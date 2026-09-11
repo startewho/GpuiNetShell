@@ -601,6 +601,28 @@ impl<'a> MaterializeRequest<'a> {
         Ok(result)
     }
 
+    /// Takes ordinary children as typed values carried by [`crate::typed_child`],
+    /// requiring each to be one of `expected`.
+    pub fn take_typed_children<T: 'static>(&mut self, expected: &[&str]) -> Result<Vec<T>, String> {
+        let mut result = Vec::with_capacity(self.children.len());
+        for child in self.children.drain(..) {
+            if !expected.contains(&child.component) {
+                return Err(format!(
+                    "{} accepts only {} children; received {}",
+                    self.component_name,
+                    expected.join(" or "),
+                    child.component
+                ));
+            }
+            let mut element = child.element;
+            result.push(crate::typed_child::take_typed::<T>(
+                &mut element,
+                child.component,
+            )?);
+        }
+        Ok(result)
+    }
+
     /// Materializes a named slot, if the description supplied one.
     pub fn take_slot(&mut self, name: &str) -> Result<Option<AnyElement>, String> {
         match self.take_slot_factory(name) {

@@ -320,6 +320,31 @@ public sealed unsafe class RenderContextTests
         Assert.Contains(NativeProtocol.ArgStringCallback, flags);
     }
 
+    [Fact]
+    public void CollectionComponentsRecordTheirConstructors()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.TabBar("tabs")
+            .SelectedIndex(1)
+            .Variant(TabVariantKind.Pill)
+            .OnChange(_ => { })
+            .Add(ui.Tab().Label("One"), ui.Tab().Label("Two"));
+        ui.List("list", () => "a\tAlpha").Full();
+        ui.Select("select", () => "light\tLight", _ => { }).Placeholder("Pick");
+        ui.DataTable("table", () => "Ada\tEngineer").Columns("Name", "Role");
+
+        var descriptor = arena.Publish();
+        // tabbar(0), tab(1), tab(2), list(3), select(4), datatable(5)
+        Assert.Equal(6u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentTabBar, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTab, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentList, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentSelect, descriptor.Nodes[4].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentDataTable, descriptor.Nodes[5].Component);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

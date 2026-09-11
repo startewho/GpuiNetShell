@@ -328,6 +328,62 @@ public sealed class RenderContext
         return new DropdownButtonElement(this, index);
     }
 
+    /// <summary>Declares a typed tab list. <paramref name="id"/> is its identity.</summary>
+    public TabBarElement TabBar(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTabBar);
+        _arena.SetNodeData(index, id);
+        return new TabBarElement(this, index);
+    }
+
+    /// <summary>Declares a tab for a <see cref="TabBar"/>.</summary>
+    public TabElement Tab() => new TabElement(this, _arena.AddNode(NativeProtocol.ComponentTab));
+
+    /// <summary>
+    /// Declares a retained list. <paramref name="rows"/> returns newline-
+    /// separated rows of tab-separated `id`, `label`, and optional `disabled`.
+    /// </summary>
+    public ListElement List(string id, Func<string> rows)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentList);
+        var token = Events.RegisterRows(rows);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + token);
+        return new ListElement(this, index);
+    }
+
+    /// <summary>
+    /// Declares a retained select. <paramref name="rows"/> returns
+    /// newline-separated `id\tlabel[\tdisabled]` rows; <paramref name="onSelect"/>
+    /// receives the selected row id.
+    /// </summary>
+    public SelectElement Select(string id, Func<string> rows, Action<string> onSelect)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSelect);
+        var rowsToken = Events.RegisterRows(rows);
+        var selectToken = Events.Register(value => onSelect(value.String ?? string.Empty));
+        _arena.SetNodeData(
+            index,
+            id
+                + NativeProtocol.ConstructorArgSeparator
+                + rowsToken
+                + NativeProtocol.ConstructorArgSeparator
+                + selectToken
+        );
+        return new SelectElement(this, index);
+    }
+
+    /// <summary>
+    /// Declares a retained table. <paramref name="rows"/> returns newline-
+    /// separated rows of tab-separated cell strings.
+    /// </summary>
+    public DataTableElement DataTable(string id, Func<string> rows)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDataTable);
+        var token = Events.RegisterRows(rows);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + token);
+        return new DataTableElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

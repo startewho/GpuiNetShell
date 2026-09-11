@@ -13,6 +13,7 @@ pub mod clipboard;
 pub mod collapsible;
 pub mod combobox;
 mod common;
+pub mod data_table;
 pub mod div;
 pub mod dropdown_button;
 pub mod dropdown_menu;
@@ -22,6 +23,7 @@ pub mod icon;
 pub mod kbd;
 pub mod label;
 pub mod link;
+pub mod list;
 pub mod pagination;
 pub mod popover;
 pub mod progress;
@@ -29,10 +31,12 @@ pub mod radio;
 pub mod rating;
 pub mod resizable;
 pub mod scroll;
+pub mod select;
 pub mod separator;
 pub mod skeleton;
 pub mod spinner;
 pub mod status_bar;
+pub mod tab_bar;
 pub mod tabs;
 pub mod tag;
 pub mod text;
@@ -74,6 +78,10 @@ pub fn register(registry: &mut ComponentRegistry) {
     hover_card::register(registry);
     dropdown_menu::register(registry);
     dropdown_button::register(registry);
+    tab_bar::register(registry);
+    list::register(registry);
+    select::register(registry);
+    data_table::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -129,6 +137,11 @@ mod tests {
                 "HoverCard",
                 "DropdownMenu",
                 "DropdownButton",
+                "Tab",
+                "TabBar",
+                "List",
+                "Select",
+                "DataTable",
             ]
         );
     }

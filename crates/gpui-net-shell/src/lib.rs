@@ -24,6 +24,7 @@ mod root;
 mod schema;
 mod snapshot;
 mod style;
+mod typed_child;
 mod view;
 
 pub use abi::{

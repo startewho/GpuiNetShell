@@ -57,6 +57,7 @@ internal sealed class GalleryView : View
         "Interactive",
         "Display",
         "Menus",
+        "Collections",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -65,6 +66,8 @@ internal sealed class GalleryView : View
     private int _themeIndex;
     private int _radioIndex;
     private int _rating = 3;
+    private int _tabIndex;
+    private string _selected = "";
 
     public GalleryView(GpuiApplication application, int initialPage = 0)
     {
@@ -90,6 +93,7 @@ internal sealed class GalleryView : View
             11 => InteractivePage(ref ui),
             12 => DisplayPage(ref ui),
             13 => MenusPage(ref ui),
+            14 => CollectionsPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -443,6 +447,33 @@ internal sealed class GalleryView : View
                     .ItemsCenter()
             )
             .Gap(16);
+
+    private Element CollectionsPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Collections", "Typed tabs, lists, selects, and tables."),
+                ui.TabBar("tabs")
+                    .SelectedIndex(_tabIndex)
+                    .Variant(TabVariantKind.Pill)
+                    .OnChange(index => _tabIndex = index)
+                    .Add(
+                        ui.Tab().Label("One"),
+                        ui.Tab().Label("Two"),
+                        ui.Tab().Label("Three").Disabled()
+                    ),
+                ui.List("people", ListRows).Full().H(120),
+                ui.Select("theme", SelectRows, value => _selected = value).Placeholder("Pick one"),
+                ui.Label($"Selected: {_selected}"),
+                ui.DataTable("roles", TableRows).Columns("Name", "Role", "Status")
+            )
+            .Gap(16);
+
+    private static string ListRows() =>
+        "ada\tAda Lovelace\ngrace\tGrace Hopper\nlinus\tLinus Torvalds\ttrue";
+
+    private static string SelectRows() => "light\tLight\ndark\tDark\nsystem\tSystem";
+
+    private static string TableRows() =>
+        "Ada\tEngineer\tActive\nGrace\tAdmiral\tActive\nLinus\tMaintainer\tAway";
 
     private Element Section(ref RenderContext ui, string title, string description) =>
         ui.VStack(ui.Label(title).TextSize(20).FontSemibold(), ui.Text(description)).Gap(4);

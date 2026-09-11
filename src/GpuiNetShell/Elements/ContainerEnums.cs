@@ -97,6 +97,16 @@ public enum DropdownAnchor : uint
     TopLeft = 3,
 }
 
+/// <summary>Visual variant of a <see cref="TabBarElement"/>.</summary>
+public enum TabVariantKind : uint
+{
+    Tab = 0,
+    Outline = 1,
+    Pill = 2,
+    Segmented = 3,
+    Underline = 4,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {
