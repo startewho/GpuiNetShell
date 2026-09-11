@@ -4,12 +4,16 @@
 //! its `ComponentMaterializer`. The runtime knows none of them by name: adding
 //! a component is `register` here plus one id in the wire schema.
 
+pub mod avatar;
 pub mod badge;
 pub mod button;
 pub mod combobox;
 mod common;
 pub mod div;
+pub mod icon;
+pub mod kbd;
 pub mod label;
+pub mod link;
 pub mod popover;
 pub mod progress;
 pub mod radio;
@@ -42,6 +46,10 @@ pub fn register(registry: &mut ComponentRegistry) {
     separator::register(registry);
     skeleton::register(registry);
     tag::register(registry);
+    link::register(registry);
+    kbd::register(registry);
+    avatar::register(registry);
+    icon::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -81,6 +89,10 @@ mod tests {
                 "Separator",
                 "Skeleton",
                 "Tag",
+                "Link",
+                "Kbd",
+                "Avatar",
+                "Icon",
             ]
         );
     }

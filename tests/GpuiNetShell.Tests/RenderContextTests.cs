@@ -214,6 +214,29 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(NativeProtocol.ArgEnum, descriptor.Ops[0].Flags);
     }
 
+    [Fact]
+    public void NavigationComponentsRecordTheirConstructorsAndMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Link("docs").Href("https://example.com").OnClick(() => { });
+        ui.Kbd("ctrl-k").Outline();
+        ui.Avatar().Name("Ada Lovelace").Size(ControlSize.Large);
+        ui.Icon("icons/check.svg").Size(ControlSize.Small).Rotate(0.5);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentLink, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentKbd, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentAvatar, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentIcon, descriptor.Nodes[3].Component);
+        Assert.Contains(
+            Enumerable.Range(0, (int)descriptor.OpsLen),
+            index => descriptor.Ops[index].Code == NativeProtocol.OpCallback
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

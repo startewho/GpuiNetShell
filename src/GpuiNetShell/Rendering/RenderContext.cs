@@ -182,6 +182,34 @@ public sealed class RenderContext
         return new SeparatorElement(this, index);
     }
 
+    /// <summary>Declares an external-resource link. <paramref name="id"/> is its identity.</summary>
+    public LinkElement Link(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentLink);
+        _arena.SetNodeData(index, id);
+        return new LinkElement(this, index);
+    }
+
+    /// <summary>Declares a keyboard shortcut keycap from a keystroke string.</summary>
+    public KbdElement Kbd(string keystroke)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentKbd);
+        _arena.SetNodeData(index, keystroke);
+        return new KbdElement(this, index);
+    }
+
+    /// <summary>Declares a circular avatar with a name-derived fallback.</summary>
+    public AvatarElement Avatar() =>
+        new AvatarElement(this, _arena.AddNode(NativeProtocol.ComponentAvatar));
+
+    /// <summary>Declares an SVG icon from a relative asset path.</summary>
+    public IconElement Icon(string path)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentIcon);
+        _arena.SetNodeData(index, path);
+        return new IconElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

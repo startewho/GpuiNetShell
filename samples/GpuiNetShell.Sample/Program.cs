@@ -53,6 +53,7 @@ internal sealed class GalleryView : View
         "Popover",
         "Overlays",
         "Feedback",
+        "Elements",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -81,6 +82,7 @@ internal sealed class GalleryView : View
             7 => PopoverPage(ref ui),
             8 => OverlayPage(ref ui),
             9 => FeedbackPage(ref ui),
+            10 => ElementsPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -325,6 +327,41 @@ internal sealed class GalleryView : View
                         ui.Tag().Variant(TagVariant.Info).Size(ControlSize.Small).Add(ui.Text("Info"))
                     )
                     .Gap(8)
+                    .ItemsCenter()
+            )
+            .Gap(16);
+
+    private Element ElementsPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Elements",
+                    "Links, keyboard shortcuts, avatars, and icons."
+                ),
+                ui.HStack(
+                        ui.Link("docs")
+                            .Href("https://gpui-kit.com")
+                            .Add(ui.Text("Documentation")),
+                        ui.Link("disabled")
+                            .Href("https://example.com")
+                            .Disabled()
+                            .Add(ui.Text("Disabled link"))
+                    )
+                    .Gap(16)
+                    .ItemsCenter(),
+                ui.HStack(
+                        ui.Kbd("ctrl-k"),
+                        ui.Kbd("cmd-shift-p").Outline(),
+                        ui.Kbd("alt-enter").Appearance(false)
+                    )
+                    .Gap(8)
+                    .ItemsCenter(),
+                ui.HStack(
+                        ui.Avatar().Name("Ada Lovelace"),
+                        ui.Avatar().Name("Grace Hopper").Size(ControlSize.Large),
+                        ui.Icon("icons/check.svg").Size(ControlSize.Medium)
+                    )
+                    .Gap(12)
                     .ItemsCenter()
             )
             .Gap(16);
