@@ -161,6 +161,31 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(6u, descriptor.OpsLen);
     }
 
+    [Fact]
+    public void ScrollResizableAndPopoverRecordTheirState()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        var trigger = ui.Button("t").Label("Open");
+        ui.Popover("p").Trigger(trigger).Content(ui.Label("Body")).DefaultOpen();
+        ui.Scroll("s").Axis(ScrollAxis.Vertical);
+        ui.Resizable("r").Axis(ResizeAxis.Horizontal).Sizes("100", "*");
+
+        var descriptor = arena.Publish();
+        Assert.Equal(5u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentPopover, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentScroll, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentResizable, descriptor.Nodes[4].Component);
+        // button label; popover slot+slot+default_open; scroll axis; resizable axis+sizes
+        Assert.Equal(7u, descriptor.OpsLen);
+        var codes = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Select(index => descriptor.Ops[index].Code)
+            .ToArray();
+        Assert.Contains(NativeProtocol.OpSlot, codes);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

@@ -15,7 +15,7 @@ pub const ABI_VERSION: u32 = 1;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C72;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C73;
 
 // ---------------------------------------------------------------------------
 // Components
@@ -42,6 +42,14 @@ pub const COMPONENT_COMBOBOX: u32 = 6;
 pub const COMPONENT_RADIO: u32 = 7;
 #[allow(dead_code)]
 pub const COMPONENT_TABS: u32 = 8;
+#[allow(dead_code)]
+pub const COMPONENT_SCROLL: u32 = 9;
+#[allow(dead_code)]
+pub const COMPONENT_SCROLLBAR: u32 = 10;
+#[allow(dead_code)]
+pub const COMPONENT_RESIZABLE: u32 = 11;
+#[allow(dead_code)]
+pub const COMPONENT_POPOVER: u32 = 12;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -62,6 +70,8 @@ pub const OP_PARAM_STYLE: u16 = 2;
 pub const OP_METHOD: u16 = 3;
 /// An event binding (`on_click`), whose `b` is a callback token.
 pub const OP_CALLBACK: u16 = 4;
+/// A named slot: `a` is the slot name, `b` is the child node it refers to.
+pub const OP_SLOT: u16 = 5;
 
 pub const ARG_NONE: u16 = 0;
 pub const ARG_NUMBER: u16 = 1;
@@ -87,7 +97,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C72);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C73);
     }
 
     #[test]

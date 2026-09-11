@@ -16,7 +16,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use gpui::{AnyElement, IntoElement, ParentElement, Refineable as _, StyleRefinement, Styled};
+use gpui::{
+    AnyElement, App, IntoElement, ParentElement, Refineable as _, StyleRefinement, Styled, Window,
+};
 
 use crate::context::HostContext;
 
@@ -258,9 +260,14 @@ pub struct MaterializeRequest<'a> {
     host: &'a HostContext,
     style: Option<StyleRefinement>,
     children: Vec<AnyElement>,
+    /// Named children the component reads by name instead of as ordinary
+    /// children (a popover's `trigger` and `content`).
+    slots: Vec<(String, AnyElement)>,
     disabled: bool,
     selected: bool,
     on_click: Option<u64>,
+    window: &'a mut Window,
+    cx: &'a mut App,
 }
 
 impl<'a> MaterializeRequest<'a> {
@@ -272,9 +279,12 @@ impl<'a> MaterializeRequest<'a> {
         host: &'a HostContext,
         style: StyleRefinement,
         children: Vec<AnyElement>,
+        slots: Vec<(String, AnyElement)>,
         disabled: bool,
         selected: bool,
         on_click: Option<u64>,
+        window: &'a mut Window,
+        cx: &'a mut App,
     ) -> Self {
         Self {
             component_name,
@@ -283,9 +293,12 @@ impl<'a> MaterializeRequest<'a> {
             host,
             style: Some(style),
             children,
+            slots,
             disabled,
             selected,
             on_click,
+            window,
+            cx,
         }
     }
 
@@ -323,6 +336,20 @@ impl<'a> MaterializeRequest<'a> {
 
     pub fn take_children(&mut self) -> Vec<AnyElement> {
         std::mem::take(&mut self.children)
+    }
+
+    /// Takes a named slot, if the description supplied one.
+    pub fn take_slot(&mut self, name: &str) -> Option<AnyElement> {
+        self.slots
+            .iter()
+            .position(|(held, _)| held == name)
+            .map(|index| self.slots.remove(index).1)
+    }
+
+    /// Runs `body` with the current window and app, for components that need
+    /// window-scoped state (scroll handles, keyed element state).
+    pub fn with_window_app<R>(&mut self, body: impl FnOnce(&mut Window, &mut App) -> R) -> R {
+        body(self.window, self.cx)
     }
 
     pub fn take_style(&mut self) -> StyleRefinement {

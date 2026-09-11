@@ -145,7 +145,13 @@ to its recorder. `resolve_ops` and the descriptor recorders are pure and tested
 without a window.
 
 The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, `Progress`,
-and `Combobox`; each is one file in `src/components/`.
+`Combobox`, `Radio`, `Tabs`, `Scroll`, `Scrollbar`, `Resizable`, and `Popover`;
+each is one file in `src/components/`. A component with named parts receives
+them as **slots**: `materialize_node` reads a node's `Slot` ops and delivers the
+referenced children by name through `MaterializeRequest::take_slot` instead of as
+ordinary children. Materializers also get the current `Window` and `App` through
+`with_window_app`, which is what lets `Scroll` and `Scrollbar` share a
+`ScrollHandle` in window element state by name.
 
 ## Root and overlays
 

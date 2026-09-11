@@ -9,8 +9,11 @@ pub mod button;
 pub mod combobox;
 pub mod div;
 pub mod label;
+pub mod popover;
 pub mod progress;
 pub mod radio;
+pub mod resizable;
+pub mod scroll;
 pub mod tabs;
 pub mod text;
 
@@ -27,6 +30,9 @@ pub fn register(registry: &mut ComponentRegistry) {
     combobox::register(registry);
     radio::register(registry);
     tabs::register(registry);
+    scroll::register(registry);
+    resizable::register(registry);
+    popover::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -48,7 +54,21 @@ mod tests {
                 .descriptors()
                 .map(|descriptor| descriptor.name())
                 .collect::<Vec<_>>(),
-            ["Div", "Text", "Button", "Label", "Badge", "Progress", "Combobox", "Radio", "Tabs",]
+            [
+                "Div",
+                "Text",
+                "Button",
+                "Label",
+                "Badge",
+                "Progress",
+                "Combobox",
+                "Radio",
+                "Tabs",
+                "Scroll",
+                "Scrollbar",
+                "Resizable",
+                "Popover",
+            ]
         );
     }
 }

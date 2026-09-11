@@ -163,15 +163,16 @@ impl ShellView {
 
     /// The subtree for the current description, with a banner when the most
     /// recent build failed over an earlier good snapshot.
-    fn content(&mut self, host: &HostContext) -> AnyElement {
+    fn content(&mut self, host: &HostContext, window: &mut Window, cx: &mut App) -> AnyElement {
         let materialized = self
             .current
             .as_ref()
-            .map(|snapshot| materialize(&self.registry, snapshot, host));
+            .map(|snapshot| materialize(&self.registry, snapshot, host, window, cx));
 
         match (self.error.clone(), materialized) {
             (None, Some(Ok(element))) => element,
             (None, Some(Err(message))) => {
+                eprintln!("gpui-net-shell: materialization failed: {message}");
                 self.error = Some(message.clone());
                 failure_surface(&message)
             }
@@ -188,7 +189,7 @@ impl ShellView {
 }
 
 impl Render for ShellView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.retired {
             return div().into_any_element();
         }
@@ -208,7 +209,7 @@ impl Render for ShellView {
             invalidate,
         };
 
-        let content = self.content(&host);
+        let content = self.content(&host, window, cx);
         div()
             .size_full()
             .bg(rgba(0xFFFFFFFF))

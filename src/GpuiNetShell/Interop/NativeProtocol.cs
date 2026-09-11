@@ -17,7 +17,7 @@ public static class NativeProtocol
     public const uint AbiVersion = 1;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C72;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C73;
 
     // Components. Ids are registry indices: the native host resolves them
     // against the registered component catalog.
@@ -30,6 +30,10 @@ public static class NativeProtocol
     public const uint ComponentCombobox = 6;
     public const uint ComponentRadio = 7;
     public const uint ComponentTabs = 8;
+    public const uint ComponentScroll = 9;
+    public const uint ComponentScrollbar = 10;
+    public const uint ComponentResizable = 11;
+    public const uint ComponentPopover = 12;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.
@@ -37,6 +41,8 @@ public static class NativeProtocol
     public const ushort OpParamStyle = 2;
     public const ushort OpMethod = 3;
     public const ushort OpCallback = 4;
+    /// <summary>A named slot: <c>a</c> is the name, <c>b</c> the child node index.</summary>
+    public const ushort OpSlot = 5;
 
     public const ushort ArgNone = 0;
     public const ushort ArgNumber = 1;

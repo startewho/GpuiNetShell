@@ -46,10 +46,12 @@ drives them with `OpenDialog`, `OpenSheet`, `CloseDialog`, `CloseSheet`, and
 `PushNotification`, while a `Combobox` opens its option menu as a `Bottom` sheet
 (one callback token per option). Tooltips ride the `gpui-component` window root.
 Components are registered descriptors in `src/components/` (`Div`, `Text`,
-`Button`, `Label`, `Badge`, `Progress`, `Combobox`, `Radio`, `Tabs`); adding one
-is a descriptor, a materializer, and a managed builder. Every overlay mutation
-takes the current window and ends in `Context::notify`, and re-rendering the
-content is the separate `View.Invalidate()` step.
+`Button`, `Label`, `Badge`, `Progress`, `Combobox`, `Radio`, `Tabs`, `Scroll`,
+`Scrollbar`, `Resizable`, `Popover`); adding one is a descriptor, a materializer,
+and a managed builder. Components with named parts — a popover's `trigger` and
+`content` — receive them as slots. Every overlay mutation takes the current
+window and ends in `Context::notify`, and re-rendering the content is the
+separate `View.Invalidate()` step.
 
 ## Repository layout
 
@@ -61,7 +63,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/snapshot.rs                arena decode + RenderSnapshot
   src/style.rs                   reflected GPUI style table (shell-style)
   src/registry.rs                ComponentRegistry / Descriptor / Materializer
-  src/components/                Div, Text, Button, Label, Badge, Progress, Combobox, Radio, Tabs
+  src/components/                Div, Text, Button, Label, Badge, Progress, Combobox, Radio, Tabs, Scroll, Scrollbar, Resizable, Popover
   src/context.rs                 HostContext: session, callbacks, invalidate
   src/materialize.rs             op resolution + registry dispatch
   src/view.rs                    ShellView: dirty/current/previous + rebuild
@@ -74,7 +76,7 @@ src/GpuiNetShell/              Managed runtime library
   Elements/                      Element, ButtonElement, TextElement, DivElement
   Events/                        EventRegistry
   View.cs, GpuiApplication.cs
-samples/GpuiNetShell.Sample/   Counter sample with a Button
+samples/GpuiNetShell.Sample/   Tabbed component gallery (one page per component)
 tests/GpuiNetShell.Tests/      Managed contract tests
 external/gpui-kit/             Pinned submodule (gpui-base/gpui-component)
 docs/                          Architecture and the Button route

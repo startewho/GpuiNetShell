@@ -6,7 +6,7 @@
 //! registered [`ComponentDescriptor`], whose materializer produces the element.
 //! The runtime never names a concrete component.
 
-use gpui::{AnyElement, StyleRefinement};
+use gpui::{AnyElement, App, StyleRefinement, Window};
 
 use crate::context::HostContext;
 use crate::registry::{
@@ -31,8 +31,17 @@ pub fn materialize(
     registry: &FrozenComponentRegistry,
     snapshot: &RenderSnapshot,
     host: &HostContext,
+    window: &mut Window,
+    cx: &mut App,
 ) -> Result<AnyElement, String> {
-    materialize_node(registry, snapshot.nodes(), snapshot.root(), host)
+    materialize_node(
+        registry,
+        snapshot.nodes(),
+        snapshot.root(),
+        host,
+        window,
+        cx,
+    )
 }
 
 fn materialize_node(
@@ -40,6 +49,8 @@ fn materialize_node(
     nodes: &[Node],
     id: u32,
     host: &HostContext,
+    window: &mut Window,
+    cx: &mut App,
 ) -> Result<AnyElement, String> {
     let node = nodes
         .get(id as usize)
@@ -52,9 +63,23 @@ fn materialize_node(
     let payload = build_payload(descriptor, node)?;
     let methods = record_methods(descriptor, &behavior.methods);
 
+    // A child referenced by a `Slot` op is delivered by name, not as an
+    // ordinary child.
+    let mut slot_names: Vec<(String, u32)> = Vec::new();
+    for op in &node.ops {
+        if let Op::Slot(name, child) = op {
+            slot_names.push((name.clone(), *child));
+        }
+    }
+
     let mut children = Vec::with_capacity(node.children.len());
+    let mut slots = Vec::new();
     for child in &node.children {
-        children.push(materialize_node(registry, nodes, *child, host)?);
+        let element = materialize_node(registry, nodes, *child, host, window, cx)?;
+        match slot_names.iter().find(|(_, id)| id == child) {
+            Some((name, _)) => slots.push((name.clone(), element)),
+            None => children.push(element),
+        }
     }
 
     let request = MaterializeRequest::new(
@@ -64,9 +89,12 @@ fn materialize_node(
         host,
         refinement,
         children,
+        slots,
         behavior.disabled,
         behavior.selected,
         behavior.on_click,
+        window,
+        cx,
     );
     descriptor.materializer().materialize(request)
 }
@@ -144,6 +172,7 @@ fn resolve_ops(node: &Node) -> (StyleRefinement, Behavior) {
                     behavior.on_click = Some(*token);
                 }
             }
+            Op::Slot(..) => {}
         }
     }
 

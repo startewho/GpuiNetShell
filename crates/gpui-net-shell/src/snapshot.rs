@@ -25,6 +25,8 @@ pub enum Op {
     Method(String, Option<StyleArg>),
     /// An event binding by name and callback token.
     Callback(String, u64),
+    /// A named slot pointing at one child node.
+    Slot(String, u32),
 }
 
 /// A decoded element.
@@ -209,6 +211,12 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
             Ok(Op::Callback(name, record.b))
+        }
+        OP_SLOT => {
+            if record.flags != ARG_NUMBER {
+                return Err(STATUS_INVALID_ARGUMENT);
+            }
+            Ok(Op::Slot(name, record.b as u32))
         }
         _ => Err(STATUS_INVALID_ARGUMENT),
     }

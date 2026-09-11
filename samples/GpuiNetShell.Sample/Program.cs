@@ -17,8 +17,20 @@ if (args.Contains("--check", StringComparer.Ordinal))
 
 // The application is captured by the view so its buttons can open overlays; the
 // factory runs on the native thread after this assignment.
+var initialPage = 0;
+var pageArgument = args.FirstOrDefault(argument =>
+    argument.StartsWith("--page=", StringComparison.Ordinal)
+);
+if (
+    pageArgument is not null
+    && int.TryParse(pageArgument["--page=".Length..], out var parsedPage)
+)
+{
+    initialPage = parsedPage;
+}
+
 GpuiApplication? application = null;
-application = new GpuiApplication(() => new GalleryView(application!));
+application = new GpuiApplication(() => new GalleryView(application!, initialPage));
 application.Run();
 return 0;
 
@@ -36,6 +48,9 @@ internal sealed class GalleryView : View
         "Progress",
         "Combobox",
         "Radio",
+        "Scroll",
+        "Resizable",
+        "Popover",
         "Overlays",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
@@ -45,9 +60,10 @@ internal sealed class GalleryView : View
     private int _themeIndex;
     private int _radioIndex;
 
-    public GalleryView(GpuiApplication application)
+    public GalleryView(GpuiApplication application, int initialPage = 0)
     {
         _application = application;
+        _page = initialPage;
     }
 
     protected override Element Render(ref RenderContext ui)
@@ -59,6 +75,9 @@ internal sealed class GalleryView : View
             2 => ProgressPage(ref ui),
             3 => ComboboxPage(ref ui),
             4 => RadioPage(ref ui),
+            5 => ScrollPage(ref ui),
+            6 => ResizablePage(ref ui),
+            7 => PopoverPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -208,6 +227,67 @@ internal sealed class GalleryView : View
                     )
                     .Gap(8)
                     .ItemsCenter()
+            )
+            .Gap(12);
+
+    private Element ScrollPage(ref RenderContext ui)
+    {
+        var rows = new List<Element>();
+        for (var i = 1; i <= 20; i++)
+        {
+            rows.Add(ui.Label($"Row {i}"));
+        }
+
+        return ui.VStack(
+                Section(ref ui, "Scroll", "A scrollable area and a bar that drives it by name."),
+                ui.Div(
+                        ui.Scroll("scroller")
+                            .Axis(ScrollAxis.Vertical)
+                            .Full()
+                            .Add(ui.VStack(rows.ToArray()).Gap(8).P(8)),
+                        ui.Scrollbar("scroller").Axis(ScrollAxis.Vertical)
+                    )
+                    .W(320)
+                    .H(200)
+                    .Relative()
+            )
+            .Gap(12);
+    }
+
+    private Element ResizablePage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Resizable",
+                    "Draggable panels; sizes are pixels, `*` is the flexible panel."
+                ),
+                ui.Resizable("panels")
+                    .Axis(ResizeAxis.Horizontal)
+                    .Sizes("160", "*", "160")
+                    .H(160)
+                    .Add(
+                        ui.Div(ui.Label("Left")).P(12).Full(),
+                        ui.Div(ui.Label("Center")).P(12).Full(),
+                        ui.Div(ui.Label("Right")).P(12).Full()
+                    )
+            )
+            .Gap(12);
+
+    private Element PopoverPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Popover", "A trigger with anchored content in the `content` slot."),
+                ui.Popover("popover")
+                    .DefaultOpen()
+                    .OverlayClosable()
+                    .Trigger(ui.Button("popover-trigger").Label("Show details"))
+                    .Content(
+                        ui.VStack(
+                                ui.Label("Details"),
+                                ui.Text("Anchored content painted above the window.")
+                            )
+                            .Gap(4)
+                            .P(8)
+                    )
             )
             .Gap(12);
 

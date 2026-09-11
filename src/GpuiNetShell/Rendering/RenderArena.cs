@@ -110,6 +110,16 @@ internal sealed unsafe class RenderArena : IDisposable
     internal void AddCallback(int node, string name, ulong token)
         => AddOp(node, NativeProtocol.OpCallback, NativeProtocol.ArgNone, PackString(name), token);
 
+    /// <summary>Records a named slot pointing at a child node.</summary>
+    internal void AddSlot(int node, string name, int child)
+        => AddOp(
+            node,
+            NativeProtocol.OpSlot,
+            NativeProtocol.ArgNumber,
+            PackString(name),
+            (ulong)child
+        );
+
     internal void AddChild(int parent, int child)
         => _children.Add(new NativeChild { Parent = (uint)parent, Child = (uint)child });
 

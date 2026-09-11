@@ -121,6 +121,38 @@ public sealed class RenderContext
         return new TabsElement(this, index);
     }
 
+    /// <summary>Declares a scrollable area. <paramref name="id"/> is its stable identity.</summary>
+    public ScrollElement Scroll(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentScroll);
+        _arena.SetNodeData(index, id);
+        return new ScrollElement(this, index);
+    }
+
+    /// <summary>Declares a scrollbar that drives the area named <paramref name="target"/>.</summary>
+    public ScrollbarElement Scrollbar(string target)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentScrollbar);
+        _arena.SetNodeData(index, target);
+        return new ScrollbarElement(this, index);
+    }
+
+    /// <summary>Declares resizable panels. <paramref name="id"/> is its stable identity.</summary>
+    public ResizableElement Resizable(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentResizable);
+        _arena.SetNodeData(index, id);
+        return new ResizableElement(this, index);
+    }
+
+    /// <summary>Declares an anchored popover. <paramref name="id"/> is its stable identity.</summary>
+    public PopoverElement Popover(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPopover);
+        _arena.SetNodeData(index, id);
+        return new PopoverElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

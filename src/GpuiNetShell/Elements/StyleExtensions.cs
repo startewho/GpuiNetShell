@@ -83,6 +83,12 @@ public static class StyleExtensions
     public static T FontMedium<T>(this T element)
         where T : Element => element.Style("font_medium");
 
+    public static T Relative<T>(this T element)
+        where T : Element => element.Style("relative");
+
+    public static T Absolute<T>(this T element)
+        where T : Element => element.Style("absolute");
+
     // Length styles.
     public static T W<T>(this T element, double pixels)
         where T : Element => element.Style("w", pixels);
