@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = ["crates/gpui-net-shell"]
+# The gpui-kit checkout is its own workspace; keep Cargo from treating its
+# crates as members here, which would make `workspace = true` resolve against
+# this manifest instead of gpui-kit's.
+exclude = ["external/gpui-kit"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+gpui = { package = "gpui-pre", version = "0.3.1" }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.1" }
+gpui-base = { path = "external/gpui-kit/crates/base", version = "0.6.1" }
+gpui-component = { path = "external/gpui-kit/crates/component", version = "0.6.1" }
+
+# Frame-sensitive GPUI, layout, text and component code stays optimized in Debug
+# builds so a debug host does not stall on an unoptimized full-frame draw.
+[profile.dev]
+codegen-units = 16
+debug = "limited"
+
+[profile.dev.package]
+gpui-pre = { opt-level = 3 }
+gpui-pre-macros = { opt-level = 3 }
+gpui-pre-platform = { opt-level = 3 }
+gpui-base = { opt-level = 3 }
+gpui-component = { opt-level = 3 }

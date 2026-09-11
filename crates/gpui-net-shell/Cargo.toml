@@ -1,0 +1,17 @@
+[package]
+name = "gpui-net-shell"
+description = "C#-hosted shell runtime for GPUI. Rust owns native windows and materialization; C# owns the element description."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "gpui_net_shell"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+gpui = { workspace = true }
+gpui_platform = { workspace = true }
+gpui-base = { workspace = true }
+gpui-component = { workspace = true }

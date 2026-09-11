@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>GpuiNetShell</RootNamespace>
+        <AssemblyName>GpuiNetShell</AssemblyName>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <RepositoryRoot>$(MSBuildThisFileDirectory)..\..</RepositoryRoot>
+        <NativeOutputDir>$(RepositoryRoot)\target\debug</NativeOutputDir>
+    </PropertyGroup>
+
+    <!-- The native host is part of this build: an ABI or schema change rebuilds
+         both sides together. Set SkipNativeBuild=true to use a prebuilt host. -->
+    <Target Name="BuildNativeHost" BeforeTargets="BeforeBuild" Condition="'$(SkipNativeBuild)' != 'true'">
+        <Exec Command="cargo build -p gpui-net-shell" WorkingDirectory="$(RepositoryRoot)" />
+    </Target>
+
+    <ItemGroup>
+        <None Include="$(NativeOutputDir)\gpui_net_shell.dll" Condition="Exists('$(NativeOutputDir)\gpui_net_shell.dll')">
+            <Link>gpui_net_shell.dll</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+# Build output
+target/
+**/bin/
+**/obj/
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# Generated
+*.d.ts
