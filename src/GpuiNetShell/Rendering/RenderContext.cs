@@ -210,6 +210,34 @@ public sealed class RenderContext
         return new IconElement(this, index);
     }
 
+    /// <summary>Declares a trigger container with an optional `content` reveal.</summary>
+    public CollapsibleElement Collapsible() =>
+        new CollapsibleElement(this, _arena.AddNode(NativeProtocol.ComponentCollapsible));
+
+    /// <summary>Declares controlled page navigation.</summary>
+    public PaginationElement Pagination(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPagination);
+        _arena.SetNodeData(index, id);
+        return new PaginationElement(this, index);
+    }
+
+    /// <summary>Declares an interactive star rating.</summary>
+    public RatingElement Rating(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentRating);
+        _arena.SetNodeData(index, id);
+        return new RatingElement(this, index);
+    }
+
+    /// <summary>Declares a clipboard copy button.</summary>
+    public ClipboardElement Clipboard(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentClipboard);
+        _arena.SetNodeData(index, id);
+        return new ClipboardElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

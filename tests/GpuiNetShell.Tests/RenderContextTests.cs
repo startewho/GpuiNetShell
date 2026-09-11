@@ -237,6 +237,31 @@ public sealed unsafe class RenderContextTests
         );
     }
 
+    [Fact]
+    public void InteractiveComponentsRecordTheirConstructorsAndMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Collapsible()
+            .Open()
+            .Content(ui.Label("Body"))
+            .Add(ui.Button("toggle").Label("Toggle"));
+        ui.Pagination("pages").TotalPages(10).CurrentPage(2).VisiblePages(5).OnChange(_ => { });
+        ui.Rating("quality").Max(5).Value(3).OnChange(_ => { });
+        ui.Clipboard("copy").Value("text").Tooltip("Copy");
+
+        var descriptor = arena.Publish();
+        Assert.Equal(6u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentCollapsible, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPagination, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentRating, descriptor.Nodes[4].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentClipboard, descriptor.Nodes[5].Component);
+        Assert.Contains(NativeProtocol.OpSlot, Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Select(index => descriptor.Ops[index].Code));
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

@@ -7,6 +7,8 @@
 pub mod avatar;
 pub mod badge;
 pub mod button;
+pub mod clipboard;
+pub mod collapsible;
 pub mod combobox;
 mod common;
 pub mod div;
@@ -14,9 +16,11 @@ pub mod icon;
 pub mod kbd;
 pub mod label;
 pub mod link;
+pub mod pagination;
 pub mod popover;
 pub mod progress;
 pub mod radio;
+pub mod rating;
 pub mod resizable;
 pub mod scroll;
 pub mod separator;
@@ -50,6 +54,10 @@ pub fn register(registry: &mut ComponentRegistry) {
     kbd::register(registry);
     avatar::register(registry);
     icon::register(registry);
+    collapsible::register(registry);
+    pagination::register(registry);
+    rating::register(registry);
+    clipboard::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -93,6 +101,10 @@ mod tests {
                 "Kbd",
                 "Avatar",
                 "Icon",
+                "Collapsible",
+                "Pagination",
+                "Rating",
+                "Clipboard",
             ]
         );
     }

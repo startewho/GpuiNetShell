@@ -54,6 +54,7 @@ internal sealed class GalleryView : View
         "Overlays",
         "Feedback",
         "Elements",
+        "Interactive",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -61,6 +62,7 @@ internal sealed class GalleryView : View
     private int _page;
     private int _themeIndex;
     private int _radioIndex;
+    private int _rating = 3;
 
     public GalleryView(GpuiApplication application, int initialPage = 0)
     {
@@ -83,6 +85,7 @@ internal sealed class GalleryView : View
             8 => OverlayPage(ref ui),
             9 => FeedbackPage(ref ui),
             10 => ElementsPage(ref ui),
+            11 => InteractivePage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -362,6 +365,31 @@ internal sealed class GalleryView : View
                         ui.Icon("icons/check.svg").Size(ControlSize.Medium)
                     )
                     .Gap(12)
+                    .ItemsCenter()
+            )
+            .Gap(16);
+
+    private Element InteractivePage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Interactive",
+                    "Collapsible, pagination, rating, and clipboard."
+                ),
+                ui.Collapsible()
+                    .Open()
+                    .Add(ui.Button("collapse").Label("Toggle details").Secondary())
+                    .Content(ui.Text("Revealed content in the `content` slot.")),
+                ui.Pagination("pages")
+                    .TotalPages(10)
+                    .CurrentPage(_page + 1)
+                    .VisiblePages(5)
+                    .OnChange(page => _page = page - 1),
+                ui.HStack(ui.Label("Rating"), ui.Rating("quality").Max(5).Value(_rating).OnChange(value => _rating = value))
+                    .Gap(8)
+                    .ItemsCenter(),
+                ui.HStack(ui.Label("Copy id"), ui.Clipboard("copy").Value("gpui-net-shell").Tooltip("Copy to clipboard"))
+                    .Gap(8)
                     .ItemsCenter()
             )
             .Gap(16);
