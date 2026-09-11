@@ -46,7 +46,14 @@ internal sealed unsafe class RenderArena : IDisposable
         _nodes[index] = node;
     }
 
-    internal void AddOp(int node, ushort code, ushort flags, ulong a = 0, ulong b = 0)
+    internal void AddOp(
+        int node,
+        ushort code,
+        ushort flags,
+        ulong a = 0,
+        ulong b = 0,
+        ulong c = 0
+    )
         => _ops.Add(
             new NativeOp
             {
@@ -55,6 +62,7 @@ internal sealed unsafe class RenderArena : IDisposable
                 Flags = flags,
                 A = a,
                 B = b,
+                C = c,
             }
         );
 
@@ -114,6 +122,31 @@ internal sealed unsafe class RenderArena : IDisposable
             NativeProtocol.ArgEnum,
             PackString(method),
             PackString(value)
+        );
+
+    /// <summary>
+    /// Records a component behavior method taking an element argument (P3). The
+    /// referenced node is not a child edge; it materializes only if the method
+    /// resolves it.
+    /// </summary>
+    internal void AddMethodElement(int node, string method, int childNode)
+        => AddOp(
+            node,
+            NativeProtocol.OpMethod,
+            NativeProtocol.ArgElement,
+            PackString(method),
+            (ulong)childNode
+        );
+
+    /// <summary>Records a component method taking a string and a callback token.</summary>
+    internal void AddMethodStringCallback(int node, string method, string value, ulong token)
+        => AddOp(
+            node,
+            NativeProtocol.OpMethod,
+            NativeProtocol.ArgStringCallback,
+            PackString(method),
+            PackString(value),
+            token
         );
 
     /// <summary>Records an event binding by name and callback token.</summary>

@@ -262,6 +262,64 @@ public sealed unsafe class RenderContextTests
             .Select(index => descriptor.Ops[index].Code));
     }
 
+    [Fact]
+    public void DisplayComponentsRecordTheirConstructorsAndMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Breadcrumb("Home", "Settings", "Profile");
+        ui.GroupBox().Title("Options").Variant(GroupBoxVariant.Outline).Add(ui.Text("Body"));
+        ui.StatusBar().LeftContent(ui.Label("Ready")).RightContent(ui.Label("v1"));
+        ui.WarningAlert("net", "Offline").Title("Connection").Banner();
+
+        var descriptor = arena.Publish();
+        Assert.Equal(7u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentBreadcrumb, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentGroupBox, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentStatusBar, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentAlert, descriptor.Nodes[6].Component);
+        Assert.Equal(1u, descriptor.ChildrenLen);
+        Assert.Contains(
+            Enumerable.Range(0, (int)descriptor.OpsLen),
+            index => descriptor.Ops[index].Flags == NativeProtocol.ArgElement
+        );
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        var breadcrumbData =
+            ((ulong)descriptor.Nodes[0].DataOffset << 32) | descriptor.Nodes[0].DataLen;
+        Assert.Equal("Home\nSettings\nProfile", DecodePacked(breadcrumbData, utf8));
+    }
+
+    [Fact]
+    public void MenuComponentsRecordElementAndStringCallbackMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Tooltip("tip", "Help", "Shows help");
+        ui.HoverCard("card")
+            .TriggerElement(ui.Button("hover").Label("Hover"))
+            .Content(ui.Label("Body"))
+            .OpenDelay(250);
+        ui.DropdownMenu("menu", "Actions").Item("Copy", () => { }).Item("Paste", () => { });
+        ui.DropdownButton("split", "Run").Variant(DropdownVariant.Primary).MenuItem("Once", () => { });
+
+        var descriptor = arena.Publish();
+        Assert.Equal(6u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentTooltip, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentHoverCard, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentDropdownMenu, descriptor.Nodes[4].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentDropdownButton, descriptor.Nodes[5].Component);
+
+        var flags = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Select(index => descriptor.Ops[index].Flags)
+            .ToArray();
+        Assert.Contains(NativeProtocol.ArgElement, flags);
+        Assert.Contains(NativeProtocol.ArgStringCallback, flags);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

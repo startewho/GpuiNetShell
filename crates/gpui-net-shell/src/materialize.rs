@@ -10,8 +10,8 @@ use gpui::{AnyElement, App, StyleRefinement, Window};
 
 use crate::context::HostContext;
 use crate::registry::{
-    ComponentArgument, ComponentDescriptor, ComponentPayload, FrozenComponentRegistry,
-    MaterializeRequest, RecordedComponentMethod,
+    ChildElement, ComponentArgument, ComponentDescriptor, ComponentPayload,
+    FrozenComponentRegistry, MaterializeRequest, NodeFactory, RecordedComponentMethod,
 };
 use crate::snapshot::{Node, Op, RenderSnapshot};
 use crate::style::{apply_nullary_name, apply_param, StyleArg};
@@ -23,7 +23,7 @@ struct Behavior {
     selected: bool,
     on_click: Option<u64>,
     /// Recorded component methods, in declaration order.
-    methods: Vec<(String, Option<StyleArg>)>,
+    methods: Vec<(String, Vec<StyleArg>)>,
 }
 
 /// Materializes a frozen snapshot through the catalog.
@@ -34,28 +34,26 @@ pub fn materialize(
     window: &mut Window,
     cx: &mut App,
 ) -> Result<AnyElement, String> {
-    materialize_node(
-        registry,
-        snapshot.nodes(),
-        snapshot.root(),
-        host,
-        window,
-        cx,
-    )
+    let factory = NodeFactory::new(registry, snapshot, host);
+    materialize_node(&factory, snapshot.root(), window, cx)
 }
 
-fn materialize_node(
-    registry: &FrozenComponentRegistry,
-    nodes: &[Node],
+/// Materializes one node, and recursively its ordinary children.
+///
+/// Named-slot children are left as node ids in the request so a component only
+/// pays for them when it takes the slot.
+pub(crate) fn materialize_node(
+    factory: &NodeFactory,
     id: u32,
-    host: &HostContext,
     window: &mut Window,
     cx: &mut App,
 ) -> Result<AnyElement, String> {
+    let nodes = factory.snapshot().nodes();
     let node = nodes
         .get(id as usize)
         .ok_or_else(|| format!("node {id} is outside the snapshot"))?;
-    let descriptor = registry
+    let descriptor = factory
+        .registry()
         .descriptor(node.component)
         .ok_or_else(|| format!("component {} is not registered", node.component))?;
 
@@ -64,29 +62,32 @@ fn materialize_node(
     let methods = record_methods(descriptor, &behavior.methods);
 
     // A child referenced by a `Slot` op is delivered by name, not as an
-    // ordinary child.
-    let mut slot_names: Vec<(String, u32)> = Vec::new();
+    // ordinary child, and materializes only when the component takes it.
+    let mut slots: Vec<(String, u32)> = Vec::new();
     for op in &node.ops {
         if let Op::Slot(name, child) = op {
-            slot_names.push((name.clone(), *child));
+            slots.push((name.clone(), *child));
         }
     }
 
     let mut children = Vec::with_capacity(node.children.len());
-    let mut slots = Vec::new();
     for child in &node.children {
-        let element = materialize_node(registry, nodes, *child, host, window, cx)?;
-        match slot_names.iter().find(|(_, id)| id == child) {
-            Some((name, _)) => slots.push((name.clone(), element)),
-            None => children.push(element),
+        if slots.iter().any(|(_, id)| id == child) {
+            continue;
         }
+        let element = materialize_node(factory, *child, window, cx)?;
+        let component = nodes
+            .get(*child as usize)
+            .and_then(|child| factory.registry().descriptor(child.component))
+            .map_or("Unknown", |descriptor| descriptor.name());
+        children.push(ChildElement::new(component, element));
     }
 
     let request = MaterializeRequest::new(
         descriptor.name(),
         &payload,
         &methods,
-        host,
+        factory.clone(),
         refinement,
         children,
         slots,
@@ -101,79 +102,102 @@ fn materialize_node(
 
 /// Runs the descriptor's constructor with the node's identity data.
 ///
-/// A descriptor with one constructor uses it directly. A descriptor with
-/// several named constructors (such as `Separator`/`VerticalSeparator`) selects
-/// the one whose export name equals the node's data. A constructor taking
-/// several string arguments receives them packed into the node's data,
-/// separated by [`crate::schema::CONSTRUCTOR_ARG_SEPARATOR`].
+/// A descriptor with one constructor uses it directly, packing multiple string
+/// arguments into the node's data separated by
+/// [`crate::schema::CONSTRUCTOR_ARG_SEPARATOR`]. A descriptor with several named
+/// constructors (such as `Separator`/`VerticalSeparator`, or the `Alert`
+/// variants) encodes the export name first, then its arguments, all separated
+/// by the same character.
 fn build_payload(
     descriptor: &ComponentDescriptor,
     node: &Node,
 ) -> Result<ComponentPayload, String> {
     let constructors = descriptor.constructors();
-    let constructor = match constructors {
-        [only] => only,
-        many => many
-            .iter()
-            .find(|constructor| constructor.export() == node.data)
-            .ok_or_else(|| {
-                format!(
-                    "{} has no constructor named `{}`",
-                    descriptor.name(),
-                    node.data
-                )
-            })?,
-    };
-    let arity = constructor.arguments().len();
-    let arguments = if arity == 0 {
-        Vec::new()
-    } else if arity == 1 {
-        vec![ComponentArgument::String(node.data.clone())]
-    } else {
-        let parts = node
-            .data
-            .split(crate::schema::CONSTRUCTOR_ARG_SEPARATOR)
-            .collect::<Vec<_>>();
-        if parts.len() != arity {
-            return Err(format!(
-                "{} expects {arity} constructor arguments, got {}",
-                descriptor.name(),
-                parts.len()
-            ));
+    match constructors {
+        [only] => {
+            let arity = only.arguments().len();
+            let arguments = if arity == 0 {
+                Vec::new()
+            } else if arity == 1 {
+                vec![ComponentArgument::String(node.data.clone())]
+            } else {
+                split_arguments(&node.data, arity, descriptor.name())?
+            };
+            only.payload(&arguments)
         }
-        parts
-            .into_iter()
-            .map(|part| ComponentArgument::String(part.to_string()))
-            .collect()
-    };
-    constructor.payload(&arguments)
+        many => {
+            let mut parts = node.data.split(crate::schema::CONSTRUCTOR_ARG_SEPARATOR);
+            let export = parts.next().unwrap_or_default();
+            let constructor = many
+                .iter()
+                .find(|constructor| constructor.export() == export)
+                .ok_or_else(|| {
+                    format!("{} has no constructor named `{export}`", descriptor.name())
+                })?;
+            let arguments = parts
+                .map(|part| ComponentArgument::String(part.to_string()))
+                .collect::<Vec<_>>();
+            if arguments.len() != constructor.arguments().len() {
+                return Err(format!(
+                    "{} constructor `{export}` expects {} arguments, got {}",
+                    descriptor.name(),
+                    constructor.arguments().len(),
+                    arguments.len()
+                ));
+            }
+            constructor.payload(&arguments)
+        }
+    }
+}
+
+fn split_arguments(
+    encoded: &str,
+    arity: usize,
+    component: &str,
+) -> Result<Vec<ComponentArgument>, String> {
+    let parts = encoded
+        .split(crate::schema::CONSTRUCTOR_ARG_SEPARATOR)
+        .collect::<Vec<_>>();
+    if parts.len() != arity {
+        return Err(format!(
+            "{component} expects {arity} constructor arguments, got {}",
+            parts.len()
+        ));
+    }
+    Ok(parts
+        .into_iter()
+        .map(|part| ComponentArgument::String(part.to_string()))
+        .collect())
 }
 
 /// Turns recorded method names into owned payloads, dropping unknown names.
 fn record_methods(
     descriptor: &ComponentDescriptor,
-    methods: &[(String, Option<StyleArg>)],
+    methods: &[(String, Vec<StyleArg>)],
 ) -> Vec<RecordedComponentMethod> {
     let mut recorded = Vec::with_capacity(methods.len());
-    for (name, argument) in methods {
+    for (name, arguments) in methods {
         let Some(method) = descriptor.method(name) else {
             continue;
         };
-        if let Ok(payload) = method.record(&argument_list(argument.as_ref())) {
+        if let Ok(payload) = method.record(&argument_list(arguments)) {
             recorded.push(RecordedComponentMethod::new(method.name(), payload));
         }
     }
     recorded
 }
 
-fn argument_list(argument: Option<&StyleArg>) -> Vec<ComponentArgument> {
-    match argument {
-        None => Vec::new(),
-        Some(StyleArg::Number(value)) => vec![ComponentArgument::Number(f64::from(*value))],
-        Some(StyleArg::String(value)) => vec![ComponentArgument::String(value.clone())],
-        Some(StyleArg::Enum(value)) => vec![ComponentArgument::Enum(value.clone())],
-        Some(StyleArg::Callback(token)) => vec![ComponentArgument::Callback(*token)],
-    }
+fn argument_list(arguments: &[StyleArg]) -> Vec<ComponentArgument> {
+    arguments
+        .iter()
+        .map(|argument| match argument {
+            StyleArg::Number(value) => ComponentArgument::Number(f64::from(*value)),
+            StyleArg::String(value) => ComponentArgument::String(value.clone()),
+            StyleArg::Enum(value) => ComponentArgument::Enum(value.clone()),
+            StyleArg::Callback(token) => ComponentArgument::Callback(*token),
+            StyleArg::Element(node) => ComponentArgument::Element(*node),
+        })
+        .collect()
 }
 
 /// Folds a node's ops into a style refinement and a behavior.
@@ -198,20 +222,20 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
                     refinement = next;
                 }
             }
-            Op::Method(name, arg) => {
+            Op::Method(name, args) => {
                 if descriptor.method(name).is_some() {
-                    behavior.methods.push((name.clone(), arg.clone()));
+                    behavior.methods.push((name.clone(), args.clone()));
                 } else {
                     match name.as_str() {
                         "disabled" => {
                             behavior.disabled =
-                                arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
+                                args.first().map(StyleArg::is_truthy).unwrap_or(true)
                         }
                         "selected" => {
                             behavior.selected =
-                                arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
+                                args.first().map(StyleArg::is_truthy).unwrap_or(true)
                         }
-                        _ => behavior.methods.push((name.clone(), arg.clone())),
+                        _ => behavior.methods.push((name.clone(), args.clone())),
                     }
                 }
             }
@@ -223,7 +247,7 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
                     // `Radio.on_change` or `Popover.on_open_change`.
                     behavior
                         .methods
-                        .push((name.clone(), Some(StyleArg::Callback(*token))));
+                        .push((name.clone(), vec![StyleArg::Callback(*token)]));
                 }
             }
             Op::Slot(..) => {}
@@ -257,9 +281,9 @@ mod tests {
                 COMPONENT_BUTTON,
                 "save",
                 vec![
-                    Op::Method("disabled".into(), Some(StyleArg::Number(1.0))),
-                    Op::Method("label".into(), Some(StyleArg::String("Save".into()))),
-                    Op::Method("primary".into(), None),
+                    Op::Method("disabled".into(), vec![StyleArg::Number(1.0)]),
+                    Op::Method("label".into(), vec![StyleArg::String("Save".into())]),
+                    Op::Method("primary".into(), Vec::new()),
                     Op::Callback("on_click".into(), 42),
                 ],
             ),
@@ -270,8 +294,8 @@ mod tests {
         assert_eq!(
             behavior.methods,
             vec![
-                ("label".into(), Some(StyleArg::String("Save".into()))),
-                ("primary".into(), None),
+                ("label".into(), vec![StyleArg::String("Save".into())]),
+                ("primary".into(), Vec::new()),
             ]
         );
     }
@@ -284,14 +308,14 @@ mod tests {
             &node(
                 crate::schema::COMPONENT_TABS,
                 "pages",
-                vec![Op::Method("selected".into(), Some(StyleArg::Number(1.0)))],
+                vec![Op::Method("selected".into(), vec![StyleArg::Number(1.0)])],
             ),
             descriptor,
         );
         assert!(!behavior.selected);
         assert_eq!(
             behavior.methods,
-            vec![("selected".into(), Some(StyleArg::Number(1.0)))]
+            vec![("selected".into(), vec![StyleArg::Number(1.0)])]
         );
     }
 
@@ -321,8 +345,8 @@ mod tests {
         let recorded = record_methods(
             descriptor,
             &[
-                ("label".into(), Some(StyleArg::String("Save".into()))),
-                ("not_a_method".into(), None),
+                ("label".into(), vec![StyleArg::String("Save".into())]),
+                ("not_a_method".into(), Vec::new()),
             ],
         );
         assert_eq!(recorded.len(), 1);

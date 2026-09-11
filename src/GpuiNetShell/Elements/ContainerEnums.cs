@@ -71,6 +71,32 @@ public enum TagVariant : uint
     Info = 5,
 }
 
+/// <summary>Presentation variant of a <see cref="GroupBoxElement"/>.</summary>
+public enum GroupBoxVariant : uint
+{
+    Normal = 0,
+    Fill = 1,
+    Outline = 2,
+}
+
+/// <summary>Visual variant of a <see cref="DropdownButtonElement"/>.</summary>
+public enum DropdownVariant : uint
+{
+    Primary = 0,
+    Secondary = 1,
+    Danger = 2,
+    Ghost = 3,
+}
+
+/// <summary>Popup-menu anchor of a <see cref="DropdownButtonElement"/>.</summary>
+public enum DropdownAnchor : uint
+{
+    TopRight = 0,
+    BottomRight = 1,
+    BottomLeft = 2,
+    TopLeft = 3,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {

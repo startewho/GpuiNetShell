@@ -4,14 +4,20 @@
 //! its `ComponentMaterializer`. The runtime knows none of them by name: adding
 //! a component is `register` here plus one id in the wire schema.
 
+pub mod alert;
 pub mod avatar;
 pub mod badge;
+pub mod breadcrumb;
 pub mod button;
 pub mod clipboard;
 pub mod collapsible;
 pub mod combobox;
 mod common;
 pub mod div;
+pub mod dropdown_button;
+pub mod dropdown_menu;
+pub mod group_box;
+pub mod hover_card;
 pub mod icon;
 pub mod kbd;
 pub mod label;
@@ -26,9 +32,11 @@ pub mod scroll;
 pub mod separator;
 pub mod skeleton;
 pub mod spinner;
+pub mod status_bar;
 pub mod tabs;
 pub mod tag;
 pub mod text;
+pub mod tooltip;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
 
@@ -58,6 +66,14 @@ pub fn register(registry: &mut ComponentRegistry) {
     pagination::register(registry);
     rating::register(registry);
     clipboard::register(registry);
+    breadcrumb::register(registry);
+    group_box::register(registry);
+    status_bar::register(registry);
+    alert::register(registry);
+    tooltip::register(registry);
+    hover_card::register(registry);
+    dropdown_menu::register(registry);
+    dropdown_button::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -105,6 +121,14 @@ mod tests {
                 "Pagination",
                 "Rating",
                 "Clipboard",
+                "Breadcrumb",
+                "GroupBox",
+                "StatusBar",
+                "Alert",
+                "Tooltip",
+                "HoverCard",
+                "DropdownMenu",
+                "DropdownButton",
             ]
         );
     }

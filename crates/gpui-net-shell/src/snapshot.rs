@@ -21,8 +21,8 @@ pub enum Op {
     NullaryStyle(String),
     /// A style method taking one argument.
     ParamStyle(String, StyleArg),
-    /// A component behavior method with an optional argument.
-    Method(String, Option<StyleArg>),
+    /// A component behavior method with its arguments, in declaration order.
+    Method(String, Vec<StyleArg>),
     /// An event binding by name and callback token.
     Callback(String, u64),
     /// A named slot pointing at one child node.
@@ -194,20 +194,54 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
         OP_PARAM_STYLE => Ok(Op::ParamStyle(name, read_arg(record, utf8)?)),
         OP_METHOD => match record.flags {
             ARG_NONE => {
-                if record.b != 0 {
+                if record.b != 0 || record.c != 0 {
                     return Err(STATUS_INVALID_ARGUMENT);
                 }
-                Ok(Op::Method(name, None))
+                Ok(Op::Method(name, Vec::new()))
             }
-            ARG_NUMBER => Ok(Op::Method(name, Some(StyleArg::Number(number(record.b)?)))),
-            ARG_STRING => Ok(Op::Method(
-                name,
-                Some(StyleArg::String(read_word(utf8, record.b)?)),
-            )),
-            ARG_ENUM => Ok(Op::Method(
-                name,
-                Some(StyleArg::Enum(read_word(utf8, record.b)?)),
-            )),
+            ARG_NUMBER => {
+                if record.c != 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                Ok(Op::Method(name, vec![StyleArg::Number(number(record.b)?)]))
+            }
+            ARG_STRING => {
+                if record.c != 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                Ok(Op::Method(
+                    name,
+                    vec![StyleArg::String(read_word(utf8, record.b)?)],
+                ))
+            }
+            ARG_ENUM => {
+                if record.c != 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                Ok(Op::Method(
+                    name,
+                    vec![StyleArg::Enum(read_word(utf8, record.b)?)],
+                ))
+            }
+            ARG_ELEMENT => {
+                if record.c != 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                let node = u32::try_from(record.b).map_err(|_| STATUS_INVALID_ARGUMENT)?;
+                Ok(Op::Method(name, vec![StyleArg::Element(node)]))
+            }
+            ARG_STRING_CALLBACK => {
+                if record.c == 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                Ok(Op::Method(
+                    name,
+                    vec![
+                        StyleArg::String(read_word(utf8, record.b)?),
+                        StyleArg::Callback(record.c),
+                    ],
+                ))
+            }
             _ => Err(STATUS_INVALID_ARGUMENT),
         },
         OP_CALLBACK => {
@@ -231,6 +265,10 @@ fn read_arg(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<StyleArg, i32
         ARG_NUMBER => Ok(StyleArg::Number(number(record.b)?)),
         ARG_STRING => Ok(StyleArg::String(read_word(utf8, record.b)?)),
         ARG_ENUM => Ok(StyleArg::Enum(read_word(utf8, record.b)?)),
+        ARG_ELEMENT => {
+            let node = u32::try_from(record.b).map_err(|_| STATUS_INVALID_ARGUMENT)?;
+            Ok(StyleArg::Element(node))
+        }
         _ => Err(STATUS_INVALID_ARGUMENT),
     }
 }
@@ -368,6 +406,7 @@ mod tests {
                     flags: ARG_STRING,
                     a: label_name,
                     b: label_value,
+                    c: 0,
                 },
                 GpuiNetOp {
                     node: 0,
@@ -375,6 +414,7 @@ mod tests {
                     flags: ARG_NONE,
                     a: nullary,
                     b: 0,
+                    c: 0,
                 },
                 GpuiNetOp {
                     node: 0,
@@ -382,6 +422,7 @@ mod tests {
                     flags: ARG_NONE,
                     a: click,
                     b: 7,
+                    c: 0,
                 },
             ],
             children: Vec::new(),
@@ -393,7 +434,7 @@ mod tests {
         assert_eq!(
             snapshot.nodes[0].ops,
             vec![
-                Op::Method("label".into(), Some(StyleArg::String("Save".into()))),
+                Op::Method("label".into(), vec![StyleArg::String("Save".into())]),
                 Op::NullaryStyle("items_center".into()),
                 Op::Callback("on_click".into(), 7),
             ]
@@ -419,6 +460,7 @@ mod tests {
                     flags: ARG_NUMBER,
                     a: size,
                     b: 2.0f32.to_bits() as u64,
+                    c: 0,
                 },
                 GpuiNetOp {
                     node: 0,
@@ -426,6 +468,7 @@ mod tests {
                     flags: ARG_NUMBER,
                     a: padding,
                     b: 12.0f32.to_bits() as u64,
+                    c: 0,
                 },
             ],
             children: Vec::new(),
@@ -436,7 +479,7 @@ mod tests {
         assert_eq!(
             snapshot.nodes[0].ops,
             vec![
-                Op::Method("size".into(), Some(StyleArg::Number(2.0))),
+                Op::Method("size".into(), vec![StyleArg::Number(2.0)]),
                 Op::ParamStyle("p".into(), StyleArg::Number(12.0)),
             ]
         );
@@ -526,6 +569,7 @@ mod tests {
                 flags: 0,
                 a: 0,
                 b: 0,
+                c: 0,
             }],
             children: Vec::new(),
             utf8: Vec::new(),
@@ -562,6 +606,7 @@ mod tests {
             click: None,
             retire_callbacks: Some(retire),
             invoke: None,
+            resolve_rows: None,
         };
         let snapshot = Snapshot {
             root: 0,

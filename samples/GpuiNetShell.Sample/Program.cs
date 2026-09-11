@@ -55,6 +55,8 @@ internal sealed class GalleryView : View
         "Feedback",
         "Elements",
         "Interactive",
+        "Display",
+        "Menus",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -86,6 +88,8 @@ internal sealed class GalleryView : View
             9 => FeedbackPage(ref ui),
             10 => ElementsPage(ref ui),
             11 => InteractivePage(ref ui),
+            12 => DisplayPage(ref ui),
+            13 => MenusPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -390,6 +394,52 @@ internal sealed class GalleryView : View
                     .ItemsCenter(),
                 ui.HStack(ui.Label("Copy id"), ui.Clipboard("copy").Value("gpui-net-shell").Tooltip("Copy to clipboard"))
                     .Gap(8)
+                    .ItemsCenter()
+            )
+            .Gap(16);
+
+    private Element DisplayPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Display", "Breadcrumbs, group boxes, status bars, and alerts."),
+                ui.Breadcrumb("Home", "Settings", "Profile"),
+                ui.GroupBox()
+                    .Title("Options")
+                    .Variant(GroupBoxVariant.Outline)
+                    .Add(ui.Text("Grouped content inside a titled container.")),
+                ui.StatusBar()
+                    .LeftContent(ui.Label("Ready"))
+                    .RightContent(ui.Label("v0.1.0"))
+                    .Add(ui.Text("Three-region status bar")),
+                ui.InfoAlert("info", "A short informational message.").Title("Heads up"),
+                ui.SuccessAlert("ok", "Everything completed successfully."),
+                ui.WarningAlert("warn", "Check your connection.").Banner(),
+                ui.ErrorAlert("err", "Something went wrong.")
+            )
+            .Gap(16);
+
+    private Element MenusPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Menus", "Tooltips, hover cards, and dropdown menus."),
+                ui.HStack(
+                        ui.Tooltip("tip", "Save", "Saves the current document"),
+                        ui.HoverCard("hover")
+                            .TriggerElement(ui.Button("hover-trigger").Label("Hover me").Secondary())
+                            .Content(
+                                ui.VStack(ui.Label("Hover card"), ui.Text("Shown on hover."))
+                                    .Gap(4)
+                                    .P(8)
+                            ),
+                        ui.DropdownMenu("menu", "Actions")
+                            .Item("Copy", () => { })
+                            .Item("Paste", () => { })
+                            .Item("Delete", () => { }),
+                        ui.DropdownButton("split", "Run")
+                            .Variant(DropdownVariant.Primary)
+                            .MenuItem("Run once", () => { })
+                            .MenuItem("Run all", () => { })
+                            .OnClick(() => { })
+                    )
+                    .Gap(16)
                     .ItemsCenter()
             )
             .Gap(16);

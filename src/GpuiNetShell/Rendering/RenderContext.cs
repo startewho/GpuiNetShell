@@ -238,6 +238,96 @@ public sealed class RenderContext
         return new ClipboardElement(this, index);
     }
 
+    /// <summary>Declares a navigation trail from an ordered list of labels.</summary>
+    public BreadcrumbElement Breadcrumb(params string[] labels)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentBreadcrumb);
+        _arena.SetNodeData(index, string.Join('\n', labels ?? []));
+        return new BreadcrumbElement(this, index);
+    }
+
+    /// <summary>Declares a titled container for grouping related content.</summary>
+    public GroupBoxElement GroupBox() =>
+        new GroupBoxElement(this, _arena.AddNode(NativeProtocol.ComponentGroupBox));
+
+    /// <summary>Declares a three-region status bar.</summary>
+    public StatusBarElement StatusBar() =>
+        new StatusBarElement(this, _arena.AddNode(NativeProtocol.ComponentStatusBar));
+
+    /// <summary>Declares a default message banner.</summary>
+    public AlertElement Alert(string id, string message) => Alert("Alert", id, message);
+
+    /// <summary>Declares an informational message banner.</summary>
+    public AlertElement InfoAlert(string id, string message) => Alert("InfoAlert", id, message);
+
+    /// <summary>Declares a success message banner.</summary>
+    public AlertElement SuccessAlert(string id, string message) => Alert("SuccessAlert", id, message);
+
+    /// <summary>Declares a warning message banner.</summary>
+    public AlertElement WarningAlert(string id, string message) => Alert("WarningAlert", id, message);
+
+    /// <summary>Declares an error message banner.</summary>
+    public AlertElement ErrorAlert(string id, string message) => Alert("ErrorAlert", id, message);
+
+    private AlertElement Alert(string export, string id, string message)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentAlert);
+        _arena.SetNodeData(
+            index,
+            export
+                + NativeProtocol.ConstructorArgSeparator
+                + id
+                + NativeProtocol.ConstructorArgSeparator
+                + message
+        );
+        return new AlertElement(this, index);
+    }
+
+    /// <summary>Declares a button trigger with a text tooltip.</summary>
+    public TooltipElement Tooltip(string id, string label, string text)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTooltip);
+        _arena.SetNodeData(
+            index,
+            id
+                + NativeProtocol.ConstructorArgSeparator
+                + label
+                + NativeProtocol.ConstructorArgSeparator
+                + text
+        );
+        return new TooltipElement(this, index);
+    }
+
+    /// <summary>Declares a hover-triggered card.</summary>
+    public HoverCardElement HoverCard(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentHoverCard);
+        _arena.SetNodeData(index, id);
+        return new HoverCardElement(this, index);
+    }
+
+    /// <summary>Declares a button-triggered popup menu.</summary>
+    public DropdownMenuElement DropdownMenu(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDropdownMenu);
+        _arena.SetNodeData(
+            index,
+            id + NativeProtocol.ConstructorArgSeparator + label
+        );
+        return new DropdownMenuElement(this, index);
+    }
+
+    /// <summary>Declares a split dropdown button.</summary>
+    public DropdownButtonElement DropdownButton(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDropdownButton);
+        _arena.SetNodeData(
+            index,
+            id + NativeProtocol.ConstructorArgSeparator + label
+        );
+        return new DropdownButtonElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

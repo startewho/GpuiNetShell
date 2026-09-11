@@ -14,10 +14,10 @@ namespace GpuiNetShell.Interop;
 /// </remarks>
 public static class NativeProtocol
 {
-    public const uint AbiVersion = 2;
+    public const uint AbiVersion = 4;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C35;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C39;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one
@@ -52,6 +52,14 @@ public static class NativeProtocol
     public const uint ComponentPagination = 22;
     public const uint ComponentRating = 23;
     public const uint ComponentClipboard = 24;
+    public const uint ComponentBreadcrumb = 25;
+    public const uint ComponentGroupBox = 26;
+    public const uint ComponentStatusBar = 27;
+    public const uint ComponentAlert = 28;
+    public const uint ComponentTooltip = 29;
+    public const uint ComponentHoverCard = 30;
+    public const uint ComponentDropdownMenu = 31;
+    public const uint ComponentDropdownButton = 32;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.
@@ -67,6 +75,10 @@ public static class NativeProtocol
     public const ushort ArgString = 2;
     /// <summary>A closed-set literal for a component method, packed like <see cref="ArgString"/>.</summary>
     public const ushort ArgEnum = 3;
+    /// <summary>An element argument: <c>b</c> is the child node index to materialize.</summary>
+    public const ushort ArgElement = 4;
+    /// <summary>A two-argument method: <c>b</c> is a packed string, <c>c</c> a callback token.</summary>
+    public const ushort ArgStringCallback = 5;
 
     // Callback value kinds delivered through the `invoke` callback.
     public const uint CallbackValueNone = 0;
@@ -81,4 +93,5 @@ public static class NativeProtocol
     public const uint NotificationError = 3;
 
     public const int StatusOk = 0;
+    public const int StatusTruncated = -3;
 }

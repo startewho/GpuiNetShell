@@ -22,6 +22,7 @@ use gpui::{
 };
 
 use crate::context::HostContext;
+use crate::snapshot::RenderSnapshot;
 
 /// A registered component's position in the registry.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -61,6 +62,8 @@ pub enum ComponentArgument {
     Boolean(bool),
     Enum(String),
     Callback(u64),
+    /// A child node index supplied as an element argument, materialized lazily.
+    Element(u32),
 }
 
 impl ComponentArgument {
@@ -84,7 +87,7 @@ impl ComponentArgument {
             Self::Boolean(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) | Self::Enum(value) => !value.is_empty(),
-            Self::Callback(_) => true,
+            Self::Callback(_) | Self::Element(_) => true,
         }
     }
 }
@@ -98,6 +101,8 @@ pub enum ArgumentSchema {
     /// A closed set of string literals a method accepts.
     Enum(&'static [&'static str]),
     Callback,
+    /// A child element materialized lazily and passed to the method.
+    Element,
 }
 
 /// One declared argument of a constructor or method.
@@ -327,6 +332,89 @@ impl ComponentCallback {
     }
 }
 
+/// A materialized ordinary child, carrying the name of the component it came
+/// from so a typed parent can validate or route it.
+pub struct ChildElement {
+    component: &'static str,
+    element: AnyElement,
+}
+
+impl ChildElement {
+    pub(crate) fn new(component: &'static str, element: AnyElement) -> Self {
+        Self { component, element }
+    }
+
+    pub fn component(&self) -> &'static str {
+        self.component
+    }
+}
+
+/// One row returned by a managed row-snapshot callback (P4).
+pub type Row = Vec<String>;
+
+/// Rebuilds a node subtree on demand.
+///
+/// A lazy slot or element argument cannot reuse the eager materialization
+/// produced for a parent: the shell hands an element to a closure that must be
+/// able to produce it again (a popover's content, a status bar's region). This
+/// factory owns everything the materializer needs — the frozen catalog, the
+/// rendered snapshot, and the host — so it can rebuild any node at any time and
+/// still be `'static`.
+#[derive(Clone)]
+pub struct NodeFactory {
+    registry: FrozenComponentRegistry,
+    snapshot: RenderSnapshot,
+    host: HostContext,
+}
+
+impl NodeFactory {
+    pub fn new(
+        registry: &FrozenComponentRegistry,
+        snapshot: &RenderSnapshot,
+        host: &HostContext,
+    ) -> Self {
+        Self {
+            registry: registry.clone(),
+            snapshot: snapshot.clone(),
+            host: host.clone(),
+        }
+    }
+
+    pub fn registry(&self) -> &FrozenComponentRegistry {
+        &self.registry
+    }
+
+    pub fn snapshot(&self) -> &RenderSnapshot {
+        &self.snapshot
+    }
+
+    pub fn host(&self) -> &HostContext {
+        &self.host
+    }
+
+    pub fn build(
+        &self,
+        node: u32,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<AnyElement, String> {
+        crate::materialize::materialize_node(self, node, window, cx)
+    }
+}
+
+/// A named slot that rebuilds its node each time it is taken.
+#[derive(Clone)]
+pub struct SlotFactory {
+    factory: NodeFactory,
+    node: u32,
+}
+
+impl SlotFactory {
+    pub fn build(&self, window: &mut Window, cx: &mut App) -> Result<AnyElement, String> {
+        self.factory.build(self.node, window, cx)
+    }
+}
+
 /// Turns a recorded component into an element.
 pub trait ComponentMaterializer: Send + Sync + 'static {
     fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String>;
@@ -337,12 +425,11 @@ pub struct MaterializeRequest<'a> {
     component_name: &'static str,
     payload: &'a ComponentPayload,
     methods: &'a [RecordedComponentMethod],
-    host: &'a HostContext,
+    factory: NodeFactory,
     style: Option<StyleRefinement>,
-    children: Vec<AnyElement>,
-    /// Named children the component reads by name instead of as ordinary
-    /// children (a popover's `trigger` and `content`).
-    slots: Vec<(String, AnyElement)>,
+    children: Vec<ChildElement>,
+    /// Named slots, held as node ids so they materialize only when taken.
+    slots: Vec<(String, u32)>,
     disabled: bool,
     selected: bool,
     on_click: Option<u64>,
@@ -356,10 +443,10 @@ impl<'a> MaterializeRequest<'a> {
         component_name: &'static str,
         payload: &'a ComponentPayload,
         methods: &'a [RecordedComponentMethod],
-        host: &'a HostContext,
+        factory: NodeFactory,
         style: StyleRefinement,
-        children: Vec<AnyElement>,
-        slots: Vec<(String, AnyElement)>,
+        children: Vec<ChildElement>,
+        slots: Vec<(String, u32)>,
         disabled: bool,
         selected: bool,
         on_click: Option<u64>,
@@ -370,7 +457,7 @@ impl<'a> MaterializeRequest<'a> {
             component_name,
             payload,
             methods,
-            host,
+            factory,
             style: Some(style),
             children,
             slots,
@@ -395,7 +482,7 @@ impl<'a> MaterializeRequest<'a> {
     }
 
     pub fn host(&self) -> &HostContext {
-        self.host
+        self.factory.host()
     }
 
     pub fn disabled(&self) -> bool {
@@ -418,10 +505,65 @@ impl<'a> MaterializeRequest<'a> {
     ) -> Result<ComponentCallback, String> {
         match argument {
             ComponentArgument::Callback(token) => Ok(ComponentCallback {
-                host: self.host.clone(),
+                host: self.factory.host().clone(),
                 token: *token,
             }),
             other => Err(format!("expected a callback argument, got {other:?}")),
+        }
+    }
+
+    /// Materializes an element argument (P3) on first use.
+    pub fn resolve_element(&mut self, argument: &ComponentArgument) -> Result<AnyElement, String> {
+        match argument {
+            ComponentArgument::Element(node) => self.factory.build(*node, self.window, self.cx),
+            other => Err(format!("expected an element argument, got {other:?}")),
+        }
+    }
+
+    /// Invokes a managed row-snapshot callback (P4) and parses its rows.
+    ///
+    /// The managed side writes newline-separated rows of tab-separated fields;
+    /// a [`crate::schema::STATUS_TRUNCATED`] reply means its buffer was too
+    /// small, so the call is retried with the size it reported.
+    pub fn resolve_rows(&self, argument: &ComponentArgument) -> Result<Vec<Row>, String> {
+        let token = match argument {
+            ComponentArgument::Callback(token) => *token,
+            other => return Err(format!("expected a rows callback, got {other:?}")),
+        };
+        let host = self.factory.host();
+        let Some(resolve) = host.callbacks.resolve_rows else {
+            return Err("the host has no resolve_rows callback".into());
+        };
+
+        let mut capacity = 64 * 1024usize;
+        loop {
+            let mut buffer = vec![0u8; capacity];
+            let mut length = 0u32;
+            // SAFETY: the buffer is live for the call and the managed side
+            // writes at most `capacity` bytes before returning.
+            let status = unsafe {
+                resolve(
+                    host.session_id,
+                    token,
+                    buffer.as_mut_ptr(),
+                    capacity as u32,
+                    &mut length,
+                )
+            };
+            if status == crate::schema::STATUS_TRUNCATED {
+                capacity = (length as usize).max(capacity * 2);
+                if capacity > 8 * 1024 * 1024 {
+                    return Err("row snapshot is too large".into());
+                }
+                continue;
+            }
+            if status != crate::schema::STATUS_OK {
+                return Err(format!("row snapshot failed with status {status}"));
+            }
+            buffer.truncate(length as usize);
+            let text =
+                String::from_utf8(buffer).map_err(|_| "row snapshot is not UTF-8".to_string())?;
+            return Ok(parse_rows(&text));
         }
     }
 
@@ -429,16 +571,52 @@ impl<'a> MaterializeRequest<'a> {
         self.children.len()
     }
 
-    pub fn take_children(&mut self) -> Vec<AnyElement> {
-        std::mem::take(&mut self.children)
+    /// The component name of each ordinary child, in declaration order.
+    pub fn child_component_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.children.iter().map(|child| child.component)
     }
 
-    /// Takes a named slot, if the description supplied one.
-    pub fn take_slot(&mut self, name: &str) -> Option<AnyElement> {
-        self.slots
-            .iter()
-            .position(|(held, _)| held == name)
-            .map(|index| self.slots.remove(index).1)
+    pub fn take_children(&mut self) -> Vec<AnyElement> {
+        self.children.drain(..).map(|child| child.element).collect()
+    }
+
+    /// Takes ordinary children, requiring each to be one of `expected`.
+    ///
+    /// This is the typed-parent contract (P5): a `Menu` accepts only `MenuItem`
+    /// children, and a script that nests anything else is told which component
+    /// was wrong rather than failing silently.
+    pub fn take_children_of(&mut self, expected: &[&str]) -> Result<Vec<AnyElement>, String> {
+        let mut result = Vec::with_capacity(self.children.len());
+        for child in self.children.drain(..) {
+            if !expected.contains(&child.component) {
+                return Err(format!(
+                    "{} accepts only {} children; received {}",
+                    self.component_name,
+                    expected.join(" or "),
+                    child.component
+                ));
+            }
+            result.push(child.element);
+        }
+        Ok(result)
+    }
+
+    /// Materializes a named slot, if the description supplied one.
+    pub fn take_slot(&mut self, name: &str) -> Result<Option<AnyElement>, String> {
+        match self.take_slot_factory(name) {
+            Some(factory) => Ok(Some(factory.build(self.window, self.cx)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Takes a named slot as a rebuildable factory, if one was supplied.
+    pub fn take_slot_factory(&mut self, name: &str) -> Option<SlotFactory> {
+        let index = self.slots.iter().position(|(held, _)| held == name)?;
+        let (_, node) = self.slots.remove(index);
+        Some(SlotFactory {
+            factory: self.factory.clone(),
+            node,
+        })
     }
 
     /// Runs `body` with the current window and app, for components that need
@@ -489,6 +667,14 @@ impl<'a> MaterializeRequest<'a> {
         element.extend(self.take_children());
         Ok(element.into_any_element())
     }
+}
+
+/// Parses newline-separated rows of tab-separated fields.
+fn parse_rows(text: &str) -> Vec<Row> {
+    text.lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| line.split('\t').map(str::to_owned).collect())
+        .collect()
 }
 
 /// One registered component: what a description can construct, what it can call
@@ -746,5 +932,18 @@ mod tests {
                 method: "label",
             }
         );
+    }
+
+    #[test]
+    fn row_snapshots_parse_tab_separated_fields() {
+        assert!(parse_rows("").is_empty());
+        assert_eq!(
+            parse_rows("a\tb\nc\td\n"),
+            vec![
+                vec!["a".to_string(), "b".to_string()],
+                vec!["c".to_string(), "d".to_string()],
+            ]
+        );
+        assert_eq!(parse_rows("only"), vec![vec!["only".to_string()]]);
     }
 }

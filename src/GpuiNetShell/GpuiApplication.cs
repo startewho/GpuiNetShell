@@ -106,6 +106,30 @@ public sealed class GpuiApplication
         return Marshal.PtrToStringUTF8((IntPtr)data, (int)length) ?? string.Empty;
     }
 
+    /// <summary>
+    /// Fills <paramref name="buffer"/> with the tab-separated rows a row
+    /// provider returns for <paramref name="token"/>. Reports the required byte
+    /// count so native code can retry with a larger buffer.
+    /// </summary>
+    internal unsafe int OnResolveRows(ulong token, byte* buffer, uint capacity, uint* outLen)
+    {
+        if (!_events.TryGetRows(token, out var provider))
+        {
+            return -1;
+        }
+        var bytes = Encoding.UTF8.GetBytes(provider() ?? string.Empty);
+        *outLen = (uint)bytes.Length;
+        if (bytes.Length > capacity)
+        {
+            return NativeProtocol.StatusTruncated;
+        }
+        if (bytes.Length > 0)
+        {
+            Marshal.Copy(bytes, 0, (IntPtr)buffer, bytes.Length);
+        }
+        return NativeProtocol.StatusOk;
+    }
+
     /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
     internal int OnRetireCallbacks(ulong generation)
     {

@@ -19,9 +19,10 @@ pub struct GpuiNetNode {
 
 /// One operation applied to an element.
 ///
-/// `a`/`b` are interpreted by `code`. String operations pack
+/// `a`/`b`/`c` are interpreted by `code`. String operations pack
 /// `(offset << 32) | len` into `a` with `b == 0`. Scalar operations use `a`
-/// with `b == 0`. `flags` is reserved and must be zero.
+/// with `b == 0`. A method taking two arguments uses `b` for the first and `c`
+/// for the second. `flags` classifies the argument(s).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GpuiNetOp {
@@ -30,6 +31,7 @@ pub struct GpuiNetOp {
     pub flags: u16,
     pub a: u64,
     pub b: u64,
+    pub c: u64,
 }
 
 /// A parent/child edge. `parent` and `child` index [`GpuiNetArena::nodes`].
@@ -122,6 +124,19 @@ pub struct GpuiNetCallbacks {
             data_len: u32,
         ) -> i32,
     >,
+    /// Fills a caller-owned buffer with newline-separated rows of tab-separated
+    /// fields for a row-snapshot callback token. Reports the required byte
+    /// count through `out_len`; returns [`crate::schema::STATUS_TRUNCATED`] when
+    /// `capacity` was too small so the caller can retry with a larger buffer.
+    pub resolve_rows: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            token: u64,
+            buffer: *mut u8,
+            capacity: u32,
+            out_len: *mut u32,
+        ) -> i32,
+    >,
 }
 
 impl std::fmt::Debug for GpuiNetCallbacks {
@@ -197,8 +212,8 @@ mod tests {
     fn record_layouts_are_stable() {
         assert_eq!(std::mem::size_of::<GpuiNetNode>(), 16);
         assert_eq!(std::mem::size_of::<GpuiNetChild>(), 8);
-        // node(4) + code(2) + flags(2) = 8, then two aligned u64 words.
-        assert_eq!(std::mem::size_of::<GpuiNetOp>(), 24);
+        // node(4) + code(2) + flags(2) = 8, then three aligned u64 words.
+        assert_eq!(std::mem::size_of::<GpuiNetOp>(), 32);
     }
 
     #[test]

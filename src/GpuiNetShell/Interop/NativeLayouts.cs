@@ -12,7 +12,7 @@ internal struct NativeNode
     public uint DataLen;
 }
 
-/// <summary>Mirrors <c>GpuiNetOp</c>. 24 bytes.</summary>
+/// <summary>Mirrors <c>GpuiNetOp</c>. 32 bytes.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct NativeOp
 {
@@ -21,6 +21,7 @@ internal struct NativeOp
     public ushort Flags;
     public ulong A;
     public ulong B;
+    public ulong C;
 }
 
 /// <summary>Mirrors <c>GpuiNetChild</c>. 8 bytes.</summary>
@@ -62,6 +63,7 @@ internal unsafe struct NativeCallbacks
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> Click;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> RetireCallbacks;
     public delegate* unmanaged[Cdecl]<ulong, ulong, uint, double, byte*, uint, int> Invoke;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, byte*, uint, uint*, int> ResolveRows;
 }
 
 /// <summary>Mirrors <c>GpuiNetShellApi</c>. 80 bytes.</summary>

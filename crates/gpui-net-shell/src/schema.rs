@@ -11,11 +11,11 @@
 //! behavior is a generic `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 4;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C35;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C39;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -78,6 +78,22 @@ pub const COMPONENT_PAGINATION: u32 = 22;
 pub const COMPONENT_RATING: u32 = 23;
 #[allow(dead_code)]
 pub const COMPONENT_CLIPBOARD: u32 = 24;
+#[allow(dead_code)]
+pub const COMPONENT_BREADCRUMB: u32 = 25;
+#[allow(dead_code)]
+pub const COMPONENT_GROUP_BOX: u32 = 26;
+#[allow(dead_code)]
+pub const COMPONENT_STATUS_BAR: u32 = 27;
+#[allow(dead_code)]
+pub const COMPONENT_ALERT: u32 = 28;
+#[allow(dead_code)]
+pub const COMPONENT_TOOLTIP: u32 = 29;
+#[allow(dead_code)]
+pub const COMPONENT_HOVER_CARD: u32 = 30;
+#[allow(dead_code)]
+pub const COMPONENT_DROPDOWN_MENU: u32 = 31;
+#[allow(dead_code)]
+pub const COMPONENT_DROPDOWN_BUTTON: u32 = 32;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -106,6 +122,10 @@ pub const ARG_NUMBER: u16 = 1;
 pub const ARG_STRING: u16 = 2;
 /// A closed-set literal for a component method, packed like [`ARG_STRING`].
 pub const ARG_ENUM: u16 = 3;
+/// An element argument: `b` is the index of the child node to materialize.
+pub const ARG_ELEMENT: u16 = 4;
+/// A two-argument method: `b` is a packed string, `c` is a callback token.
+pub const ARG_STRING_CALLBACK: u16 = 5;
 
 // ---------------------------------------------------------------------------
 // Callback values
@@ -140,7 +160,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C35);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C39);
     }
 
     #[test]

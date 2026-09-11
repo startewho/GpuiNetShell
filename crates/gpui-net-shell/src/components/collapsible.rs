@@ -41,7 +41,7 @@ impl ComponentMaterializer for CollapsibleMaterializer {
                 CollapsibleOp::MotionId(id) => component.motion_id(id.clone()),
             };
         }
-        if let Some(content) = request.take_slot("content") {
+        if let Some(content) = request.take_slot("content")? {
             component = component.content(content);
         }
         request.finish(component)

@@ -51,4 +51,21 @@ public sealed class EventRegistryTests
         var registry = new EventRegistry();
         Assert.False(registry.Dispatch(42));
     }
+
+    [Fact]
+    public void RowProvidersResolveAndRetireWithTheirGeneration()
+    {
+        var registry = new EventRegistry();
+
+        registry.BeginGeneration(1);
+        var token = registry.RegisterRows(() => "a\tb\nc\td");
+
+        Assert.True(registry.TryGetRows(token, out var provider));
+        Assert.Equal("a\tb\nc\td", provider());
+
+        registry.BeginGeneration(2);
+        registry.Retire(1);
+
+        Assert.False(registry.TryGetRows(token, out _));
+    }
 }

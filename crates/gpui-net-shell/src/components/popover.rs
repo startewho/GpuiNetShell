@@ -3,18 +3,19 @@
 //! A button-triggered popover. The trigger is built from the constructor's
 //! `(id, label)`; the surface content arrives as the named `content` slot.
 //!
-//! The materializer uses `gpui-base`'s `Popover`, whose content builder is
-//! `FnOnce`: this runtime materializes children eagerly, so it has no lazy slot
-//! factory to hand a re-runnable `Fn`. The method vocabulary still matches
-//! `component-shell` (`card_anchor`, `default_open`, `open`, `overlay_closable`,
-//! `on_open_change`); `appearance` is omitted because the base surface has no
-//! unstyled mode.
+//! The content is attached as an ordinary child of the styled
+//! `gpui-component` `Popover`, so it is painted inside the popover surface
+//! (background, border, radius, padding) rather than as unstyled children.
 
 use std::sync::Arc;
 
-use gpui::{div, Anchor, AnyElement, ParentElement as _};
-use gpui_base::Popover;
-use gpui_component::button::{Button, ButtonVariants as _};
+use gpui::{
+    div, Anchor, AnyElement, IntoElement as _, ParentElement as _, Refineable as _, Styled as _,
+};
+use gpui_component::{
+    button::{Button, ButtonVariants as _},
+    popover::Popover,
+};
 
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallbackArgument,
@@ -33,6 +34,7 @@ enum PopoverOp {
     Anchor(Anchor),
     DefaultOpen(bool),
     Open(bool),
+    Appearance(bool),
     OverlayClosable(bool),
     OnOpenChange(ComponentArgument),
 }
@@ -47,7 +49,7 @@ impl ComponentMaterializer for PopoverMaterializer {
             .ok_or_else(|| "Popover received an incompatible payload".to_string())?
             .clone();
         let content = request
-            .take_slot("content")
+            .take_slot("content")?
             .ok_or_else(|| "Popover requires content(element)".to_string())?;
 
         let mut popover = Popover::new(payload.id.clone()).trigger(
@@ -63,6 +65,7 @@ impl ComponentMaterializer for PopoverMaterializer {
                 PopoverOp::Anchor(anchor) => popover.anchor(anchor),
                 PopoverOp::DefaultOpen(open) => popover.default_open(open),
                 PopoverOp::Open(open) => popover.open(open),
+                PopoverOp::Appearance(appearance) => popover.appearance(appearance),
                 PopoverOp::OverlayClosable(closable) => popover.overlay_closable(closable),
                 PopoverOp::OnOpenChange(argument) => {
                     let callback = request.resolve_callback(&argument)?;
@@ -77,8 +80,11 @@ impl ComponentMaterializer for PopoverMaterializer {
                 }
             };
         }
-        popover = popover.content(move |_, _window, _cx| content);
-        request.finish(div().child(popover))
+        // The styled `Popover` paints its ordinary children inside its surface.
+        popover.extend([content]);
+        let mut wrapper = div().child(popover);
+        wrapper.style().refine(&request.take_style());
+        Ok(wrapper.into_any_element())
     }
 }
 
@@ -170,6 +176,8 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         .with_documentation("Sets the initial uncontrolled open state."),
                     boolean("open", PopoverOp::Open)
                         .with_documentation("Controls whether the popover is open."),
+                    boolean("appearance", PopoverOp::Appearance)
+                        .with_documentation("Controls the native popover surface styling."),
                     boolean("overlay_closable", PopoverOp::OverlayClosable).with_documentation(
                         "Controls whether pressing outside dismisses the popover.",
                     ),
@@ -182,9 +190,6 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         |arguments| match arguments {
                             [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
                                 PopoverOp::OnOpenChange(ComponentArgument::Callback(*token)),
-                            )),
-                            [ComponentArgument::Number(token)] => Ok(ComponentPayload::new(
-                                PopoverOp::OnOpenChange(ComponentArgument::Callback(*token as u64)),
                             )),
                             _ => Err("Popover.on_open_change(callback) expects a callback".into()),
                         },

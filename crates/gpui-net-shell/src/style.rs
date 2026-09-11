@@ -37,22 +37,25 @@ pub enum StyleArg {
     Enum(String),
     /// A callback token passed as a component method argument (`on_change`).
     Callback(u64),
+    /// A child node passed as an element argument, materialized lazily.
+    Element(u32),
 }
 
 impl StyleArg {
     pub(crate) fn as_f32(&self) -> Result<f32, String> {
         match self {
             StyleArg::Number(value) => Ok(*value),
-            StyleArg::String(_) | StyleArg::Enum(_) | StyleArg::Callback(_) => {
-                Err("expected a number, got a string".into())
-            }
+            StyleArg::String(_)
+            | StyleArg::Enum(_)
+            | StyleArg::Callback(_)
+            | StyleArg::Element(_) => Err("expected a number, got a string".into()),
         }
     }
 
     pub(crate) fn as_str(&self) -> Result<&str, String> {
         match self {
             StyleArg::String(value) | StyleArg::Enum(value) => Ok(value),
-            StyleArg::Number(_) | StyleArg::Callback(_) => {
+            StyleArg::Number(_) | StyleArg::Callback(_) | StyleArg::Element(_) => {
                 Err("expected a string, got a number".into())
             }
         }
@@ -63,7 +66,7 @@ impl StyleArg {
         match self {
             StyleArg::Number(value) => *value != 0.0 && !value.is_nan(),
             StyleArg::String(value) | StyleArg::Enum(value) => !value.is_empty(),
-            StyleArg::Callback(_) => true,
+            StyleArg::Callback(_) | StyleArg::Element(_) => true,
         }
     }
 

@@ -14,6 +14,7 @@ namespace GpuiNetShell.Events;
 public sealed class EventRegistry
 {
     private readonly Dictionary<ulong, Action<EventValue>> _handlers = [];
+    private readonly Dictionary<ulong, Func<string>> _rowProviders = [];
     private readonly Dictionary<ulong, List<ulong>> _generations = [];
     private ulong _next = 1;
     private ulong _generation;
@@ -45,6 +46,26 @@ public sealed class EventRegistry
         return token;
     }
 
+    /// <summary>
+    /// Registers a row-snapshot provider — a callback the native host invokes
+    /// to obtain tab-separated rows — and returns its never-reused token.
+    /// </summary>
+    public ulong RegisterRows(Func<string> provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        var token = _next++;
+        _rowProviders[token] = provider;
+        if (_generations.TryGetValue(_generation, out var tokens))
+        {
+            tokens.Add(token);
+        }
+        return token;
+    }
+
+    /// <summary>Resolves a row-snapshot provider; false when retired.</summary>
+    public bool TryGetRows(ulong token, out Func<string> provider) =>
+        _rowProviders.TryGetValue(token, out provider!);
+
     /// <summary>Runs the handler for <paramref name="token"/>; false when retired.</summary>
     public bool Dispatch(ulong token) => DispatchValue(token, EventValue.None);
 
@@ -70,6 +91,7 @@ public sealed class EventRegistry
             foreach (var token in tokens)
             {
                 _handlers.Remove(token);
+                _rowProviders.Remove(token);
             }
         }
     }
@@ -77,6 +99,7 @@ public sealed class EventRegistry
     public void Clear()
     {
         _handlers.Clear();
+        _rowProviders.Clear();
         _generations.Clear();
         _next = 1;
         _generation = 0;

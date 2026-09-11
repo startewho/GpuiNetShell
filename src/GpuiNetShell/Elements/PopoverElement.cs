@@ -41,6 +41,13 @@ public sealed class PopoverElement : Element
         return this;
     }
 
+    /// <summary>Controls the native popover surface styling.</summary>
+    public PopoverElement Appearance(bool appearance = true)
+    {
+        Arena.AddMethodNumber(Index, "appearance", appearance ? 1 : 0);
+        return this;
+    }
+
     /// <summary>Controls whether pressing outside dismisses the surface.</summary>
     public PopoverElement OverlayClosable(bool closable = true)
     {
