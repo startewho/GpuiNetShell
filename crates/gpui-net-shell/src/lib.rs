@@ -5,16 +5,15 @@
 //! loop, validation, and materialization, and never exposes a GPUI type across
 //! the C ABI.
 //!
-//! The component vocabulary in [`schema`] is mirrored in
-//! `src/GpuiNetShell/Interop/NativeProtocol.cs`. Adding a component is a
-//! descriptor in [`registry`] plus a materializer in [`components`].
+//! The shape follows `gpui-shell`: [`snapshot`] decodes the description,
+//! [`style`] resolves reflected style method names, and [`materialize`]
+//! dispatches one component at a time. The wire vocabulary in [`schema`] is
+//! mirrored in `src/GpuiNetShell/Interop/NativeProtocol.cs`.
 
 mod abi;
-mod components;
 mod ffi;
 mod host;
 mod materialize;
-mod registry;
 mod schema;
 mod snapshot;
 mod style;
@@ -23,5 +22,5 @@ pub use abi::{
     GpuiNetArena, GpuiNetCallbacks, GpuiNetChild, GpuiNetNode, GpuiNetOp, GpuiNetShellApi,
 };
 pub use ffi::{gpui_net_shell_abi_version, gpui_net_shell_get_api, gpui_net_shell_schema_hash};
-pub use registry::ComponentRegistry;
 pub use snapshot::{Node, Op, Snapshot};
+pub use style::StyleArg;

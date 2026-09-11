@@ -20,9 +20,9 @@ GpuiNetShell managed runtime  (RenderArena, EventRegistry, GpuiApplication)
         ▼
 gpui-net-shell native host  (Rust)
         ├─ app host: gpui::Application, window, event loop
-        ├─ arena decode -> owned ValidatedSnapshot
-        ├─ component registry (Div, Text, Button)
-        └─ materializers -> gpui-component / gpui-base elements
+        ├─ snapshot decode -> owned description
+        ├─ style.rs: reflected GPUI style table
+        └─ materialize.rs: Component dispatch + Behavior + finish
 ```
 
 The split mirrors `gpui-shell`: a description is published only when state
@@ -41,9 +41,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/abi.rs                     C layouts and the API table
   src/snapshot.rs                arena decode + validation
   src/style.rs                   reflected GPUI style table (shell-style)
-  src/registry.rs                component descriptors
-  src/components/                Div, Text, Button materializers
-  src/materialize.rs             recursive dispatch
+  src/materialize.rs             Component dispatch, Behavior, finish
   src/host.rs                    GPUI application and window
   src/ffi.rs                     panic-safe C entry points
 src/GpuiNetShell/              Managed runtime library

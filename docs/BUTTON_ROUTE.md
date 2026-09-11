@@ -2,6 +2,7 @@
 
 This is the first complete vertical slice: a C# `Button` declaration becomes a
 real `gpui-component` button, and activating it calls back into managed code.
+The native walk mirrors `gpui-shell`'s `materialize.rs`.
 
 ## 1. Declaration (C#)
 
@@ -14,65 +15,66 @@ ui.Button("increment")
 
 - `RenderContext.Button` (`src/GpuiNetShell/Rendering/RenderContext.cs`) adds a
   node with `ComponentButton` and the id (`"increment"`) as node data.
-- `ButtonElement` (`src/GpuiNetShell/Elements/ButtonElement.cs`) appends
-  operations: `OpLabel`, `OpButtonVariant(Primary)`, and `OpOnClick(token)`.
+- `ButtonElement` (`src/GpuiNetShell/Elements/ButtonElement.cs`) records generic
+  operations: `Method("label", "Increment")`, `Method("primary")`, and
+  `Callback("on_click", token)`.
 - `OnClick` registers the handler in the `EventRegistry` and writes the returned
-  token into the arena.
+  token into the callback operation.
 
 ## 2. Arena (C#)
 
 `RenderArena` (`src/GpuiNetShell/Rendering/RenderArena.cs`) collects the nodes,
 operations, edges, and UTF-8, then `Publish()` copies them into reused unmanaged
-buffers and returns a `NativeArena` descriptor.
+buffers and returns a `NativeArena` descriptor. Every operation's `a` is the
+packed UTF-8 range of a method name; `flags` classifies the argument in `b`.
 
 ## 3. Callback and decode (Rust)
 
 The native host is dirty, so `ShellView::refresh`
-(`crates/gpui-net-shell/src/host.rs`) calls the managed `render` callback. It
-fills the arena, returns a nonzero revision, and the native host calls
-`Snapshot::decode` (`src/snapshot.rs`):
+(`crates/gpui-net-shell/src/host.rs`) calls the managed `render` callback,
+receives a nonzero revision, and calls `Snapshot::decode`
+(`src/snapshot.rs`):
 
-- flags and `b` word must be zero;
-- the node index of every operation must be in range;
-- string ranges must be in bounds and valid UTF-8;
-- `OpButtonVariant` must be a known operation;
+- record flags and argument kinds must be valid;
+- every operation's node index must be in range;
+- name/argument ranges must be in bounds and valid UTF-8;
+- numeric arguments must be finite;
+- callback tokens must be nonzero;
 - the graph must be acyclic.
 
-On success the host acknowledges with `render_completed(session, revision, 0)`
-and retains the owned snapshot.
+The result is an owned `Snapshot` whose ops are `NullaryStyle`, `ParamStyle`,
+`Method`, or `Callback` — no per-style or per-property operation code. On
+success the host acknowledges with `render_completed(session, revision, 0)`.
 
 ## 4. Materialization (Rust)
 
-`materialize_node` (`src/materialize.rs`) looks up `ComponentButton` in the
-`ComponentRegistry` and calls `components::button::materialize`.
+`materialize` (`src/materialize.rs`) walks the snapshot the way the shell does:
 
-`button::plan` (`src/components/button.rs`) turns the node into a `ButtonPlan`:
+- `resolve_ops(node)` makes one pass:
+  - `NullaryStyle`/`ParamStyle` fold into a `StyleRefinement` through
+    `style::apply_nullary_name` / `style::apply_param`;
+  - `Method` accumulates into a `Behavior` through `apply_behavior`;
+  - `Callback` sets the behavior's event token through `apply_callback`.
+- `materialize_node` builds the children first.
+- `materialize_component` matches the `Component`:
 
-```text
-id          <- node data
-label       <- OpLabel data
-variant     <- OpButtonVariant
-size        <- OpButtonSize
-loading     <- OpLoading
-compact     <- OpCompact
-disabled    <- OpDisabled
-selected    <- OpSelected
-on_click    <- OpOnClick
-```
+  ```text
+  Component::Div          -> finish(div(), refinement, children)
+  Component::Text(value)  -> finish(div().child(value), refinement, children)
+  Component::Button(id)   -> Button::new(id)
+                               .loading(behavior.loading)
+                               .disabled(behavior.disabled)
+                               .selected(behavior.selected)
+                               // variant, size, label, tooltip, on_click
+                               -> finish(button, refinement, children)
+  ```
 
-`materialize` then builds a `gpui_component::button::Button`:
+- `finish(element, refinement, children)` applies the refinement, extends the
+  children, and produces the `AnyElement`.
 
-```rust
-Button::new(plan.id)
-    .loading(plan.loading)
-    .disabled(plan.disabled)
-    .selected(plan.selected)
-    // ...variant, size, label, tooltip, shared style ops, children...
-    .on_click(move |_event, _window, cx| { /* managed click + invalidate */ })
-```
-
-Children are materialized first and handed to `.children(...)`, matching GPUI's
-consumed-element model.
+Styles are applied only through `StyleRefinement`, so the same `finish` serves
+every component. The `Button` arm reads the shared `Behavior`, exactly as the
+shell's `Component::Button` arm does.
 
 ## 5. Activation
 
@@ -86,11 +88,12 @@ all UI state stay managed.
 
 ## Tests covering the route
 
-- Rust `snapshot::tests` — arena decode, string ranges, cycles, unknown
-  components.
-- Rust `components::button::tests` — identity, operation interpretation, and
-  that every variant constructs a real `Button`.
-- Rust `registry::tests` — builtin descriptors and lookup.
+- Rust `snapshot::tests` — decoding styles/methods/callbacks, argument kinds,
+  cycles, unknown components/operations.
+- Rust `materialize::tests` — component identity, behavior accumulation, style
+  folding, and that unknown methods are inert.
+- Rust `style::tests` — the reflection table, parameter binding, and color
+  parsing.
 - C# `RenderArenaTests` / `RenderContextTests` — arena encoding and the Button
   op sequence.
 - C# `EventRegistryTests` — token registration, dispatch, and reset.

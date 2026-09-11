@@ -1,11 +1,11 @@
-using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Elements;
 
 /// <summary>
 /// A stateless command button. Identity is the constructor id; label, variant,
-/// size, loading, compact, disabled, selected and activation are operations.
+/// size, loading, compact, disabled, selected and activation are recorded as
+/// behavior methods and a callback, matching the shell's `Behavior`.
 /// </summary>
 public sealed class ButtonElement : Element
 {
@@ -13,28 +13,21 @@ public sealed class ButtonElement : Element
         : base(ui, index) { }
 
     /// <summary>Sets the visible label.</summary>
-    public ButtonElement Label(string label)
-    {
-        Arena.AddStringOp(Index, NativeProtocol.OpLabel, label);
-        return this;
-    }
+    public ButtonElement Label(string label) => Method("label", label);
 
     /// <summary>Sets concise hover help.</summary>
-    public ButtonElement Tooltip(string tooltip)
-    {
-        Arena.AddStringOp(Index, NativeProtocol.OpTooltip, tooltip);
-        return this;
-    }
+    public ButtonElement Tooltip(string tooltip) => Method("tooltip", tooltip);
 
+    /// <summary>Selects a visual variant by its method name.</summary>
     public ButtonElement Variant(ButtonVariant variant)
     {
-        Arena.AddOp(Index, NativeProtocol.OpButtonVariant, (ulong)variant);
+        Arena.AddMethod(Index, VariantName(variant));
         return this;
     }
 
     public ButtonElement Size(ButtonSize size)
     {
-        Arena.AddOp(Index, NativeProtocol.OpButtonSize, (ulong)size);
+        Arena.AddMethodNumber(Index, "size", (double)(int)size);
         return this;
     }
 
@@ -54,25 +47,25 @@ public sealed class ButtonElement : Element
 
     public ButtonElement Loading(bool loading = true)
     {
-        Arena.AddBoolOp(Index, NativeProtocol.OpLoading, loading);
+        Arena.AddMethodNumber(Index, "loading", loading ? 1 : 0);
         return this;
     }
 
     public ButtonElement Compact()
     {
-        Arena.AddOp(Index, NativeProtocol.OpCompact);
+        Arena.AddMethod(Index, "compact");
         return this;
     }
 
     public ButtonElement Disabled(bool disabled = true)
     {
-        Arena.AddBoolOp(Index, NativeProtocol.OpDisabled, disabled);
+        Arena.AddMethodNumber(Index, "disabled", disabled ? 1 : 0);
         return this;
     }
 
     public ButtonElement Selected(bool selected = true)
     {
-        Arena.AddBoolOp(Index, NativeProtocol.OpSelected, selected);
+        Arena.AddMethodNumber(Index, "selected", selected ? 1 : 0);
         return this;
     }
 
@@ -83,7 +76,27 @@ public sealed class ButtonElement : Element
     public ButtonElement OnClick(Action handler)
     {
         var token = Events.Register(handler);
-        Arena.AddOp(Index, NativeProtocol.OpOnClick, token);
+        Arena.AddCallback(Index, "on_click", token);
         return this;
     }
+
+    private ButtonElement Method(string name, string value)
+    {
+        Arena.AddMethodString(Index, name, value);
+        return this;
+    }
+
+    private static string VariantName(ButtonVariant variant) =>
+        variant switch
+        {
+            ButtonVariant.Default => "default",
+            ButtonVariant.Primary => "primary",
+            ButtonVariant.Secondary => "secondary",
+            ButtonVariant.Danger => "danger",
+            ButtonVariant.Success => "success",
+            ButtonVariant.Warning => "warning",
+            ButtonVariant.Ghost => "ghost",
+            ButtonVariant.Link => "link",
+            _ => "default",
+        };
 }

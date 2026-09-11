@@ -20,15 +20,22 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(1u, descriptor.NodesLen);
         Assert.Equal((uint)NativeProtocol.ComponentButton, descriptor.Nodes[0].Component);
         Assert.Equal(3u, descriptor.OpsLen);
-        Assert.Equal(NativeProtocol.OpLabel, descriptor.Ops[0].Code);
-        Assert.Equal(NativeProtocol.OpButtonVariant, descriptor.Ops[1].Code);
-        Assert.Equal((ulong)ButtonVariant.Primary, descriptor.Ops[1].A);
-        Assert.Equal(NativeProtocol.OpOnClick, descriptor.Ops[2].Code);
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.ArgString, descriptor.Ops[0].Flags);
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[1].Flags);
+        Assert.Equal(NativeProtocol.OpCallback, descriptor.Ops[2].Code);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("label", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("Save", DecodePacked(descriptor.Ops[0].B, utf8));
+        Assert.Equal("primary", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal("on_click", DecodePacked(descriptor.Ops[2].A, utf8));
         Assert.Equal(0, calls);
     }
 
     [Fact]
-    public void ContainerRecordsChildEdges()
+    public void ContainerRecordsChildEdgesAndStyleCalls()
     {
         using var arena = new RenderArena();
         var ui = new RenderContext(arena, new EventRegistry());
@@ -40,8 +47,13 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(2u, descriptor.ChildrenLen);
         Assert.Equal(NativeProtocol.ComponentText, descriptor.Nodes[1].Component);
         Assert.Equal(2u, descriptor.OpsLen);
-        Assert.Equal(NativeProtocol.OpStyleNullary, descriptor.Ops[0].Code);
-        Assert.Equal(NativeProtocol.OpStyleLength, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("flex_col", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("gap", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal(8.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[1].B));
     }
 
     [Fact]
@@ -54,20 +66,16 @@ public sealed unsafe class RenderContextTests
 
         var descriptor = arena.Publish();
         Assert.Equal(3u, descriptor.OpsLen);
-        Assert.Equal(NativeProtocol.OpStyleLength, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[0].Code);
         Assert.Equal(12.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[0].B));
-        Assert.Equal(NativeProtocol.OpStyleColor, descriptor.Ops[1].Code);
-        Assert.Equal(NativeProtocol.OpStyleNullary, descriptor.Ops[2].Code);
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[2].Code);
 
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        var paddingName = DecodePacked(descriptor.Ops[0].A, utf8);
-        var colorName = DecodePacked(descriptor.Ops[1].A, utf8);
-        var colorValue = DecodePacked(descriptor.Ops[1].B, utf8);
-        var fullName = DecodePacked(descriptor.Ops[2].A, utf8);
-        Assert.Equal("p", paddingName);
-        Assert.Equal("bg", colorName);
-        Assert.Equal("#112233", colorValue);
-        Assert.Equal("size_full", fullName);
+        Assert.Equal("p", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("bg", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal("#112233", DecodePacked(descriptor.Ops[1].B, utf8));
+        Assert.Equal("size_full", DecodePacked(descriptor.Ops[2].A, utf8));
     }
 
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)

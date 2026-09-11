@@ -36,17 +36,25 @@ pub enum StyleArg {
 }
 
 impl StyleArg {
-    fn as_f32(&self) -> Result<f32, String> {
+    pub(crate) fn as_f32(&self) -> Result<f32, String> {
         match self {
             StyleArg::Number(value) => Ok(*value),
             StyleArg::String(_) => Err("expected a number, got a string".into()),
         }
     }
 
-    fn as_str(&self) -> Result<&str, String> {
+    pub(crate) fn as_str(&self) -> Result<&str, String> {
         match self {
             StyleArg::String(value) => Ok(value),
             StyleArg::Number(_) => Err("expected a string, got a number".into()),
+        }
+    }
+
+    /// Whether the argument reads as present/on, matching shell truthiness.
+    pub(crate) fn is_truthy(&self) -> bool {
+        match self {
+            StyleArg::Number(value) => *value != 0.0 && !value.is_nan(),
+            StyleArg::String(value) => !value.is_empty(),
         }
     }
 

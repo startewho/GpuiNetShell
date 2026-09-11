@@ -46,44 +46,69 @@ internal sealed unsafe class RenderArena : IDisposable
         _nodes[index] = node;
     }
 
-    internal void AddOp(int node, ushort code, ulong a = 0, ulong b = 0)
-        => _ops.Add(new NativeOp { Node = (uint)node, Code = code, A = a, B = b });
-
-    internal void AddBoolOp(int node, ushort code, bool value)
-        => AddOp(node, code, value ? 1UL : 0UL);
-
-    internal void AddStringOp(int node, ushort code, string value)
-        => AddOp(node, code, PackString(value));
-
-    /// <summary>Records a no-argument GPUI style method by name.</summary>
-    internal void AddStyleNullary(int node, string method)
-        => AddOp(node, NativeProtocol.OpStyleNullary, PackString(method));
-
-    /// <summary>Records a style method taking a pixel/number argument.</summary>
-    internal void AddStyleLength(int node, string method, double pixels)
-        => AddOp(
-            node,
-            NativeProtocol.OpStyleLength,
-            PackString(method),
-            BitConverter.SingleToUInt32Bits((float)pixels)
+    internal void AddOp(int node, ushort code, ushort flags, ulong a = 0, ulong b = 0)
+        => _ops.Add(
+            new NativeOp
+            {
+                Node = (uint)node,
+                Code = code,
+                Flags = flags,
+                A = a,
+                B = b,
+            }
         );
 
-    /// <summary>Records a style method taking a bare number argument.</summary>
-    internal void AddStyleNumber(int node, string method, double value)
+    /// <summary>Records a no-argument style method by name.</summary>
+    internal void AddNullaryStyle(int node, string method)
+        => AddOp(node, NativeProtocol.OpNullaryStyle, NativeProtocol.ArgNone, PackString(method));
+
+    /// <summary>Records a style method taking a pixel/number argument.</summary>
+    internal void AddParamStyle(int node, string method, double value)
         => AddOp(
             node,
-            NativeProtocol.OpStyleNumber,
+            NativeProtocol.OpParamStyle,
+            NativeProtocol.ArgNumber,
             PackString(method),
             BitConverter.SingleToUInt32Bits((float)value)
         );
 
-    /// <summary>Records a style method taking a color literal argument.</summary>
-    internal void AddStyleColor(int node, string method, string color)
-        => AddOp(node, NativeProtocol.OpStyleColor, PackString(method), PackString(color));
+    /// <summary>Records a style method taking a string (or color) argument.</summary>
+    internal void AddParamStyleString(int node, string method, string value)
+        => AddOp(
+            node,
+            NativeProtocol.OpParamStyle,
+            NativeProtocol.ArgString,
+            PackString(method),
+            PackString(value)
+        );
 
-    /// <summary>Records a style method taking a string argument.</summary>
-    internal void AddStyleString(int node, string method, string value)
-        => AddOp(node, NativeProtocol.OpStyleString, PackString(method), PackString(value));
+    /// <summary>Records a component behavior method by name.</summary>
+    internal void AddMethod(int node, string method)
+        => AddOp(node, NativeProtocol.OpMethod, NativeProtocol.ArgNone, PackString(method));
+
+    /// <summary>Records a component behavior method taking a number argument.</summary>
+    internal void AddMethodNumber(int node, string method, double value)
+        => AddOp(
+            node,
+            NativeProtocol.OpMethod,
+            NativeProtocol.ArgNumber,
+            PackString(method),
+            BitConverter.SingleToUInt32Bits((float)value)
+        );
+
+    /// <summary>Records a component behavior method taking a string argument.</summary>
+    internal void AddMethodString(int node, string method, string value)
+        => AddOp(
+            node,
+            NativeProtocol.OpMethod,
+            NativeProtocol.ArgString,
+            PackString(method),
+            PackString(value)
+        );
+
+    /// <summary>Records an event binding by name and callback token.</summary>
+    internal void AddCallback(int node, string name, ulong token)
+        => AddOp(node, NativeProtocol.OpCallback, NativeProtocol.ArgNone, PackString(name), token);
 
     internal void AddChild(int parent, int child)
         => _children.Add(new NativeChild { Parent = (uint)parent, Child = (uint)child });

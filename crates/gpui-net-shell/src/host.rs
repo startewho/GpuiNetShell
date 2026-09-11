@@ -14,8 +14,7 @@ use gpui::{
 };
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
-use crate::materialize::materialize_node;
-use crate::registry::{ComponentRegistry, Invalidate};
+use crate::materialize::{materialize, Invalidate};
 use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK, STATUS_STALE_REVISION};
 use crate::snapshot::Snapshot;
 
@@ -23,7 +22,6 @@ use crate::snapshot::Snapshot;
 struct ShellView {
     session_id: u64,
     callbacks: GpuiNetCallbacks,
-    registry: Rc<ComponentRegistry>,
     snapshot: Option<Snapshot>,
     revision: u64,
     dirty: bool,
@@ -31,11 +29,10 @@ struct ShellView {
 }
 
 impl ShellView {
-    fn new(session_id: u64, callbacks: GpuiNetCallbacks, registry: Rc<ComponentRegistry>) -> Self {
+    fn new(session_id: u64, callbacks: GpuiNetCallbacks) -> Self {
         Self {
             session_id,
             callbacks,
-            registry,
             snapshot: None,
             revision: 0,
             dirty: true,
@@ -100,14 +97,7 @@ impl ShellView {
         }
 
         let materialized = match self.snapshot.as_ref() {
-            Some(snapshot) => materialize_node(
-                &self.registry,
-                snapshot,
-                snapshot.root,
-                self.session_id,
-                &self.callbacks,
-                invalidate,
-            ),
+            Some(snapshot) => materialize(snapshot, self.session_id, &self.callbacks, invalidate),
             None => Err("Waiting for the managed host to publish a view.".to_string()),
         };
 
@@ -158,7 +148,6 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
 
-            let registry = Rc::new(ComponentRegistry::with_builtins());
             let bounds = Bounds::centered(None, size(px(900.0), px(600.0)), cx);
             let opened = cx.open_window(
                 WindowOptions {
@@ -170,7 +159,7 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                     ..Default::default()
                 },
                 move |window, cx| {
-                    let view = cx.new(|_| ShellView::new(application_id, callbacks, registry));
+                    let view = cx.new(|_| ShellView::new(application_id, callbacks));
                     cx.new(|cx| gpui_component::Root::new(view, window, cx))
                 },
             );

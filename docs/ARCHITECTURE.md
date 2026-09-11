@@ -20,7 +20,7 @@ Rust owns:
 - the decoded, owned snapshot;
 - validation of every arena record;
 - component materialization into GPUI elements;
-- the component registry;
+- the component dispatch and behavior model;
 - the C ABI table.
 
 The boundary rule is: cross for a state transition (a dirty render, an event),
@@ -36,15 +36,17 @@ RenderArena.Publish()                  C#  (copies to unmanaged buffers)
         │ NativeArena descriptor
         ▼
 render callback (C ABI)
-        │ Snapshot::decode  -> owned ValidatedSnapshot
+        │ Snapshot::decode  -> owned description
         ▼
 render_completed(session, revision)    Rust -> C# acknowledgement
         │
         ▼
-ShellView::render -> materialize_node  Rust
-        │ component registry dispatch
+ShellView::render -> materialize        Rust
+        │ resolve_ops -> (StyleRefinement, Behavior)
+        │ materialize_node -> recurse children
+        │ materialize_component -> match on Component
         ▼
-Div / Text / Button materializers -> gpui-component elements
+Div / Text / Button -> gpui-component elements
 ```
 
 A clean GPUI repaint re-materializes the retained snapshot without calling
@@ -57,17 +59,16 @@ Four flat buffers describe one render:
 
 - `GpuiNetNode[]`: component id, flags, and a UTF-8 data range (Button id or
   Text content);
-- `GpuiNetOp[]`: typed operations addressed by node index;
+- `GpuiNetOp[]`: operations addressed by node index;
 - `GpuiNetChild[]`: parent/child edges;
 - one UTF-8 byte buffer.
 
-String operations pack `(offset << 32) | length` into the operation's `a` word.
-All other operations use `a` (and sometimes `b`) with their own meaning. A style
-operation stores the GPUI method name in `a` and its argument in `b`.
-
-`Snapshot::decode` validates record flags, index bounds, UTF-8 ranges, known
-components, known operations, and acyclicity before producing owned data.
-Rust never retains a managed pointer: decoding copies every value it keeps.
+Every operation's `a` word packs the UTF-8 range of a method name; `flags`
+classifies the argument in `b` (`None`, `Number` as an `f32` bit pattern, or
+`String` as a packed range). `Snapshot::decode` validates record flags, index
+bounds, UTF-8 ranges, argument kinds, known components, and acyclicity before
+producing owned data. Rust never retains a managed pointer: decoding copies
+every value it keeps.
 
 ## Styling
 
@@ -85,27 +86,35 @@ exactly as `gpui-shell` does:
   bound by hand in `apply_param`, because reflection reaches no-argument methods
   only.
 
-`components::build_refinement` applies the calls in order; `components::apply_style`
-refines any `Styled` element with the result. The managed `StyleExtensions`
-surface (`lib`-side `Style`, `StyleColor`, and typed sugar) only names methods;
-it has no knowledge of how they are applied.
+`materialize::resolve_ops` applies the calls in order while it accumulates the
+node's behavior. The managed `StyleExtensions` surface (`Style`, `StyleColor`,
+and typed sugar) only names methods; it has no knowledge of how they are
+applied.
 
-## Components and the registry
+## Components and behavior
 
-`crates/gpui-net-shell/src/registry.rs` maps a component id to a
-`ComponentDescriptor { id, name, materializer }`. This is a smaller form of
-`gpui-shell`'s descriptor seam. Adding a component is:
+`crates/gpui-net-shell/src/materialize.rs` mirrors `gpui-shell`'s
+`materialize.rs`:
+
+- `resolve_ops` performs one pass over a node's ops: style calls fold into a
+  `StyleRefinement`, generic `Method` ops accumulate into a `Behavior`, and
+  `Callback` ops set the behavior's event tokens.
+- `materialize_node` builds children first, then dispatches.
+- `materialize_component` is a single `match` on the `Component` (Div, Text,
+  Button).
+- `finish(element, refinement, children)` applies the refinement and children
+  and produces the `AnyElement`.
+
+Adding a component is:
 
 1. a `COMPONENT_*` constant and its `is_known_component` arm in `schema.rs`;
 2. a `NativeProtocol.Component*` constant in C#;
-3. a materializer in `components/`;
-4. one entry in `ComponentRegistry::with_builtins`.
+3. one `Component` variant and one `match` arm in `materialize.rs`.
 
-The host, decoder, FFI, and managed runtime never name a concrete component
-beyond that registry.
-
-Each materializer splits a pure *plan* from the element build so the
-interpretation is testable without a window (see `button::ButtonPlan`).
+Component behavior is not enumerated per method: `apply_behavior` maps a method
+name (`disabled`, `label`, `primary`, `size`, …) onto the shared `Behavior`, so
+the managed builders only name methods. `resolve_ops` and `apply_behavior` are
+pure and tested without a window.
 
 ## Application and events
 
@@ -155,13 +164,14 @@ unwind across the C boundary.
   `StyleExtensions` for a name the reflected table already knows, or add a
   name to `PARAM_STYLES` and one arm in `apply_param` for a method that takes
   an argument.
-- A new **component behavior operation** is a constant in `schema.rs`, its
-  `NativeProtocol` mirror, a decode arm, and the component's plan.
-- A new **component** is a descriptor plus a materializer, as above.
+- A new **component behavior method** is one arm in `apply_behavior` (or
+  `apply_callback`) and whatever the component arm reads; the managed side only
+  names the method.
+- A new **component** is a `Component` variant and a `match` arm, as above.
 
-When a component id, behavior operation code, or payload rule changes, bump
-`SCHEMA_HASH` on both sides. When a C record layout changes, bump `ABI_VERSION`
-and update both sides together.
+When a component id or payload rule changes, bump `SCHEMA_HASH` on both sides.
+When a C record layout changes, bump `ABI_VERSION` and update both sides
+together.
 
 ## Windows apartment
 

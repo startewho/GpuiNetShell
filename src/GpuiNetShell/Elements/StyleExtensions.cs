@@ -18,7 +18,7 @@ public static class StyleExtensions
     public static T Style<T>(this T element, string method)
         where T : Element
     {
-        element.Arena.AddStyleNullary(element.Index, method);
+        element.Arena.AddNullaryStyle(element.Index, method);
         return element;
     }
 
@@ -26,7 +26,7 @@ public static class StyleExtensions
     public static T Style<T>(this T element, string method, double value)
         where T : Element
     {
-        element.Arena.AddStyleLength(element.Index, method, value);
+        element.Arena.AddParamStyle(element.Index, method, value);
         return element;
     }
 
@@ -34,7 +34,7 @@ public static class StyleExtensions
     public static T StyleString<T>(this T element, string method, string value)
         where T : Element
     {
-        element.Arena.AddStyleString(element.Index, method, value);
+        element.Arena.AddParamStyleString(element.Index, method, value);
         return element;
     }
 
@@ -42,7 +42,7 @@ public static class StyleExtensions
     public static T StyleColor<T>(this T element, string method, string color)
         where T : Element
     {
-        element.Arena.AddStyleColor(element.Index, method, color);
+        element.Arena.AddParamStyleString(element.Index, method, color);
         return element;
     }
 

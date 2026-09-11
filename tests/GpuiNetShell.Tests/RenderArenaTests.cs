@@ -12,35 +12,58 @@ public sealed unsafe class RenderArenaTests
         var root = arena.AddNode(NativeProtocol.ComponentDiv);
         var button = arena.AddNode(NativeProtocol.ComponentButton);
         arena.SetNodeData(button, "save");
-        arena.AddStringOp(button, NativeProtocol.OpLabel, "Save");
-        arena.AddBoolOp(button, NativeProtocol.OpDisabled, true);
+        arena.AddMethodString(button, "label", "Save");
+        arena.AddMethodNumber(button, "disabled", 1);
+        arena.AddCallback(button, "on_click", 7);
         arena.AddChild(root, button);
 
         var descriptor = arena.Publish();
 
         Assert.Equal(2u, descriptor.NodesLen);
-        Assert.Equal(2u, descriptor.OpsLen);
+        Assert.Equal(3u, descriptor.OpsLen);
         Assert.Equal(1u, descriptor.ChildrenLen);
         Assert.Equal(4u, descriptor.Nodes[button].DataLen);
-        Assert.Equal(NativeProtocol.OpLabel, descriptor.Ops[0].Code);
-        Assert.Equal(1UL, descriptor.Ops[1].A);
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.ArgString, descriptor.Ops[0].Flags);
+        Assert.Equal(NativeProtocol.OpCallback, descriptor.Ops[2].Code);
+        Assert.Equal(7UL, descriptor.Ops[2].B);
         Assert.Equal((uint)root, descriptor.Children[0].Parent);
         Assert.Equal((uint)button, descriptor.Children[0].Child);
     }
 
     [Fact]
-    public void StringOperationsPackOffsetAndLength()
+    public void MethodNamesPackOffsetAndLength()
     {
         using var arena = new RenderArena();
         var node = arena.AddNode(NativeProtocol.ComponentButton);
-        arena.AddStringOp(node, NativeProtocol.OpLabel, "Save");
+        arena.AddMethodString(node, "label", "Save");
 
         var descriptor = arena.Publish();
         var packed = descriptor.Ops[0].A;
 
         Assert.Equal(0ul, packed >> 32);
-        Assert.Equal((ulong)"Save".Length, packed & 0xFFFF_FFFF);
-        Assert.Equal((byte)'S', descriptor.Utf8[0]);
+        Assert.Equal((ulong)"label".Length, packed & 0xFFFF_FFFF);
+        Assert.Equal((byte)'l', descriptor.Utf8[0]);
+    }
+
+    [Fact]
+    public void StyleCallsUseTheGenericStyleEnvelope()
+    {
+        using var arena = new RenderArena();
+        var node = arena.AddNode(NativeProtocol.ComponentDiv);
+        arena.AddNullaryStyle(node, "items_center");
+        arena.AddParamStyle(node, "p", 12);
+        arena.AddParamStyleString(node, "bg", "#112233");
+
+        var descriptor = arena.Publish();
+
+        Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[0].Flags);
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.ArgNumber, descriptor.Ops[1].Flags);
+        Assert.Equal(12.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[1].B));
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[2].Code);
+        Assert.Equal(NativeProtocol.ArgString, descriptor.Ops[2].Flags);
     }
 
     [Fact]

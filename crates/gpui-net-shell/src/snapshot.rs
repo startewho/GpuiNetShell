@@ -3,37 +3,26 @@
 //! Rust must never retain a managed pointer. [`Snapshot::decode`] validates
 //! every record and copies what it keeps, so a later managed callback or
 //! teardown cannot observe a stale borrow.
+//!
+//! The decoded [`Op`] mirrors `gpui-shell`'s `SpecOp`: a style call, a component
+//! behavior `Method`, or a `Callback`. Which style name, which behavior method,
+//! and what it means are resolved during materialization, not here.
 
 use crate::abi::GpuiNetArena;
 use crate::schema::*;
+use crate::style::StyleArg;
 
 /// A decoded operation.
-///
-/// Component behavior is typed because the host must interpret it. Styling is
-/// *not* enumerated: a style operation carries the GPUI method name and its
-/// argument, resolved against the reflected style table at materialization
-/// time (see [`crate::style`]).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    Disabled(bool),
-    Selected(bool),
-    OnClick(u64),
-    Label(String),
-    Tooltip(String),
-    Loading(bool),
-    ButtonVariant(u64),
-    ButtonSize(u64),
-    Compact,
     /// A no-argument style method, by name.
-    StyleNullary(String),
-    /// A style method taking a pixel/number argument.
-    StyleLength(String, f32),
-    /// A style method taking a bare number.
-    StyleNumber(String, f32),
-    /// A style method taking a color literal.
-    StyleColor(String, String),
-    /// A style method taking a string argument.
-    StyleString(String, String),
+    NullaryStyle(String),
+    /// A style method taking one argument.
+    ParamStyle(String, StyleArg),
+    /// A component behavior method with an optional argument.
+    Method(String, Option<StyleArg>),
+    /// An event binding by name and callback token.
+    Callback(String, u64),
 }
 
 /// A decoded element.
@@ -43,16 +32,6 @@ pub struct Node {
     pub data: String,
     pub ops: Vec<Op>,
     pub children: Vec<u32>,
-}
-
-impl Node {
-    /// The last declared activation token, if any.
-    pub fn on_click(&self) -> Option<u64> {
-        self.ops.iter().rev().find_map(|op| match op {
-            Op::OnClick(token) => Some(*token),
-            _ => None,
-        })
-    }
 }
 
 /// An owned element description for one window render.
@@ -129,81 +108,52 @@ pub fn is_known_component(component: u32) -> bool {
 }
 
 fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
-    if record.flags != 0 {
+    let name = read_word(utf8, record.a)?;
+    if name.is_empty() {
         return Err(STATUS_INVALID_ARGUMENT);
     }
-    let operand = record.a;
-    let data = record.b;
+
     match record.code {
-        OP_DISABLED => {
-            require_b_zero(data)?;
-            Ok(Op::Disabled(operand != 0))
-        }
-        OP_SELECTED => {
-            require_b_zero(data)?;
-            Ok(Op::Selected(operand != 0))
-        }
-        OP_LOADING => {
-            require_b_zero(data)?;
-            Ok(Op::Loading(operand != 0))
-        }
-        OP_ON_CLICK => {
-            require_b_zero(data)?;
-            if operand == 0 {
+        OP_NULLARY_STYLE => {
+            if record.flags != ARG_NONE || record.b != 0 {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
-            Ok(Op::OnClick(operand))
+            Ok(Op::NullaryStyle(name))
         }
-        OP_BUTTON_VARIANT => {
-            require_b_zero(data)?;
-            Ok(Op::ButtonVariant(operand))
-        }
-        OP_BUTTON_SIZE => {
-            require_b_zero(data)?;
-            Ok(Op::ButtonSize(operand))
-        }
-        OP_COMPACT => {
-            require_b_zero(data)?;
-            if operand != 0 {
+        OP_PARAM_STYLE => Ok(Op::ParamStyle(name, read_arg(record, utf8)?)),
+        OP_METHOD => match record.flags {
+            ARG_NONE => {
+                if record.b != 0 {
+                    return Err(STATUS_INVALID_ARGUMENT);
+                }
+                Ok(Op::Method(name, None))
+            }
+            ARG_NUMBER => Ok(Op::Method(name, Some(StyleArg::Number(number(record.b)?)))),
+            ARG_STRING => Ok(Op::Method(
+                name,
+                Some(StyleArg::String(read_word(utf8, record.b)?)),
+            )),
+            _ => Err(STATUS_INVALID_ARGUMENT),
+        },
+        OP_CALLBACK => {
+            if record.flags != ARG_NONE || record.b == 0 {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
-            Ok(Op::Compact)
+            Ok(Op::Callback(name, record.b))
         }
-        OP_LABEL => {
-            require_b_zero(data)?;
-            Ok(Op::Label(read_word(utf8, operand)?))
-        }
-        OP_TOOLTIP => {
-            require_b_zero(data)?;
-            Ok(Op::Tooltip(read_word(utf8, operand)?))
-        }
-        OP_STYLE_NULLARY => {
-            require_b_zero(data)?;
-            Ok(Op::StyleNullary(read_word(utf8, operand)?))
-        }
-        OP_STYLE_LENGTH => Ok(Op::StyleLength(read_word(utf8, operand)?, scalar(data)?)),
-        OP_STYLE_NUMBER => Ok(Op::StyleNumber(read_word(utf8, operand)?, scalar(data)?)),
-        OP_STYLE_COLOR => Ok(Op::StyleColor(
-            read_word(utf8, operand)?,
-            read_word(utf8, data)?,
-        )),
-        OP_STYLE_STRING => Ok(Op::StyleString(
-            read_word(utf8, operand)?,
-            read_word(utf8, data)?,
-        )),
         _ => Err(STATUS_INVALID_ARGUMENT),
     }
 }
 
-fn require_b_zero(data: u64) -> Result<(), i32> {
-    if data == 0 {
-        Ok(())
-    } else {
-        Err(STATUS_INVALID_ARGUMENT)
+fn read_arg(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<StyleArg, i32> {
+    match record.flags {
+        ARG_NUMBER => Ok(StyleArg::Number(number(record.b)?)),
+        ARG_STRING => Ok(StyleArg::String(read_word(utf8, record.b)?)),
+        _ => Err(STATUS_INVALID_ARGUMENT),
     }
 }
 
-fn scalar(bits: u64) -> Result<f32, i32> {
+fn number(bits: u64) -> Result<f32, i32> {
     let value = f32::from_bits(bits as u32);
     if value.is_finite() {
         Ok(value)
@@ -313,105 +263,87 @@ mod tests {
     }
 
     #[test]
-    fn decodes_a_button_tree_with_identity_ops_and_children() {
+    fn decodes_styles_methods_and_callbacks() {
         let mut utf8 = String::new();
-        let id_word = string_word("save", &mut utf8);
-        let label_word = string_word("Save", &mut utf8);
-        let bytes = utf8.into_bytes();
-
-        let arena = RawArena {
-            nodes: vec![
-                GpuiNetNode {
-                    component: COMPONENT_DIV,
-                    flags: 0,
-                    data_offset: 0,
-                    data_len: 0,
-                },
-                GpuiNetNode {
-                    component: COMPONENT_BUTTON,
-                    flags: 0,
-                    data_offset: (id_word >> 32) as u32,
-                    data_len: (id_word & 0xffff_ffff) as u32,
-                },
-            ],
-            ops: vec![
-                GpuiNetOp {
-                    node: 1,
-                    code: OP_LABEL,
-                    flags: 0,
-                    a: label_word,
-                    b: 0,
-                },
-                GpuiNetOp {
-                    node: 1,
-                    code: OP_BUTTON_VARIANT,
-                    flags: 0,
-                    a: BUTTON_VARIANT_PRIMARY,
-                    b: 0,
-                },
-                GpuiNetOp {
-                    node: 1,
-                    code: OP_ON_CLICK,
-                    flags: 0,
-                    a: 7,
-                    b: 0,
-                },
-            ],
-            children: vec![GpuiNetChild {
-                parent: 0,
-                child: 1,
-            }],
-            utf8: bytes,
-        };
-
-        let snapshot = Snapshot::decode(&arena.descriptor(), 0).expect("valid arena");
-        assert_eq!(snapshot.nodes.len(), 2);
-        assert_eq!(snapshot.nodes[0].children, vec![1]);
-        let button = &snapshot.nodes[1];
-        assert_eq!(button.component, COMPONENT_BUTTON);
-        assert_eq!(button.data, "save");
-        assert!(button.ops.contains(&Op::Label("Save".into())));
-        assert!(button
-            .ops
-            .contains(&Op::ButtonVariant(BUTTON_VARIANT_PRIMARY)));
-        assert_eq!(button.on_click(), Some(7));
-    }
-
-    #[test]
-    fn decodes_generic_style_operations() {
-        let mut utf8 = String::new();
-        let padding = string_word("p", &mut utf8);
-        let color_name = string_word("bg", &mut utf8);
-        let color = string_word("#ff0000", &mut utf8);
+        let id = string_word("save", &mut utf8);
+        let label_name = string_word("label", &mut utf8);
+        let label_value = string_word("Save", &mut utf8);
         let nullary = string_word("items_center", &mut utf8);
+        let click = string_word("on_click", &mut utf8);
         let bytes = utf8.into_bytes();
 
         let arena = RawArena {
             nodes: vec![GpuiNetNode {
-                component: COMPONENT_DIV,
+                component: COMPONENT_BUTTON,
+                flags: 0,
+                data_offset: (id >> 32) as u32,
+                data_len: (id & 0xffff_ffff) as u32,
+            }],
+            ops: vec![
+                GpuiNetOp {
+                    node: 0,
+                    code: OP_METHOD,
+                    flags: ARG_STRING,
+                    a: label_name,
+                    b: label_value,
+                },
+                GpuiNetOp {
+                    node: 0,
+                    code: OP_NULLARY_STYLE,
+                    flags: ARG_NONE,
+                    a: nullary,
+                    b: 0,
+                },
+                GpuiNetOp {
+                    node: 0,
+                    code: OP_CALLBACK,
+                    flags: ARG_NONE,
+                    a: click,
+                    b: 7,
+                },
+            ],
+            children: Vec::new(),
+            utf8: bytes,
+        };
+
+        let snapshot = Snapshot::decode(&arena.descriptor(), 0).expect("valid arena");
+        assert_eq!(snapshot.nodes[0].data, "save");
+        assert_eq!(
+            snapshot.nodes[0].ops,
+            vec![
+                Op::Method("label".into(), Some(StyleArg::String("Save".into()))),
+                Op::NullaryStyle("items_center".into()),
+                Op::Callback("on_click".into(), 7),
+            ]
+        );
+    }
+
+    #[test]
+    fn decodes_numeric_methods_and_param_styles() {
+        let mut utf8 = String::new();
+        let size = string_word("size", &mut utf8);
+        let padding = string_word("p", &mut utf8);
+        let bytes = utf8.into_bytes();
+
+        let arena = RawArena {
+            nodes: vec![GpuiNetNode {
+                component: COMPONENT_BUTTON,
                 ..Default::default()
             }],
             ops: vec![
                 GpuiNetOp {
                     node: 0,
-                    code: OP_STYLE_LENGTH,
-                    flags: 0,
+                    code: OP_METHOD,
+                    flags: ARG_NUMBER,
+                    a: size,
+                    b: 2.0f32.to_bits() as u64,
+                },
+                GpuiNetOp {
+                    node: 0,
+                    code: OP_PARAM_STYLE,
+                    flags: ARG_NUMBER,
                     a: padding,
                     b: 12.0f32.to_bits() as u64,
-                },
-                GpuiNetOp {
-                    node: 0,
-                    code: OP_STYLE_COLOR,
-                    flags: 0,
-                    a: color_name,
-                    b: color,
-                },
-                GpuiNetOp {
-                    node: 0,
-                    code: OP_STYLE_NULLARY,
-                    flags: 0,
-                    a: nullary,
-                    b: 0,
                 },
             ],
             children: Vec::new(),
@@ -422,9 +354,8 @@ mod tests {
         assert_eq!(
             snapshot.nodes[0].ops,
             vec![
-                Op::StyleLength("p".into(), 12.0),
-                Op::StyleColor("bg".into(), "#ff0000".into()),
-                Op::StyleNullary("items_center".into()),
+                Op::Method("size".into(), Some(StyleArg::Number(2.0))),
+                Op::ParamStyle("p".into(), StyleArg::Number(12.0)),
             ]
         );
     }
