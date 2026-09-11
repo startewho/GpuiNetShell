@@ -18,3 +18,6 @@ gpui_platform = { workspace = true }
 # as gpui-shell does, instead of enumerating every style as an operation code.
 gpui-base = { workspace = true, features = ["inspector"] }
 gpui-component = { workspace = true }
+# A managed thread can ask the GPUI thread to re-render; the ingress channel
+# carries that request without the requester touching GPUI state.
+async-channel = "2"

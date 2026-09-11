@@ -14,6 +14,7 @@ static API: GpuiNetShellApi = GpuiNetShellApi {
     abi_version: ABI_VERSION,
     schema_hash: SCHEMA_HASH,
     run_application: Some(run_application),
+    invalidate: Some(invalidate),
     _reserved: 0,
 };
 
@@ -53,6 +54,16 @@ unsafe extern "C" fn run_application(
 
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::host::run(application_id, callbacks)
+    }));
+    match outcome {
+        Ok(status) => status,
+        Err(_) => STATUS_PANIC,
+    }
+}
+
+unsafe extern "C" fn invalidate(session_id: u64) -> i32 {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::host::invalidate(session_id)
     }));
     match outcome {
         Ok(status) => status,

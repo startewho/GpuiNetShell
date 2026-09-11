@@ -22,10 +22,11 @@ mod registry;
 mod schema;
 mod snapshot;
 mod style;
+mod view;
 
 pub use abi::{
     GpuiNetArena, GpuiNetCallbacks, GpuiNetChild, GpuiNetNode, GpuiNetOp, GpuiNetShellApi,
 };
 pub use ffi::{gpui_net_shell_abi_version, gpui_net_shell_get_api, gpui_net_shell_schema_hash};
-pub use snapshot::{Node, Op, Snapshot};
+pub use snapshot::{Node, Op, RenderSnapshot, Snapshot};
 pub use style::StyleArg;

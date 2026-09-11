@@ -29,29 +29,45 @@ never per builder call, per frame, or per property.
 ## Render path
 
 ```text
-View.Render(ref RenderContext)         C#
-        │ writes nodes / ops / children / UTF-8
+ShellView::render                       Rust
+        │ dirty?  ── no ──▶ materialize the retained snapshot
+        ▼ yes
+render callback (session, generation)   C ABI
+        │ managed View.Render writes nodes / ops / children / UTF-8
         ▼
-RenderArena.Publish()                  C#  (copies to unmanaged buffers)
+RenderArena.Publish()                   C#
         │ NativeArena descriptor
         ▼
-render callback (C ABI)
-        │ Snapshot::decode  -> owned description
+Snapshot::decode -> RenderSnapshot      Rust
+        │ render_completed(session, generation)
         ▼
-render_completed(session, revision)    Rust -> C# acknowledgement
-        │
-        ▼
-ShellView::render -> materialize        Rust
-        │ resolve_ops -> (StyleRefinement, Behavior)
-        │ materialize_node -> recurse children
-        │ ComponentRegistry::descriptor(id) -> MaterializeRequest
-        ▼
-Div / Text / Button materializers -> gpui-component elements
+materialize -> ComponentRegistry -> materializers -> elements
 ```
 
 A clean GPUI repaint re-materializes the retained snapshot without calling
 managed `Render`. `Render` runs only when the view is dirty, which is set on
-first mount and whenever an event binding requests a re-render.
+first mount, by an event binding, or by `View.Invalidate()`.
+
+## View and snapshots
+
+`crates/gpui-net-shell/src/view.rs` mirrors `gpui-shell`'s `view.rs`. A
+`ShellView` entity owns:
+
+- `current` and `previous` `RenderSnapshot`s — the previous is held one
+  generation longer so an event dispatched against the last frame still
+  resolves its callback tokens;
+- `dirty`, `retired`, and the last build `error`;
+- the frozen component registry.
+
+`rebuild` is transactional: the managed callback fills the arena, `Snapshot::decode`
+validates it, and only then is the new `RenderSnapshot` swapped in. A failed
+build leaves the previous description and its callbacks untouched.
+
+A `RenderSnapshot` (in `src/snapshot.rs`) is a cloneable `Rc` handle that owns
+its generation. When it is dropped, it calls the managed `retire_callbacks`
+with its generation, and the managed host releases exactly that generation's
+event handlers. That is what keeps callback lifetime tied to a description
+rather than to a frame or a global counter.
 
 ## The render arena
 
@@ -146,13 +162,19 @@ struct GpuiNetShellApi {
     uint32_t abi_version;
     uint64_t schema_hash;
     int32_t (*run_application)(uint64_t, const GpuiNetCallbacks*);
+    int32_t (*invalidate)(uint64_t session);
     uint64_t reserved;
 };
 ```
 
-`run_application` blocks in the GPUI event loop. `GpuiNetCallbacks` carries the
-managed `application_started`, `window_closed`, `render`, `render_completed`,
-and `click` function pointers, all cdecl.
+`run_application` blocks in the GPUI event loop. `invalidate` is the
+any-thread request behind `View.Invalidate()`: it posts to the session's view,
+which marks itself dirty and repaints.
+
+`GpuiNetCallbacks` carries the managed `application_started`, `window_closed`,
+`render(session, generation, arena, root)`, `render_completed(session,
+generation, status)`, `click(session, token)`, and `retire_callbacks(session,
+generation)` function pointers, all cdecl.
 
 `ABI_VERSION` covers the record layouts; `SCHEMA_HASH` covers the component and
 operation vocabulary. A managed/native pair must agree on both. The constants

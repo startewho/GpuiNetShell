@@ -57,12 +57,13 @@ internal unsafe struct NativeCallbacks
     public uint Reserved;
     public delegate* unmanaged[Cdecl]<ulong, int> ApplicationStarted;
     public delegate* unmanaged[Cdecl]<ulong, int, int> WindowClosed;
-    public delegate* unmanaged[Cdecl]<ulong, NativeArena*, uint*, ulong*, int> Render;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, NativeArena*, uint*, int> Render;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int, int> RenderCompleted;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> Click;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, int> RetireCallbacks;
 }
 
-/// <summary>Mirrors <c>GpuiNetShellApi</c>. 32 bytes.</summary>
+/// <summary>Mirrors <c>GpuiNetShellApi</c>. 40 bytes.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct GpuiNetShellApi
 {
@@ -70,5 +71,6 @@ internal unsafe struct GpuiNetShellApi
     public uint AbiVersion;
     public ulong SchemaHash;
     public delegate* unmanaged[Cdecl]<ulong, NativeCallbacks*, int> RunApplication;
+    public delegate* unmanaged[Cdecl]<ulong, int> Invalidate;
     public ulong Reserved;
 }

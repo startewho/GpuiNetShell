@@ -8,7 +8,9 @@
 //! behavior `Method`, or a `Callback`. Which style name, which behavior method,
 //! and what it means are resolved during materialization, not here.
 
-use crate::abi::GpuiNetArena;
+use std::rc::Rc;
+
+use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
 use crate::schema::*;
 use crate::style::StyleArg;
 
@@ -95,6 +97,82 @@ impl Snapshot {
         detect_cycle(&nodes)?;
 
         Ok(Self { root, nodes })
+    }
+}
+
+/// One frozen description of a view's interface, modeled on `gpui-shell`'s
+/// `RenderSnapshot`.
+///
+/// Built by [`Snapshot::decode`] and read by the materializer. A replacement is
+/// built beside the live one and swapped in whole, so a decode that fails leaves
+/// the previous description untouched. The snapshot owns its generation: when it
+/// is dropped it tells the managed host to retire the event handlers that
+/// generation registered, which is what keeps callback lifetime tied to the
+/// description rather than to a frame.
+#[derive(Clone)]
+pub struct RenderSnapshot {
+    inner: Rc<RenderSnapshotInner>,
+}
+
+struct RenderSnapshotInner {
+    session_id: u64,
+    revision: u64,
+    snapshot: Snapshot,
+    callbacks: GpuiNetCallbacks,
+}
+
+impl RenderSnapshot {
+    pub(crate) fn new(
+        session_id: u64,
+        revision: u64,
+        snapshot: Snapshot,
+        callbacks: GpuiNetCallbacks,
+    ) -> Self {
+        Self {
+            inner: Rc::new(RenderSnapshotInner {
+                session_id,
+                revision,
+                snapshot,
+                callbacks,
+            }),
+        }
+    }
+
+    /// The generation this description was built for.
+    pub fn revision(&self) -> u64 {
+        self.inner.revision
+    }
+
+    pub fn root(&self) -> u32 {
+        self.inner.snapshot.root
+    }
+
+    pub fn nodes(&self) -> &[Node] {
+        &self.inner.snapshot.nodes
+    }
+
+    pub fn node(&self, id: u32) -> Option<&Node> {
+        self.inner.snapshot.nodes.get(id as usize)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.snapshot.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.snapshot.nodes.is_empty()
+    }
+}
+
+impl Drop for RenderSnapshotInner {
+    fn drop(&mut self) {
+        if let Some(retire) = self.callbacks.retire_callbacks {
+            // SAFETY: managed callback; retiring one generation touches no
+            // native borrow.
+            unsafe {
+                let _ = retire(self.session_id, self.revision);
+            }
+        }
     }
 }
 
@@ -449,5 +527,37 @@ mod tests {
     fn zero_length_arena_is_an_empty_error_not_a_crash() {
         let arena = GpuiNetArena::empty();
         assert_eq!(Snapshot::decode(&arena, 0), Err(STATUS_BAD_INDEX));
+    }
+
+    #[test]
+    fn dropping_a_snapshot_retires_its_generation() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static RETIRED: AtomicU64 = AtomicU64::new(0);
+        unsafe extern "C" fn retire(_session_id: u64, generation: u64) -> i32 {
+            RETIRED.store(generation, Ordering::SeqCst);
+            0
+        }
+
+        let callbacks = GpuiNetCallbacks {
+            struct_size: std::mem::size_of::<GpuiNetCallbacks>() as u32,
+            _reserved: 0,
+            application_started: None,
+            window_closed: None,
+            render: None,
+            render_completed: None,
+            click: None,
+            retire_callbacks: Some(retire),
+        };
+        let snapshot = Snapshot {
+            root: 0,
+            nodes: Vec::new(),
+        };
+
+        let frozen = RenderSnapshot::new(11, 7, snapshot, callbacks);
+        assert_eq!(frozen.revision(), 7);
+        drop(frozen);
+
+        assert_eq!(RETIRED.load(Ordering::SeqCst), 7);
     }
 }

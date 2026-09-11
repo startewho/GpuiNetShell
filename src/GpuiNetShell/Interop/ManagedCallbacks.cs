@@ -19,6 +19,7 @@ internal static unsafe class ManagedCallbacks
         Render = &RenderCallback,
         RenderCompleted = &RenderCompletedCallback,
         Click = &ClickCallback,
+        RetireCallbacks = &RetireCallbacksCallback,
     };
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -54,15 +55,15 @@ internal static unsafe class ManagedCallbacks
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int RenderCallback(
         ulong sessionId,
+        ulong generation,
         NativeArena* arena,
-        uint* root,
-        ulong* revision
+        uint* root
     )
     {
         try
         {
             return GpuiApplication.Find(sessionId) is { } application
-                ? application.RenderInto(arena, root, revision)
+                ? application.RenderInto(generation, arena, root)
                 : -1;
         }
         catch
@@ -72,12 +73,12 @@ internal static unsafe class ManagedCallbacks
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int RenderCompletedCallback(ulong sessionId, ulong revision, int status)
+    private static int RenderCompletedCallback(ulong sessionId, ulong generation, int status)
     {
         try
         {
             return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnRenderCompleted(revision, status)
+                ? application.OnRenderCompleted(generation, status)
                 : NativeProtocol.StatusOk;
         }
         catch
@@ -94,6 +95,21 @@ internal static unsafe class ManagedCallbacks
             return GpuiApplication.Find(sessionId) is { } application
                 ? application.OnClick(token)
                 : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int RetireCallbacksCallback(ulong sessionId, ulong generation)
+    {
+        try
+        {
+            return GpuiApplication.Find(sessionId) is { } application
+                ? application.OnRetireCallbacks(generation)
+                : NativeProtocol.StatusOk;
         }
         catch
         {

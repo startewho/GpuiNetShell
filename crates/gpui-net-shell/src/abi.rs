@@ -83,10 +83,12 @@ impl GpuiNetArena {
 
 /// Managed entry points the host calls back into.
 ///
-/// `render` fills `arena`/`root`/`revision`. `render_completed` acknowledges a
-/// decoded revision (or reports its failure). `click` delivers a Button
-/// activation by callback token. `struct_size` lets native code validate the
-/// available prefix.
+/// `render` fills `arena`/`root` for one generation. `render_completed`
+/// acknowledges a decoded generation (or reports its failure). `click` delivers
+/// a Button activation by callback token. `retire_callbacks` is called when a
+/// published snapshot is dropped, letting the managed host release the event
+/// handlers that generation registered. `struct_size` lets native code validate
+/// the available prefix.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GpuiNetCallbacks {
@@ -97,14 +99,15 @@ pub struct GpuiNetCallbacks {
     pub render: Option<
         unsafe extern "C" fn(
             session_id: u64,
+            generation: u64,
             arena: *mut GpuiNetArena,
             root: *mut u32,
-            revision: *mut u64,
         ) -> i32,
     >,
     pub render_completed:
-        Option<unsafe extern "C" fn(session_id: u64, revision: u64, status: i32) -> i32>,
+        Option<unsafe extern "C" fn(session_id: u64, generation: u64, status: i32) -> i32>,
     pub click: Option<unsafe extern "C" fn(session_id: u64, token: u64) -> i32>,
+    pub retire_callbacks: Option<unsafe extern "C" fn(session_id: u64, generation: u64) -> i32>,
 }
 
 impl std::fmt::Debug for GpuiNetCallbacks {
@@ -126,6 +129,8 @@ pub struct GpuiNetShellApi {
     pub run_application: Option<
         unsafe extern "C" fn(application_id: u64, callbacks: *const GpuiNetCallbacks) -> i32,
     >,
+    /// Requests a re-render of one session from any thread.
+    pub invalidate: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
     pub _reserved: u64,
 }
 

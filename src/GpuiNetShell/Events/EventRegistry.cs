@@ -4,10 +4,25 @@ namespace GpuiNetShell.Events;
 /// Maps stable callback tokens to managed click handlers. Native code carries
 /// only the token across the ABI.
 /// </summary>
+/// <remarks>
+/// Handlers are grouped by the snapshot generation that registered them, so a
+/// retired snapshot releases exactly its own handlers. Tokens are never reused,
+/// so a click dispatched against the previous frame still resolves while that
+/// snapshot is retained.
+/// </remarks>
 public sealed class EventRegistry
 {
     private readonly Dictionary<ulong, Action> _handlers = [];
+    private readonly Dictionary<ulong, List<ulong>> _generations = [];
     private ulong _next = 1;
+    private ulong _generation;
+
+    /// <summary>Marks the snapshot generation new handlers belong to.</summary>
+    public void BeginGeneration(ulong generation)
+    {
+        _generation = generation;
+        _generations[generation] = [];
+    }
 
     /// <summary>Registers a handler and returns its never-reused token.</summary>
     public ulong Register(Action handler)
@@ -15,6 +30,10 @@ public sealed class EventRegistry
         ArgumentNullException.ThrowIfNull(handler);
         var token = _next++;
         _handlers[token] = handler;
+        if (_generations.TryGetValue(_generation, out var tokens))
+        {
+            tokens.Add(token);
+        }
         return token;
     }
 
@@ -29,12 +48,23 @@ public sealed class EventRegistry
         return true;
     }
 
-    /// <summary>Retires all handlers but keeps tokens monotonic.</summary>
-    public void Reset() => _handlers.Clear();
+    /// <summary>Retires every handler registered for a snapshot generation.</summary>
+    public void Retire(ulong generation)
+    {
+        if (_generations.Remove(generation, out var tokens))
+        {
+            foreach (var token in tokens)
+            {
+                _handlers.Remove(token);
+            }
+        }
+    }
 
     public void Clear()
     {
         _handlers.Clear();
+        _generations.Clear();
         _next = 1;
+        _generation = 0;
     }
 }

@@ -32,7 +32,7 @@ packed UTF-8 range of a method name; `flags` classifies the argument in `b`.
 
 The native host is dirty, so `ShellView::refresh`
 (`crates/gpui-net-shell/src/host.rs`) calls the managed `render` callback,
-receives a nonzero revision, and calls `Snapshot::decode`
+receives the generation, and calls `Snapshot::decode`
 (`src/snapshot.rs`):
 
 - record flags and argument kinds must be valid;
@@ -44,7 +44,7 @@ receives a nonzero revision, and calls `Snapshot::decode`
 
 The result is an owned `Snapshot` whose ops are `NullaryStyle`, `ParamStyle`,
 `Method`, or `Callback` — no per-style or per-property operation code. On
-success the host acknowledges with `render_completed(session, revision, 0)`.
+success the host acknowledges with `render_completed(session, generation, 0)`.
 
 ## 4. Materialization (Rust)
 
@@ -85,10 +85,12 @@ component, and the runtime never names `Button` itself.
 Clicking (or Enter/Space on) the button runs the closure. It calls the managed
 `click(session, token)` callback, then marks the owning view dirty and notifies
 it. The view re-renders, calls managed `Render` again, and publishes a new
-revision and snapshot.
+generation and snapshot.
 
 The click crosses the ABI as one `(session, token)` pair; the handler lookup and
-all UI state stay managed.
+all UI state stay managed. The handler belongs to the generation that registered
+it; when that snapshot is dropped (two generations later), the native
+`retire_callbacks` tells the managed host to release it.
 
 ## Tests covering the route
 

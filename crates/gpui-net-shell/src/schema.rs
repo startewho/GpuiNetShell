@@ -69,7 +69,6 @@ pub const STATUS_TRUNCATED: i32 = -3;
 pub const STATUS_BAD_UTF8: i32 = -4;
 pub const STATUS_BAD_INDEX: i32 = -5;
 pub const STATUS_CYCLE: i32 = -6;
-pub const STATUS_STALE_REVISION: i32 = -8;
 pub const STATUS_PANIC: i32 = -9;
 
 #[cfg(test)]

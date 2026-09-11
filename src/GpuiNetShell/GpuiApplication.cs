@@ -21,7 +21,6 @@ public sealed class GpuiApplication
     private readonly RenderArena _arena = new();
 
     private View? _root;
-    private ulong _revision;
 
     public GpuiApplication(Func<View> rootFactory)
     {
@@ -45,25 +44,51 @@ public sealed class GpuiApplication
 
     internal int OnWindowClosed(int status) => status;
 
-    internal unsafe int RenderInto(NativeArena* arena, uint* root, ulong* revision)
+    /// <summary>
+    /// Builds one description for <paramref name="generation"/> and publishes it
+    /// into the arena. Event handlers registered here belong to that generation
+    /// and are released when its snapshot is retired.
+    /// </summary>
+    internal unsafe int RenderInto(ulong generation, NativeArena* arena, uint* root)
     {
         _arena.Reset();
-        _events.Reset();
+        _events.BeginGeneration(generation);
 
         var ui = new RenderContext(_arena, _events);
         _root ??= _rootFactory();
+        _root.AttachInvalidator(Invalidate);
         var element = _root.RenderRoot(ref ui);
 
         *arena = _arena.Publish();
         *root = (uint)element.Index;
-        *revision = ++_revision;
         return NativeProtocol.StatusOk;
     }
 
-    internal int OnRenderCompleted(ulong revision, int status) => status;
+    internal int OnRenderCompleted(ulong generation, int status) => status;
 
     internal int OnClick(ulong token) =>
         _events.Dispatch(token) ? NativeProtocol.StatusOk : -1;
+
+    /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
+    internal int OnRetireCallbacks(ulong generation)
+    {
+        _events.Retire(generation);
+        return NativeProtocol.StatusOk;
+    }
+
+    /// <summary>
+    /// Requests a re-render from any thread. Equivalent to shell's
+    /// <c>cx.notify()</c>: the native view marks itself dirty and repaints.
+    /// </summary>
+    public unsafe void Invalidate()
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->Invalidate == null)
+        {
+            return;
+        }
+        _ = api->Invalidate(_sessionId);
+    }
 
     /// <summary>Runs the native application event loop. Blocking.</summary>
     public void Run() => RunOnUiThread(RunCore);

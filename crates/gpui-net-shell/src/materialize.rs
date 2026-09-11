@@ -12,7 +12,7 @@ use crate::registry::{
     ComponentArgument, ComponentDescriptor, ComponentPayload, FrozenComponentRegistry, HostContext,
     MaterializeRequest, RecordedComponentMethod,
 };
-use crate::snapshot::{Node, Op, Snapshot};
+use crate::snapshot::{Node, Op, RenderSnapshot};
 use crate::style::{apply_nullary_name, apply_param, StyleArg};
 
 /// Behavior collected from a node's ops, applied when the component is built.
@@ -25,23 +25,22 @@ struct Behavior {
     methods: Vec<(String, Option<StyleArg>)>,
 }
 
-/// Materializes a snapshot's root through the frozen catalog.
+/// Materializes a frozen snapshot through the catalog.
 pub fn materialize(
     registry: &FrozenComponentRegistry,
-    snapshot: &Snapshot,
+    snapshot: &RenderSnapshot,
     host: &HostContext,
 ) -> Result<AnyElement, String> {
-    materialize_node(registry, snapshot, snapshot.root, host)
+    materialize_node(registry, snapshot.nodes(), snapshot.root(), host)
 }
 
 fn materialize_node(
     registry: &FrozenComponentRegistry,
-    snapshot: &Snapshot,
+    nodes: &[Node],
     id: u32,
     host: &HostContext,
 ) -> Result<AnyElement, String> {
-    let node = snapshot
-        .nodes
+    let node = nodes
         .get(id as usize)
         .ok_or_else(|| format!("node {id} is outside the snapshot"))?;
     let descriptor = registry
@@ -54,7 +53,7 @@ fn materialize_node(
 
     let mut children = Vec::with_capacity(node.children.len());
     for child in &node.children {
-        children.push(materialize_node(registry, snapshot, *child, host)?);
+        children.push(materialize_node(registry, nodes, *child, host)?);
     }
 
     let request = MaterializeRequest::new(

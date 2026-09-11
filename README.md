@@ -32,6 +32,12 @@ GPUI style method names (`items_center`, `size_full`, `p`, `gap`, `bg`, …) and
 Rust resolves them against GPUI's reflected style table, exactly as `gpui-shell`
 does.
 
+Each published render is a frozen `RenderSnapshot` that owns its generation.
+The native `ShellView` keeps the current and previous snapshots; when one is
+replaced its generation is retired and the managed host releases exactly that
+generation's event handlers. `View.Invalidate()` is the managed equivalent of
+`cx.notify()`.
+
 ## Repository layout
 
 ```text
@@ -39,12 +45,13 @@ Cargo.toml                     Rust workspace
 crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/schema.rs                  wire vocabulary (mirrored in C#)
   src/abi.rs                     C layouts and the API table
-  src/snapshot.rs                arena decode + validation
+  src/snapshot.rs                arena decode + RenderSnapshot
   src/style.rs                   reflected GPUI style table (shell-style)
   src/registry.rs                ComponentRegistry / Descriptor / Materializer
   src/components/                Div, Text, Button descriptors + materializers
   src/materialize.rs             op resolution + registry dispatch
-  src/host.rs                    GPUI application and window
+  src/view.rs                    ShellView: dirty/current/previous + rebuild
+  src/host.rs                    GPUI application, window, ingress
   src/ffi.rs                     panic-safe C entry points
 src/GpuiNetShell/              Managed runtime library
   Interop/                       layouts, P/Invoke, managed callbacks

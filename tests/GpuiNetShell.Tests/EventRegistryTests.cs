@@ -8,6 +8,7 @@ public sealed class EventRegistryTests
     public void DispatchRunsTheRegisteredHandlerOnce()
     {
         var registry = new EventRegistry();
+        registry.BeginGeneration(1);
         var calls = 0;
         var token = registry.Register(() => calls++);
 
@@ -16,15 +17,31 @@ public sealed class EventRegistryTests
     }
 
     [Fact]
-    public void ResetRetiresHandlersButKeepsTokensMonotonic()
+    public void RetiringAGenerationReleasesOnlyItsHandlers()
     {
         var registry = new EventRegistry();
+
+        registry.BeginGeneration(1);
         var first = registry.Register(() => { });
 
-        registry.Reset();
+        registry.BeginGeneration(2);
         var second = registry.Register(() => { });
 
+        registry.Retire(1);
+
         Assert.False(registry.Dispatch(first));
+        Assert.True(registry.Dispatch(second));
+    }
+
+    [Fact]
+    public void TokensAreNeverReusedAcrossGenerations()
+    {
+        var registry = new EventRegistry();
+        registry.BeginGeneration(1);
+        var first = registry.Register(() => { });
+        registry.BeginGeneration(2);
+        var second = registry.Register(() => { });
+
         Assert.True(second > first);
     }
 

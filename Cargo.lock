@@ -2253,6 +2253,7 @@ dependencies = [
 name = "gpui-net-shell"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "gpui-base",
  "gpui-component",
  "gpui-pre",
