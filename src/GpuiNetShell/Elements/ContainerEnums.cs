@@ -45,6 +45,32 @@ public enum PopoverAnchor : uint
     RightCenter = 7,
 }
 
+/// <summary>The icon a <see cref="SpinnerElement"/> rotates.</summary>
+public enum SpinnerIcon : uint
+{
+    Loader = 0,
+    LoaderCircle = 1,
+}
+
+/// <summary>The rotation easing curve of a <see cref="SpinnerElement"/>.</summary>
+public enum SpinnerEase : uint
+{
+    Linear = 0,
+    EaseInOut = 1,
+    EaseOutQuint = 2,
+}
+
+/// <summary>Semantic variant of a <see cref="TagElement"/>.</summary>
+public enum TagVariant : uint
+{
+    Primary = 0,
+    Secondary = 1,
+    Danger = 2,
+    Success = 3,
+    Warning = 4,
+    Info = 5,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {

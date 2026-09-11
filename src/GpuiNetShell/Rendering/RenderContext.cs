@@ -151,6 +151,37 @@ public sealed class RenderContext
         return new PopoverElement(this, index);
     }
 
+    /// <summary>Declares a cycling loading spinner.</summary>
+    public SpinnerElement Spinner() =>
+        new SpinnerElement(this, _arena.AddNode(NativeProtocol.ComponentSpinner));
+
+    /// <summary>Declares a horizontal separator.</summary>
+    public SeparatorElement Separator() => Separator("Separator");
+
+    /// <summary>Declares a vertical separator.</summary>
+    public SeparatorElement VerticalSeparator() => Separator("VerticalSeparator");
+
+    /// <summary>Declares a dashed horizontal separator.</summary>
+    public SeparatorElement DashedSeparator() => Separator("DashedSeparator");
+
+    /// <summary>Declares a dashed vertical separator.</summary>
+    public SeparatorElement VerticalDashedSeparator() => Separator("VerticalDashedSeparator");
+
+    /// <summary>Declares an animated loading placeholder.</summary>
+    public SkeletonElement Skeleton() =>
+        new SkeletonElement(this, _arena.AddNode(NativeProtocol.ComponentSkeleton));
+
+    /// <summary>Declares a compact semantic status tag.</summary>
+    public TagElement Tag() =>
+        new TagElement(this, _arena.AddNode(NativeProtocol.ComponentTag));
+
+    private SeparatorElement Separator(string export)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSeparator);
+        _arena.SetNodeData(index, export);
+        return new SeparatorElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

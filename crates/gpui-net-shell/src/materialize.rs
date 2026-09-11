@@ -101,16 +101,29 @@ fn materialize_node(
 
 /// Runs the descriptor's constructor with the node's identity data.
 ///
-/// A constructor taking several string arguments receives them packed into the
-/// node's data, separated by [`crate::schema::CONSTRUCTOR_ARG_SEPARATOR`].
+/// A descriptor with one constructor uses it directly. A descriptor with
+/// several named constructors (such as `Separator`/`VerticalSeparator`) selects
+/// the one whose export name equals the node's data. A constructor taking
+/// several string arguments receives them packed into the node's data,
+/// separated by [`crate::schema::CONSTRUCTOR_ARG_SEPARATOR`].
 fn build_payload(
     descriptor: &ComponentDescriptor,
     node: &Node,
 ) -> Result<ComponentPayload, String> {
-    let constructor = descriptor
-        .constructors()
-        .first()
-        .ok_or_else(|| format!("{} has no constructor", descriptor.name()))?;
+    let constructors = descriptor.constructors();
+    let constructor = match constructors {
+        [only] => only,
+        many => many
+            .iter()
+            .find(|constructor| constructor.export() == node.data)
+            .ok_or_else(|| {
+                format!(
+                    "{} has no constructor named `{}`",
+                    descriptor.name(),
+                    node.data
+                )
+            })?,
+    };
     let arity = constructor.arguments().len();
     let arguments = if arity == 0 {
         Vec::new()

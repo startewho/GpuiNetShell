@@ -15,7 +15,11 @@ pub mod progress;
 pub mod radio;
 pub mod resizable;
 pub mod scroll;
+pub mod separator;
+pub mod skeleton;
+pub mod spinner;
 pub mod tabs;
+pub mod tag;
 pub mod text;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
@@ -34,6 +38,10 @@ pub fn register(registry: &mut ComponentRegistry) {
     scroll::register(registry);
     resizable::register(registry);
     popover::register(registry);
+    spinner::register(registry);
+    separator::register(registry);
+    skeleton::register(registry);
+    tag::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -69,6 +77,10 @@ mod tests {
                 "Scrollbar",
                 "Resizable",
                 "Popover",
+                "Spinner",
+                "Separator",
+                "Skeleton",
+                "Tag",
             ]
         );
     }

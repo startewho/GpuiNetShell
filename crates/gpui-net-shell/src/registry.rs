@@ -17,7 +17,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, IntoElement, ParentElement, Refineable as _, StyleRefinement, Styled, Window,
+    AnyElement, App, Context, ElementId, Entity, IntoElement, ParentElement, Refineable as _,
+    StyleRefinement, Styled, Window,
 };
 
 use crate::context::HostContext;
@@ -444,6 +445,35 @@ impl<'a> MaterializeRequest<'a> {
     /// window-scoped state (scroll handles, keyed element state).
     pub fn with_window_app<R>(&mut self, body: impl FnOnce(&mut Window, &mut App) -> R) -> R {
         body(self.window, self.cx)
+    }
+
+    /// Creates or retrieves a retained native entity for this component.
+    ///
+    /// This is the runtime's equivalent of `component-shell`'s `StateDescriptor`
+    /// plus `ComponentArgument::Entity`: a component such as `Input` owns one
+    /// `InputState` entity that survives across renders and is shared by every
+    /// render that names the same `key`. The `init` closure runs only on the
+    /// first render for that key, so it should capture the first render's
+    /// configuration; later configuration changes mutate the entity through
+    /// [`MaterializeRequest::update_entity`].
+    ///
+    /// `key` must be window-unique among retained entities (a component id is
+    /// the usual choice). Sibling parts that share one entity pass the same key.
+    pub fn use_keyed_state<S: 'static>(
+        &mut self,
+        key: impl Into<ElementId>,
+        init: impl FnOnce(&mut Window, &mut Context<S>) -> S,
+    ) -> Entity<S> {
+        self.window.use_keyed_state(key.into(), self.cx, init)
+    }
+
+    /// Applies `update` to a retained entity, then requests a repaint.
+    pub fn update_entity<S: 'static, R>(
+        &mut self,
+        entity: &Entity<S>,
+        update: impl FnOnce(&mut S, &mut Context<S>) -> R,
+    ) -> R {
+        entity.update(self.cx, update)
     }
 
     pub fn take_style(&mut self) -> StyleRefinement {

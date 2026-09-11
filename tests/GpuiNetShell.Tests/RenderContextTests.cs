@@ -185,6 +185,35 @@ public sealed unsafe class RenderContextTests
         Assert.Contains(NativeProtocol.OpSlot, codes);
     }
 
+    [Fact]
+    public void FeedbackComponentsRecordTheirConstructorsAndMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Spinner()
+            .Size(ControlSize.Large)
+            .Icon(SpinnerIcon.LoaderCircle)
+            .Color("blue-600")
+            .Ease(SpinnerEase.EaseOutQuint);
+        ui.VerticalDashedSeparator().Label("Account").Color("red-500");
+        ui.Skeleton().Secondary();
+        ui.Tag().Variant(TagVariant.Danger).Outline().RoundedFull().Size(ControlSize.Small);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentSpinner, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentSeparator, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentSkeleton, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTag, descriptor.Nodes[3].Component);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        var separatorData =
+            ((ulong)descriptor.Nodes[1].DataOffset << 32) | descriptor.Nodes[1].DataLen;
+        Assert.Equal("VerticalDashedSeparator", DecodePacked(separatorData, utf8));
+        Assert.Equal(NativeProtocol.ArgEnum, descriptor.Ops[0].Flags);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

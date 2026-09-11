@@ -134,24 +134,21 @@ impl ComponentMaterializer for ScrollMaterializer {
         let children = request.take_children();
         let style = request.take_style();
 
-        let mut area = request.with_window_app(|window, cx| {
-            let key = ElementId::Name(SharedString::from(id));
-            let handle = window
-                .use_keyed_state(key.clone(), cx, |_, _| ScrollHandle::default())
-                .read(cx)
-                .clone();
-            let mut area = div()
-                .id(key)
-                .flex()
-                .track_scroll(&handle)
-                .lock_scroll_axis();
-            area = match axis {
-                ScrollbarAxis::Vertical => area.flex_col().overflow_y_scroll(),
-                ScrollbarAxis::Horizontal => area.flex_row().overflow_x_scroll(),
-                ScrollbarAxis::Both => area.overflow_scroll(),
-            };
-            area.children(children)
-        });
+        let key = ElementId::Name(SharedString::from(id));
+        let entity = request.use_keyed_state(key.clone(), |_, _| ScrollHandle::default());
+        let handle = request.with_window_app(|_, cx| entity.read(cx).clone());
+
+        let mut area = div()
+            .id(key)
+            .flex()
+            .track_scroll(&handle)
+            .lock_scroll_axis();
+        area = match axis {
+            ScrollbarAxis::Vertical => area.flex_col().overflow_y_scroll(),
+            ScrollbarAxis::Horizontal => area.flex_row().overflow_x_scroll(),
+            ScrollbarAxis::Both => area.overflow_scroll(),
+        };
+        let mut area = area.children(children);
         area.style().refine(&style);
         Ok(area.into_any_element())
     }
@@ -174,27 +171,24 @@ impl ComponentMaterializer for ScrollbarMaterializer {
         );
         let style = request.take_style();
 
-        Ok(request.with_window_app(|window, cx| {
-            let key = ElementId::Name(SharedString::from(target));
-            let handle = window
-                .use_keyed_state(key, cx, |_, _| ScrollHandle::default())
-                .read(cx)
-                .clone();
-            let mut bar = Scrollbar::new(&handle);
-            if let Some(axis) = axis {
-                bar = bar.axis(axis);
-            }
-            if let Some(mode) = mode {
-                bar = bar.mode(mode);
-            }
-            if viewport_from_layout {
-                bar = bar.viewport_from_layout();
-            }
+        let key = ElementId::Name(SharedString::from(target));
+        let entity = request.use_keyed_state(key, |_, _| ScrollHandle::default());
+        let handle = request.with_window_app(|_, cx| entity.read(cx).clone());
 
-            let mut frame = div().absolute().top_0().bottom_0().right_0().w(px(12.0));
-            frame.style().refine(&style);
-            frame.child(bar).into_any_element()
-        }))
+        let mut bar = Scrollbar::new(&handle);
+        if let Some(axis) = axis {
+            bar = bar.axis(axis);
+        }
+        if let Some(mode) = mode {
+            bar = bar.mode(mode);
+        }
+        if viewport_from_layout {
+            bar = bar.viewport_from_layout();
+        }
+
+        let mut frame = div().absolute().top_0().bottom_0().right_0().w(px(12.0));
+        frame.style().refine(&style);
+        Ok(frame.child(bar).into_any_element())
     }
 }
 

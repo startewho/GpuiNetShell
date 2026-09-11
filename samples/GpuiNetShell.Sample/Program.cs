@@ -52,6 +52,7 @@ internal sealed class GalleryView : View
         "Resizable",
         "Popover",
         "Overlays",
+        "Feedback",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -78,6 +79,8 @@ internal sealed class GalleryView : View
             5 => ScrollPage(ref ui),
             6 => ResizablePage(ref ui),
             7 => PopoverPage(ref ui),
+            8 => OverlayPage(ref ui),
+            9 => FeedbackPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -289,6 +292,42 @@ internal sealed class GalleryView : View
                     )
             )
             .Gap(12);
+
+    private Element FeedbackPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Feedback",
+                    "Spinners, separators, skeletons, and status tags."
+                ),
+                ui.HStack(
+                        ui.Spinner(),
+                        ui.Spinner().Size(ControlSize.Small),
+                        ui.Spinner().Icon(SpinnerIcon.LoaderCircle).Color("blue-600"),
+                        ui.Spinner().Size(ControlSize.Large).Ease(SpinnerEase.EaseOutQuint)
+                    )
+                    .Gap(20)
+                    .ItemsCenter(),
+                ui.Separator(),
+                ui.Separator().Label("Account"),
+                ui.DashedSeparator().Color("red-500"),
+                ui.HStack(
+                        ui.Skeleton().W(80).H(12),
+                        ui.Skeleton().Secondary().W(120).H(12),
+                        ui.Skeleton().W(60).H(12)
+                    )
+                    .Gap(8)
+                    .ItemsCenter(),
+                ui.HStack(
+                        ui.Tag().Variant(TagVariant.Primary).Add(ui.Text("Primary")),
+                        ui.Tag().Variant(TagVariant.Success).RoundedFull().Add(ui.Text("Success")),
+                        ui.Tag().Variant(TagVariant.Danger).Outline().Add(ui.Text("Danger")),
+                        ui.Tag().Variant(TagVariant.Info).Size(ControlSize.Small).Add(ui.Text("Info"))
+                    )
+                    .Gap(8)
+                    .ItemsCenter()
+            )
+            .Gap(16);
 
     private Element Section(ref RenderContext ui, string title, string description) =>
         ui.VStack(ui.Label(title).TextSize(20).FontSemibold(), ui.Text(description)).Gap(4);
