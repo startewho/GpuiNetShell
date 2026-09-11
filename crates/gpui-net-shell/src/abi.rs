@@ -131,6 +131,27 @@ pub struct GpuiNetShellApi {
     >,
     /// Requests a re-render of one session from any thread.
     pub invalidate: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
+    /// Opens a dialog with a UTF-8 title and body.
+    pub open_dialog: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            title: *const u8,
+            title_len: u32,
+            body: *const u8,
+            body_len: u32,
+        ) -> i32,
+    >,
+    /// Closes the topmost dialog.
+    pub close_dialog: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
+    /// Posts a UTF-8 notification with a severity level.
+    pub push_notification: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            message: *const u8,
+            message_len: u32,
+            level: u32,
+        ) -> i32,
+    >,
     pub _reserved: u64,
 }
 

@@ -38,6 +38,13 @@ replaced its generation is retired and the managed host releases exactly that
 generation's event handlers. `View.Invalidate()` is the managed equivalent of
 `cx.notify()`.
 
+The overlay host (`src/root.rs`) wraps the content view and paints a dialog
+stack and a notification stack over it; the managed `GpuiApplication` drives
+them with `OpenDialog`, `CloseDialog`, and `PushNotification`, and tooltips ride
+the `gpui-component` window root. Components are registered descriptors in
+`src/components/` (`Div`, `Text`, `Button`, `Label`, `Badge`, `Progress`);
+adding one is a descriptor, a materializer, and a managed builder.
+
 ## Repository layout
 
 ```text
@@ -48,9 +55,10 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/snapshot.rs                arena decode + RenderSnapshot
   src/style.rs                   reflected GPUI style table (shell-style)
   src/registry.rs                ComponentRegistry / Descriptor / Materializer
-  src/components/                Div, Text, Button descriptors + materializers
+  src/components/                Div, Text, Button, Label, Badge, Progress
   src/materialize.rs             op resolution + registry dispatch
   src/view.rs                    ShellView: dirty/current/previous + rebuild
+  src/root.rs                    Root: content + dialog + notification layers
   src/host.rs                    GPUI application, window, ingress
   src/ffi.rs                     panic-safe C entry points
 src/GpuiNetShell/              Managed runtime library

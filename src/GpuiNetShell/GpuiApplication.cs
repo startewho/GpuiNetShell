@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using System.Text;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
@@ -88,6 +89,58 @@ public sealed class GpuiApplication
             return;
         }
         _ = api->Invalidate(_sessionId);
+    }
+
+    /// <summary>Opens a dialog with a plain-text title and body, from any thread.</summary>
+    public unsafe void OpenDialog(string title, string body)
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->OpenDialog == null)
+        {
+            return;
+        }
+        var titleBytes = Encoding.UTF8.GetBytes(title ?? string.Empty);
+        var bodyBytes = Encoding.UTF8.GetBytes(body ?? string.Empty);
+        fixed (byte* titlePointer = titleBytes)
+        fixed (byte* bodyPointer = bodyBytes)
+        {
+            _ = api->OpenDialog(
+                _sessionId,
+                titlePointer,
+                (uint)titleBytes.Length,
+                bodyPointer,
+                (uint)bodyBytes.Length
+            );
+        }
+    }
+
+    /// <summary>Closes the topmost dialog, from any thread.</summary>
+    public unsafe void CloseDialog()
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->CloseDialog == null)
+        {
+            return;
+        }
+        _ = api->CloseDialog(_sessionId);
+    }
+
+    /// <summary>Posts a notification, from any thread.</summary>
+    public unsafe void PushNotification(
+        string message,
+        NotificationLevel level = NotificationLevel.Info
+    )
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->PushNotification == null)
+        {
+            return;
+        }
+        var bytes = Encoding.UTF8.GetBytes(message ?? string.Empty);
+        fixed (byte* pointer = bytes)
+        {
+            _ = api->PushNotification(_sessionId, pointer, (uint)bytes.Length, (uint)level);
+        }
     }
 
     /// <summary>Runs the native application event loop. Blocking.</summary>

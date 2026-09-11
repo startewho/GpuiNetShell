@@ -63,7 +63,7 @@ internal unsafe struct NativeCallbacks
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> RetireCallbacks;
 }
 
-/// <summary>Mirrors <c>GpuiNetShellApi</c>. 40 bytes.</summary>
+/// <summary>Mirrors <c>GpuiNetShellApi</c>. 64 bytes.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct GpuiNetShellApi
 {
@@ -72,5 +72,8 @@ internal unsafe struct GpuiNetShellApi
     public ulong SchemaHash;
     public delegate* unmanaged[Cdecl]<ulong, NativeCallbacks*, int> RunApplication;
     public delegate* unmanaged[Cdecl]<ulong, int> Invalidate;
+    public delegate* unmanaged[Cdecl]<ulong, byte*, uint, byte*, uint, int> OpenDialog;
+    public delegate* unmanaged[Cdecl]<ulong, int> CloseDialog;
+    public delegate* unmanaged[Cdecl]<ulong, byte*, uint, uint, int> PushNotification;
     public ulong Reserved;
 }

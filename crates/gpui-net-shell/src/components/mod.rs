@@ -4,17 +4,23 @@
 //! its `ComponentMaterializer`. The runtime knows none of them by name: adding
 //! a component is `register` here plus one id in the wire schema.
 
+pub mod badge;
 pub mod button;
 pub mod div;
+pub mod label;
+pub mod progress;
 pub mod text;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
 
-/// Registers every built-in component.
+/// Registers every built-in component. The order is the wire id order.
 pub fn register(registry: &mut ComponentRegistry) {
     div::register(registry);
     text::register(registry);
     button::register(registry);
+    label::register(registry);
+    badge::register(registry);
+    progress::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -36,7 +42,7 @@ mod tests {
                 .descriptors()
                 .map(|descriptor| descriptor.name())
                 .collect::<Vec<_>>(),
-            ["Div", "Text", "Button"]
+            ["Div", "Text", "Button", "Label", "Badge", "Progress"]
         );
     }
 }

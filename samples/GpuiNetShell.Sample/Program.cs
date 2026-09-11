@@ -15,27 +15,72 @@ if (args.Contains("--check", StringComparer.Ordinal))
     return compatible ? 0 : 1;
 }
 
-// The smallest end-to-end Button route: one window, one view, one event.
-var application = new GpuiApplication(() => new CounterView());
+// The application is captured by the view so its buttons can open overlays; the
+// factory runs on the native thread after this assignment.
+GpuiApplication? application = null;
+application = new GpuiApplication(() => new GalleryView(application!));
 application.Run();
 return 0;
 
-/// <summary>Owns the counter state; <see cref="Render"/> describes it.</summary>
-internal sealed class CounterView : View
+/// <summary>
+/// A small gallery: labels and a badge, a progress bar, and buttons that
+/// increment, reset, open a dialog, or post a notification. The increment
+/// button carries a tooltip.
+/// </summary>
+internal sealed class GalleryView : View
 {
+    private readonly GpuiApplication _application;
     private int _count;
+
+    public GalleryView(GpuiApplication application)
+    {
+        _application = application;
+    }
 
     protected override Element Render(ref RenderContext ui) =>
         ui.VStack(
-                ui.Text($"Count: {_count}").TextSize(24),
-                ui.Button("increment")
-                    .Label("Increment")
-                    .Primary()
-                    .OnClick(() => _count++)
+                ui.HStack(
+                        ui.Label("Counter").TextSize(18).FontSemibold(),
+                        ui.Badge(_count)
+                    )
+                    .Gap(8)
+                    .ItemsCenter()
+                   ,
+                ui.Text($"Count: {_count}").TextSize(28),
+                ui.Progress("progress").Value(_count / 101).P(20),
+                ui.HStack(
+                        ui.Button("increment")
+                            .Label("Increment")
+                            .Primary()
+                            .Tooltip("Increments the counter")
+                            .OnClick(() => _count++),
+                        ui.Button("reset").Label("Reset").Secondary().OnClick(() => _count = 0),
+                        ui.Button("dialog")
+                            .Label("Open dialog")
+                            .OnClick(() =>
+                                _application.OpenDialog(
+                                    "About GpuiNetShell",
+                                    "A C#-hosted GPUI shell: managed state, native rendering."
+                                )
+                            ),
+                        ui.Button("notify")
+                            .Label("Notify")
+                            .Success()
+                            .OnClick(() =>
+                                _application.PushNotification(
+                                    $"Count is {_count}",
+                                    NotificationLevel.Success
+                                )
+                            )
+                    )
+                    .Gap(8)
+                    .ItemsCenter()
+            .MinH(0)
+            .Full()
             )
-            .Gap(12)
-            .P(24)
+            .Gap(16)
+            .P(32)
             .Full()
             .ItemsCenter()
-            .JustifyCenter();
+          ;
 }

@@ -78,6 +78,27 @@ public sealed unsafe class RenderContextTests
         Assert.Equal("size_full", DecodePacked(descriptor.Ops[2].A, utf8));
     }
 
+    [Fact]
+    public void LabelBadgeAndProgressRecordTheirIdentitiesAndMethods()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry());
+
+        ui.Label("Name");
+        ui.Badge(7).Dot();
+        ui.Progress("bar").Value(50).Loading(false);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(3u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentLabel, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentBadge, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentProgress, descriptor.Nodes[2].Component);
+        // dot + value + loading
+        Assert.Equal(3u, descriptor.OpsLen);
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
+        Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[0].Flags);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

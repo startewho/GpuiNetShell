@@ -137,6 +137,29 @@ per method either: `ComponentDescriptor::method(name)` resolves a recorded name
 to its recorder. `resolve_ops` and the descriptor recorders are pure and tested
 without a window.
 
+The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, and
+`Progress`; each is one file in `src/components/`.
+
+## Root and overlays
+
+`crates/gpui-net-shell/src/root.rs` mirrors `gpui-shell`'s `root.rs`. `Root`
+owns the managed content view and paints the layers over it, back to front:
+
+1. **Content** — the `ShellView` the managed host describes.
+2. **Dialog stack** — a stack of title/body cards; only the topmost is
+   interactive, and a single backdrop dims the content beneath the stack.
+3. **Notifications** — a top-right stack that dismisses itself after a short
+   lifetime.
+
+The window is rooted at `gpui_component::Root` wrapping our `Root`, so
+`gpui-component` tooltips (attached through component methods such as
+`Button.Tooltip`) render on the window's own tooltip layer.
+
+Overlays are native: the managed host opens them through the command ingress
+(`OpenDialog`, `CloseDialog`, `PushNotification`), and the content is built from
+the request, so no overlay state crosses the ABI. The any-thread commands are
+delivered on the GPUI thread by the task `host::run` spawns.
+
 ## Application and events
 
 `GpuiApplication` owns one `View` and one native session. `View.Render` builds an
@@ -163,13 +186,18 @@ struct GpuiNetShellApi {
     uint64_t schema_hash;
     int32_t (*run_application)(uint64_t, const GpuiNetCallbacks*);
     int32_t (*invalidate)(uint64_t session);
+    int32_t (*open_dialog)(uint64_t, const uint8_t* title, uint32_t, const uint8_t* body, uint32_t);
+    int32_t (*close_dialog)(uint64_t session);
+    int32_t (*push_notification)(uint64_t, const uint8_t* message, uint32_t, uint32_t level);
     uint64_t reserved;
 };
 ```
 
-`run_application` blocks in the GPUI event loop. `invalidate` is the
-any-thread request behind `View.Invalidate()`: it posts to the session's view,
-which marks itself dirty and repaints.
+`run_application` blocks in the GPUI event loop. `invalidate` is the any-thread
+request behind `View.Invalidate()`: it posts to the session's view, which marks
+itself dirty and repaints. `open_dialog`, `close_dialog`, and
+`push_notification` post overlay commands to the same ingress; `Root` applies
+them on the GPUI thread.
 
 `GpuiNetCallbacks` carries the managed `application_started`, `window_closed`,
 `render(session, generation, arena, root)`, `render_completed(session,
@@ -210,6 +238,7 @@ manifest requirement for Windows common controls.
 
 ## Not yet built
 
+- rich overlay content (dialogs and notifications currently carry plain text);
 - retained controls beyond Button (Input, Slider, Scroll, List/Table);
 - multi-window support and window options over the ABI;
 - a theme payload from C# (the native host uses the gpui-component default);

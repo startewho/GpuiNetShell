@@ -19,6 +19,7 @@ mod materialize;
 // of today; the rest is the seam components are added through.
 #[allow(dead_code)]
 mod registry;
+mod root;
 mod schema;
 mod snapshot;
 mod style;
