@@ -86,16 +86,4 @@ public sealed class ButtonElement : Element
         Arena.AddOp(Index, NativeProtocol.OpOnClick, token);
         return this;
     }
-
-    public ButtonElement Padding(double pixels)
-    {
-        Arena.AddLengthOp(Index, NativeProtocol.OpPadding, pixels);
-        return this;
-    }
-
-    public ButtonElement Width(double pixels)
-    {
-        Arena.AddLengthOp(Index, NativeProtocol.OpWidth, pixels);
-        return this;
-    }
 }

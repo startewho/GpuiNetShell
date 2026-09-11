@@ -17,6 +17,7 @@ mod materialize;
 mod registry;
 mod schema;
 mod snapshot;
+mod style;
 
 pub use abi::{
     GpuiNetArena, GpuiNetCallbacks, GpuiNetChild, GpuiNetNode, GpuiNetOp, GpuiNetShellApi,

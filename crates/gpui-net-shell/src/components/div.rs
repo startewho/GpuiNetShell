@@ -4,11 +4,11 @@
 use gpui::prelude::*;
 use gpui::{div, AnyElement, IntoElement};
 
-use crate::components::{apply_style, style_ops};
+use crate::components::apply_style;
 use crate::registry::MaterializeContext;
 
 pub fn materialize(ctx: &mut MaterializeContext<'_>) -> Result<AnyElement, String> {
-    let element = apply_style(div(), &style_ops(ctx.node));
+    let element = apply_style(div(), ctx.node);
     Ok(element
         .children(std::mem::take(&mut ctx.children))
         .into_any_element())
@@ -16,34 +16,23 @@ pub fn materialize(ctx: &mut MaterializeContext<'_>) -> Result<AnyElement, Strin
 
 #[cfg(test)]
 mod tests {
-    use crate::components::{style_ops, StyleOp};
-    use crate::schema::*;
+    use crate::components::build_refinement;
+    use crate::schema::COMPONENT_DIV;
     use crate::snapshot::{Node, Op};
 
     #[test]
-    fn containers_report_their_layout_operations() {
+    fn containers_fold_layout_styles_into_the_refinement() {
         let node = Node {
             component: COMPONENT_DIV,
             data: String::new(),
             ops: vec![
-                Op {
-                    code: OP_FLEX_COL,
-                    a: 0,
-                    b: 0,
-                    data: None,
-                },
-                Op {
-                    code: OP_PADDING,
-                    a: 24.0f32.to_bits() as u64,
-                    b: 0,
-                    data: None,
-                },
+                Op::StyleNullary("flex_col".into()),
+                Op::StyleLength("p".into(), 24.0),
             ],
             children: Vec::new(),
         };
-        assert_eq!(
-            style_ops(&node),
-            vec![StyleOp::FlexCol, StyleOp::Padding(24.0)]
-        );
+        let refinement = build_refinement(&node);
+        assert_eq!(refinement.flex_direction, Some(gpui::FlexDirection::Column));
+        assert_eq!(refinement.padding.top, Some(gpui::px(24.0).into()));
     }
 }

@@ -52,18 +52,38 @@ internal sealed unsafe class RenderArena : IDisposable
     internal void AddBoolOp(int node, ushort code, bool value)
         => AddOp(node, code, value ? 1UL : 0UL);
 
-    internal void AddLengthOp(int node, ushort code, double pixels)
-        => AddOp(node, code, BitConverter.SingleToUInt32Bits((float)pixels));
-
-    internal void AddColorOp(int node, ushort code, uint rgba)
-        => AddOp(node, code, rgba);
-
     internal void AddStringOp(int node, ushort code, string value)
-    {
-        var (offset, length) = AppendUtf8(value);
-        var packed = ((ulong)offset << 32) | length;
-        AddOp(node, code, packed);
-    }
+        => AddOp(node, code, PackString(value));
+
+    /// <summary>Records a no-argument GPUI style method by name.</summary>
+    internal void AddStyleNullary(int node, string method)
+        => AddOp(node, NativeProtocol.OpStyleNullary, PackString(method));
+
+    /// <summary>Records a style method taking a pixel/number argument.</summary>
+    internal void AddStyleLength(int node, string method, double pixels)
+        => AddOp(
+            node,
+            NativeProtocol.OpStyleLength,
+            PackString(method),
+            BitConverter.SingleToUInt32Bits((float)pixels)
+        );
+
+    /// <summary>Records a style method taking a bare number argument.</summary>
+    internal void AddStyleNumber(int node, string method, double value)
+        => AddOp(
+            node,
+            NativeProtocol.OpStyleNumber,
+            PackString(method),
+            BitConverter.SingleToUInt32Bits((float)value)
+        );
+
+    /// <summary>Records a style method taking a color literal argument.</summary>
+    internal void AddStyleColor(int node, string method, string color)
+        => AddOp(node, NativeProtocol.OpStyleColor, PackString(method), PackString(color));
+
+    /// <summary>Records a style method taking a string argument.</summary>
+    internal void AddStyleString(int node, string method, string value)
+        => AddOp(node, NativeProtocol.OpStyleString, PackString(method), PackString(value));
 
     internal void AddChild(int parent, int child)
         => _children.Add(new NativeChild { Parent = (uint)parent, Child = (uint)child });
@@ -110,6 +130,12 @@ internal sealed unsafe class RenderArena : IDisposable
         var offset = (uint)_utf8.Count;
         _utf8.AddRange(bytes);
         return (offset, (uint)bytes.Length);
+    }
+
+    private ulong PackString(string value)
+    {
+        var (offset, length) = AppendUtf8(value);
+        return ((ulong)offset << 32) | length;
     }
 
     private static void PublishBuffer<T>(List<T> source, ref byte* buffer, ref nuint capacity)

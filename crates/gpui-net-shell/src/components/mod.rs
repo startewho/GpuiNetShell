@@ -13,7 +13,7 @@ use gpui::prelude::*;
 use gpui::{StyleRefinement, Styled};
 
 use crate::snapshot::{Node, Op};
-use crate::style::{StyleArg, apply_nullary_name, apply_param};
+use crate::style::{apply_nullary_name, apply_param, StyleArg};
 
 /// Folds `node`'s style operations into one `StyleRefinement`, in order.
 pub fn build_refinement(node: &Node) -> StyleRefinement {
@@ -21,19 +21,19 @@ pub fn build_refinement(node: &Node) -> StyleRefinement {
     for op in &node.ops {
         match op {
             Op::StyleNullary(name) => {
-                if let Some(next) = apply_nullary_name(name, refinement) {
+                if let Some(next) = apply_nullary_name(name, refinement.clone()) {
                     refinement = next;
                 }
             }
             Op::StyleLength(name, value) | Op::StyleNumber(name, value) => {
                 let arg = StyleArg::Number(*value);
-                if let Ok(next) = apply_param(name, &arg, refinement) {
+                if let Ok(next) = apply_param(name, &arg, refinement.clone()) {
                     refinement = next;
                 }
             }
             Op::StyleColor(name, value) | Op::StyleString(name, value) => {
                 let arg = StyleArg::String(value.clone());
-                if let Ok(next) = apply_param(name, &arg, refinement) {
+                if let Ok(next) = apply_param(name, &arg, refinement.clone()) {
                     refinement = next;
                 }
             }
@@ -78,7 +78,8 @@ mod tests {
 
     #[test]
     fn a_color_style_is_folded_from_hex() {
-        let refinement = build_refinement(&node(vec![Op::StyleColor("bg".into(), "#ff0000".into())]));
+        let refinement =
+            build_refinement(&node(vec![Op::StyleColor("bg".into(), "#ff0000".into())]));
         let expected: gpui::Fill = gpui::Hsla::from(gpui::rgba(0xff0000ff)).into();
         assert_eq!(refinement.background, Some(expected));
     }

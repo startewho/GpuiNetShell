@@ -125,10 +125,7 @@ impl Snapshot {
 }
 
 pub fn is_known_component(component: u32) -> bool {
-    matches!(
-        component,
-        COMPONENT_DIV | COMPONENT_TEXT | COMPONENT_BUTTON
-    )
+    matches!(component, COMPONENT_DIV | COMPONENT_TEXT | COMPONENT_BUTTON)
 }
 
 fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
@@ -374,7 +371,9 @@ mod tests {
         assert_eq!(button.component, COMPONENT_BUTTON);
         assert_eq!(button.data, "save");
         assert!(button.ops.contains(&Op::Label("Save".into())));
-        assert!(button.ops.contains(&Op::ButtonVariant(BUTTON_VARIANT_PRIMARY)));
+        assert!(button
+            .ops
+            .contains(&Op::ButtonVariant(BUTTON_VARIANT_PRIMARY)));
         assert_eq!(button.on_click(), Some(7));
     }
 

@@ -8,7 +8,7 @@
 use gpui::prelude::*;
 use gpui::{AnyElement, IntoElement};
 use gpui_component::button::{Button, ButtonVariants as _};
-use gpui_component::{Disableable as _, Selectable as _, Size, Sizable as _};
+use gpui_component::{Disableable as _, Selectable as _, Sizable as _, Size};
 
 use crate::components::apply_style;
 use crate::registry::MaterializeContext;

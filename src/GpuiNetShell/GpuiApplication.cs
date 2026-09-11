@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
@@ -65,7 +66,9 @@ public sealed class GpuiApplication
         _events.Dispatch(token) ? NativeProtocol.StatusOk : -1;
 
     /// <summary>Runs the native application event loop. Blocking.</summary>
-    public unsafe void Run()
+    public void Run() => RunOnUiThread(RunCore);
+
+    private unsafe void RunCore()
     {
         var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
         if (api == null)
@@ -86,6 +89,49 @@ public sealed class GpuiApplication
         if (status != NativeProtocol.StatusOk)
         {
             throw new InvalidOperationException($"The native host exited with status {status}.");
+        }
+    }
+
+    /// <summary>
+    /// Runs the event loop on a single-threaded-apartment thread. GPUI's
+    /// Windows platform initializes OLE as STA; a managed entry thread is
+    /// already MTA, which fails with <c>RPC_E_CHANGED_MODE</c>. Other platforms
+    /// run in place.
+    /// </summary>
+    private static void RunOnUiThread(Action run)
+    {
+        if (
+            !OperatingSystem.IsWindows()
+            || Thread.CurrentThread.GetApartmentState() == ApartmentState.STA
+        )
+        {
+            run();
+            return;
+        }
+
+        Exception? failure = null;
+        var uiThread = new Thread(() =>
+        {
+            try
+            {
+                run();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        })
+        {
+            IsBackground = false,
+            Name = "GPUI UI",
+        };
+        uiThread.SetApartmentState(ApartmentState.STA);
+        uiThread.Start();
+        uiThread.Join();
+
+        if (failure is not null)
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
         }
     }
 }

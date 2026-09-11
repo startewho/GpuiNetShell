@@ -27,14 +27,14 @@ internal sealed class CounterView : View
 
     protected override Element Render(ref RenderContext ui) =>
         ui.VStack(
-                ui.Text($"Count: {_count}").FontSize(24),
+                ui.Text($"Count: {_count}").TextSize(24),
                 ui.Button("increment")
                     .Label("Increment")
                     .Primary()
                     .OnClick(() => _count++)
             )
             .Gap(12)
-            .Padding(24)
+            .P(24)
             .Full()
             .ItemsCenter()
             .JustifyCenter();

@@ -13,5 +13,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 gpui = { workspace = true }
 gpui_platform = { workspace = true }
-gpui-base = { workspace = true }
+# `inspector` exposes GPUI's reflected style-method table. It is what lets the
+# native host resolve `items_center`, `size_full` and the rest by name, exactly
+# as gpui-shell does, instead of enumerating every style as an operation code.
+gpui-base = { workspace = true, features = ["inspector"] }
 gpui-component = { workspace = true }

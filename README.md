@@ -27,7 +27,10 @@ gpui-net-shell native host  (Rust)
 
 The split mirrors `gpui-shell`: a description is published only when state
 moves, and clean repaints replay the retained snapshot in Rust without entering
-managed code.
+managed code. Styling is not enumerated over the ABI: the managed side sends
+GPUI style method names (`items_center`, `size_full`, `p`, `gap`, `bg`, …) and
+Rust resolves them against GPUI's reflected style table, exactly as `gpui-shell`
+does.
 
 ## Repository layout
 
@@ -37,6 +40,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/schema.rs                  wire vocabulary (mirrored in C#)
   src/abi.rs                     C layouts and the API table
   src/snapshot.rs                arena decode + validation
+  src/style.rs                   reflected GPUI style table (shell-style)
   src/registry.rs                component descriptors
   src/components/                Div, Text, Button materializers
   src/materialize.rs             recursive dispatch
@@ -100,14 +104,14 @@ internal sealed class CounterView : View
 
     protected override Element Render(ref RenderContext ui) =>
         ui.VStack(
-                ui.Text($"Count: {_count}").FontSize(24),
+                ui.Text($"Count: {_count}").TextSize(24),
                 ui.Button("increment")
                     .Label("Increment")
                     .Primary()
                     .OnClick(() => _count++)
             )
             .Gap(12)
-            .Padding(24)
+            .P(24)
             .Full()
             .ItemsCenter()
             .JustifyCenter();

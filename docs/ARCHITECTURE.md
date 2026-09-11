@@ -62,11 +62,33 @@ Four flat buffers describe one render:
 - one UTF-8 byte buffer.
 
 String operations pack `(offset << 32) | length` into the operation's `a` word.
-All other operations use `a` (and sometimes `b`) with their own meaning.
+All other operations use `a` (and sometimes `b`) with their own meaning. A style
+operation stores the GPUI method name in `a` and its argument in `b`.
 
 `Snapshot::decode` validates record flags, index bounds, UTF-8 ranges, known
 components, known operations, and acyclicity before producing owned data.
 Rust never retains a managed pointer: decoding copies every value it keeps.
+
+## Styling
+
+Styling is not enumerated in the ABI. A node carries style *method calls* — a
+GPUI method name plus an optional argument — and
+`crates/gpui-net-shell/src/style.rs` folds them into one `StyleRefinement`,
+exactly as `gpui-shell` does:
+
+- **No-argument methods** (`items_center`, `size_full`, `rounded_md`, `text_sm`,
+  …) come from GPUI's inspector reflection
+  (`gpui_base::styled_ext_reflection_methods` and
+  `gpui::styled_reflection::methods`). Adding an upstream style needs no change
+  here. This is why the native crate enables `gpui-base/inspector`.
+- **Methods that take an argument** (`p`, `gap`, `w`, `bg`, `text_color`, …) are
+  bound by hand in `apply_param`, because reflection reaches no-argument methods
+  only.
+
+`components::build_refinement` applies the calls in order; `components::apply_style`
+refines any `Styled` element with the result. The managed `StyleExtensions`
+surface (`lib`-side `Style`, `StyleColor`, and typed sugar) only names methods;
+it has no knowledge of how they are applied.
 
 ## Components and the registry
 
@@ -129,15 +151,24 @@ unwind across the C boundary.
 
 ## Extending the surface
 
-- A new operation is a constant in `schema.rs` plus an arm in
-  `components::style_ops` or a component plan.
-- A new style token is a `StyleOp` variant plus an `apply_style` arm; both
-  materializers and containers share it.
-- A new component is a descriptor plus a materializer, as above.
+- A new **style** needs no native change at all: add sugar in
+  `StyleExtensions` for a name the reflected table already knows, or add a
+  name to `PARAM_STYLES` and one arm in `apply_param` for a method that takes
+  an argument.
+- A new **component behavior operation** is a constant in `schema.rs`, its
+  `NativeProtocol` mirror, a decode arm, and the component's plan.
+- A new **component** is a descriptor plus a materializer, as above.
 
-When a layout, operation code, or payload rule changes, bump `SCHEMA_HASH` on
-both sides. When a C record layout changes, bump `ABI_VERSION` and update both
-sides together.
+When a component id, behavior operation code, or payload rule changes, bump
+`SCHEMA_HASH` on both sides. When a C record layout changes, bump `ABI_VERSION`
+and update both sides together.
+
+## Windows apartment
+
+GPUI's Windows platform initializes OLE as a single-threaded apartment, but a
+managed entry thread is already MTA (`RPC_E_CHANGED_MODE`). `GpuiApplication.Run`
+runs the native event loop on a dedicated STA thread on Windows, mirroring the
+manifest requirement for Windows common controls.
 
 ## Not yet built
 

@@ -23,8 +23,8 @@ use std::sync::OnceLock;
 
 use gpui::inspector_reflection::FunctionReflection;
 use gpui::{
-    AbsoluteLength, DefiniteLength, FontWeight, Hsla, Length, StyleRefinement, Styled, px, relative,
-    rems, rgba,
+    px, relative, rems, rgba, AbsoluteLength, DefiniteLength, FontWeight, Hsla, Length,
+    StyleRefinement, Styled,
 };
 use gpui_base::StyledExt as _;
 
@@ -70,13 +70,65 @@ impl StyleArg {
 
 /// Style methods that take one argument, bound by hand.
 const PARAM_STYLES: &[&str] = &[
-    "w", "h", "size", "min_w", "min_h", "min_size", "max_w", "max_h", "max_size", "p", "px", "py",
-    "pt", "pb", "pl", "pr", "m", "mx", "my", "mt", "mb", "ml", "mr", "inset", "top", "bottom",
-    "left", "right", "gap", "gap_x", "gap_y", "flex_grow", "flex_shrink", "flex_basis", "bg",
-    "text_color", "text_bg", "text_size", "font_family", "font_weight", "line_height", "opacity",
-    "border", "border_t", "border_b", "border_l", "border_r", "border_x", "border_y",
-    "border_color", "rounded", "rounded_t", "rounded_b", "rounded_l", "rounded_r", "rounded_tl",
-    "rounded_tr", "rounded_bl", "rounded_br",
+    "w",
+    "h",
+    "size",
+    "min_w",
+    "min_h",
+    "min_size",
+    "max_w",
+    "max_h",
+    "max_size",
+    "p",
+    "px",
+    "py",
+    "pt",
+    "pb",
+    "pl",
+    "pr",
+    "m",
+    "mx",
+    "my",
+    "mt",
+    "mb",
+    "ml",
+    "mr",
+    "inset",
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "gap",
+    "gap_x",
+    "gap_y",
+    "flex_grow",
+    "flex_shrink",
+    "flex_basis",
+    "bg",
+    "text_color",
+    "text_bg",
+    "text_size",
+    "font_family",
+    "font_weight",
+    "line_height",
+    "opacity",
+    "border",
+    "border_t",
+    "border_b",
+    "border_l",
+    "border_r",
+    "border_x",
+    "border_y",
+    "border_color",
+    "rounded",
+    "rounded_t",
+    "rounded_b",
+    "rounded_l",
+    "rounded_r",
+    "rounded_tl",
+    "rounded_tr",
+    "rounded_bl",
+    "rounded_br",
 ];
 
 type NullaryFn = fn(StyleRefinement) -> StyleRefinement;
@@ -126,6 +178,7 @@ fn table() -> &'static StyleTable {
 }
 
 /// The reflected no-argument style names, for diagnostics and tests.
+#[cfg(test)]
 pub fn nullary_count() -> usize {
     table().nullary.len() + EXTRA_NULLARY.len()
 }
@@ -137,7 +190,10 @@ pub fn nullary_index(name: &str) -> Option<u16> {
 
 /// Whether `name` is a style method that takes one argument.
 pub fn param_style_name(name: &str) -> Option<&'static str> {
-    PARAM_STYLES.iter().copied().find(|candidate| *candidate == name)
+    PARAM_STYLES
+        .iter()
+        .copied()
+        .find(|candidate| *candidate == name)
 }
 
 /// Applies a no-argument style method by index. An out-of-range index is inert.
@@ -164,6 +220,12 @@ pub fn apply_param(
     arg: &StyleArg,
     refinement: StyleRefinement,
 ) -> Result<StyleRefinement, String> {
+    // A name that is neither reflected nor hand-bound is an error, not a silent
+    // no-op; the `PARAM_STYLES` table is what makes that check total.
+    if param_style_name(name).is_none() {
+        return Err(format!("unknown style method `{name}`"));
+    }
+
     macro_rules! length {
         () => {
             length(arg, name)?
@@ -401,12 +463,7 @@ mod tests {
 
     #[test]
     fn a_bare_number_is_pixels_and_a_percent_string_is_relative() {
-        let padded = apply_param(
-            "p",
-            &StyleArg::Number(12.),
-            StyleRefinement::default(),
-        )
-        .unwrap();
+        let padded = apply_param("p", &StyleArg::Number(12.), StyleRefinement::default()).unwrap();
         assert_eq!(padded.padding.top, Some(px(12.).into()));
 
         let wide = apply_param(
@@ -433,26 +490,22 @@ mod tests {
 
     #[test]
     fn font_weight_rejects_out_of_range_values() {
-        assert!(
-            apply_param(
-                "font_weight",
-                &StyleArg::Number(99.),
-                StyleRefinement::default()
-            )
-            .is_err()
-        );
+        assert!(apply_param(
+            "font_weight",
+            &StyleArg::Number(99.),
+            StyleRefinement::default()
+        )
+        .is_err());
     }
 
     #[test]
     fn an_unknown_parametric_name_is_an_error() {
-        assert!(
-            apply_param(
-                "not_a_style",
-                &StyleArg::Number(1.),
-                StyleRefinement::default()
-            )
-            .is_err()
-        );
+        assert!(apply_param(
+            "not_a_style",
+            &StyleArg::Number(1.),
+            StyleRefinement::default()
+        )
+        .is_err());
     }
 
     #[test]
