@@ -59,7 +59,7 @@ fn materialize_node(
         .descriptor(node.component)
         .ok_or_else(|| format!("component {} is not registered", node.component))?;
 
-    let (refinement, behavior) = resolve_ops(node);
+    let (refinement, behavior) = resolve_ops(node, descriptor);
     let payload = build_payload(descriptor, node)?;
     let methods = record_methods(descriptor, &behavior.methods);
 
@@ -142,7 +142,12 @@ fn argument_list(argument: Option<&StyleArg>) -> Vec<ComponentArgument> {
 }
 
 /// Folds a node's ops into a style refinement and a behavior.
-fn resolve_ops(node: &Node) -> (StyleRefinement, Behavior) {
+///
+/// A method the component declares is always a component method; only a name the
+/// descriptor does not declare falls back to shell behavior (`disabled`,
+/// `selected`). Without this, a component whose own method is called `selected`
+/// — `Tabs`, `Combobox` — would never receive it.
+fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinement, Behavior) {
     let mut refinement = StyleRefinement::default();
     let mut behavior = Behavior::default();
 
@@ -158,15 +163,23 @@ fn resolve_ops(node: &Node) -> (StyleRefinement, Behavior) {
                     refinement = next;
                 }
             }
-            Op::Method(name, arg) => match name.as_str() {
-                "disabled" => {
-                    behavior.disabled = arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
+            Op::Method(name, arg) => {
+                if descriptor.method(name).is_some() {
+                    behavior.methods.push((name.clone(), arg.clone()));
+                } else {
+                    match name.as_str() {
+                        "disabled" => {
+                            behavior.disabled =
+                                arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
+                        }
+                        "selected" => {
+                            behavior.selected =
+                                arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
+                        }
+                        _ => behavior.methods.push((name.clone(), arg.clone())),
+                    }
                 }
-                "selected" => {
-                    behavior.selected = arg.as_ref().map(StyleArg::is_truthy).unwrap_or(true)
-                }
-                _ => behavior.methods.push((name.clone(), arg.clone())),
-            },
+            }
             Op::Callback(name, token) => {
                 if name == "on_click" {
                     behavior.on_click = Some(*token);
@@ -196,16 +209,21 @@ mod tests {
 
     #[test]
     fn behavior_separates_shell_state_from_recorded_methods() {
-        let (_, behavior) = resolve_ops(&node(
-            COMPONENT_BUTTON,
-            "save",
-            vec![
-                Op::Method("disabled".into(), Some(StyleArg::Number(1.0))),
-                Op::Method("label".into(), Some(StyleArg::String("Save".into()))),
-                Op::Method("primary".into(), None),
-                Op::Callback("on_click".into(), 42),
-            ],
-        ));
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(COMPONENT_BUTTON).unwrap();
+        let (_, behavior) = resolve_ops(
+            &node(
+                COMPONENT_BUTTON,
+                "save",
+                vec![
+                    Op::Method("disabled".into(), Some(StyleArg::Number(1.0))),
+                    Op::Method("label".into(), Some(StyleArg::String("Save".into()))),
+                    Op::Method("primary".into(), None),
+                    Op::Callback("on_click".into(), 42),
+                ],
+            ),
+            descriptor,
+        );
         assert!(behavior.disabled);
         assert_eq!(behavior.on_click, Some(42));
         assert_eq!(
@@ -218,15 +236,39 @@ mod tests {
     }
 
     #[test]
+    fn a_declared_method_named_selected_reaches_the_component() {
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(crate::schema::COMPONENT_TABS).unwrap();
+        let (_, behavior) = resolve_ops(
+            &node(
+                crate::schema::COMPONENT_TABS,
+                "pages",
+                vec![Op::Method("selected".into(), Some(StyleArg::Number(1.0)))],
+            ),
+            descriptor,
+        );
+        assert!(!behavior.selected);
+        assert_eq!(
+            behavior.methods,
+            vec![("selected".into(), Some(StyleArg::Number(1.0)))]
+        );
+    }
+
+    #[test]
     fn style_calls_fold_into_the_refinement() {
-        let (refinement, _) = resolve_ops(&node(
-            COMPONENT_DIV,
-            "",
-            vec![
-                Op::NullaryStyle("items_center".into()),
-                Op::ParamStyle("p".into(), StyleArg::Number(16.0)),
-            ],
-        ));
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(COMPONENT_DIV).unwrap();
+        let (refinement, _) = resolve_ops(
+            &node(
+                COMPONENT_DIV,
+                "",
+                vec![
+                    Op::NullaryStyle("items_center".into()),
+                    Op::ParamStyle("p".into(), StyleArg::Number(16.0)),
+                ],
+            ),
+            descriptor,
+        );
         assert_eq!(refinement.align_items, Some(gpui::AlignItems::Center));
         assert_eq!(refinement.padding.top, Some(gpui::px(16.0).into()));
     }
