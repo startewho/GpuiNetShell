@@ -49,7 +49,7 @@ internal unsafe struct NativeArena
     public uint Pad3;
 }
 
-/// <summary>Mirrors <c>GpuiNetCallbacks</c>. 48 bytes.</summary>
+/// <summary>Mirrors <c>GpuiNetCallbacks</c>.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeCallbacks
 {
@@ -61,6 +61,7 @@ internal unsafe struct NativeCallbacks
     public delegate* unmanaged[Cdecl]<ulong, ulong, int, int> RenderCompleted;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> Click;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> RetireCallbacks;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, uint, double, byte*, uint, int> Invoke;
 }
 
 /// <summary>Mirrors <c>GpuiNetShellApi</c>. 80 bytes.</summary>

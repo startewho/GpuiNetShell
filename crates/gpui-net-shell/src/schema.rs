@@ -11,11 +11,15 @@
 //! behavior is a generic `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C73;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C32;
+
+/// Separates the string arguments of a multi-argument constructor inside one
+/// node's identity data. `Popover(id, label)` is the only current user.
+pub const CONSTRUCTOR_ARG_SEPARATOR: char = '\u{1F}';
 
 // ---------------------------------------------------------------------------
 // Components
@@ -76,6 +80,21 @@ pub const OP_SLOT: u16 = 5;
 pub const ARG_NONE: u16 = 0;
 pub const ARG_NUMBER: u16 = 1;
 pub const ARG_STRING: u16 = 2;
+/// A closed-set literal for a component method, packed like [`ARG_STRING`].
+pub const ARG_ENUM: u16 = 3;
+
+// ---------------------------------------------------------------------------
+// Callback values
+// ---------------------------------------------------------------------------
+//
+// The `kind` word of the `invoke` callback. `boolean` and `number` travel in the
+// `number` argument; `string` travels in the `data`/`data_len` pair.
+
+#[allow(dead_code)]
+pub const CALLBACK_VALUE_NONE: u32 = 0;
+pub const CALLBACK_VALUE_BOOLEAN: u32 = 1;
+pub const CALLBACK_VALUE_NUMBER: u32 = 2;
+pub const CALLBACK_VALUE_STRING: u32 = 3;
 
 // ---------------------------------------------------------------------------
 // Status codes
@@ -97,7 +116,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C73);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C32);
     }
 
     #[test]

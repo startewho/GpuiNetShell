@@ -11,9 +11,10 @@ public sealed class ScrollElement : Element
     internal ScrollElement(RenderContext ui, int index)
         : base(ui, index) { }
 
+    /// <summary>Selects the native scroll axes.</summary>
     public ScrollElement Axis(ScrollAxis axis)
     {
-        Arena.AddMethodNumber(Index, "axis", (double)(int)axis);
+        Arena.AddMethodEnum(Index, "scroll_axis", AxisName(axis));
         return this;
     }
 
@@ -26,4 +27,12 @@ public sealed class ScrollElement : Element
         }
         return this;
     }
+
+    internal static string AxisName(ScrollAxis axis) =>
+        axis switch
+        {
+            ScrollAxis.Horizontal => "horizontal",
+            ScrollAxis.Both => "both",
+            _ => "vertical",
+        };
 }

@@ -108,6 +108,20 @@ pub struct GpuiNetCallbacks {
         Option<unsafe extern "C" fn(session_id: u64, generation: u64, status: i32) -> i32>,
     pub click: Option<unsafe extern "C" fn(session_id: u64, token: u64) -> i32>,
     pub retire_callbacks: Option<unsafe extern "C" fn(session_id: u64, generation: u64) -> i32>,
+    /// Delivers a typed value to a callback token. `kind` is one of the
+    /// `CALLBACK_VALUE_*` constants; `number` carries a boolean (`1.0`/`0.0`) or
+    /// a number, and `data`/`data_len` carry a UTF-8 string when `kind` is
+    /// [`crate::schema::CALLBACK_VALUE_STRING`].
+    pub invoke: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            token: u64,
+            kind: u32,
+            number: f64,
+            data: *const u8,
+            data_len: u32,
+        ) -> i32,
+    >,
 }
 
 impl std::fmt::Debug for GpuiNetCallbacks {

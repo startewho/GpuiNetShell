@@ -7,6 +7,7 @@
 pub mod badge;
 pub mod button;
 pub mod combobox;
+mod common;
 pub mod div;
 pub mod label;
 pub mod popover;

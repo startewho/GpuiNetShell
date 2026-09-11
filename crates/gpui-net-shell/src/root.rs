@@ -207,7 +207,7 @@ impl Render for MenuView {
                             }
                         }
                         if let Some(root) = root.upgrade() {
-                            let _ = root.update(cx, |root, cx| {
+                            root.update(cx, |root, cx| {
                                 root.close_sheet(window, cx);
                                 root.invalidate_view(cx);
                             });

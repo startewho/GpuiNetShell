@@ -28,25 +28,33 @@ use gpui::{
 };
 use gpui_base::StyledExt as _;
 
-/// One argument to a style method that takes one.
+/// One argument to a style or component method that takes one.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StyleArg {
     Number(f32),
     String(String),
+    /// A closed-set literal for a component method (`size`, `scroll_axis`, …).
+    Enum(String),
+    /// A callback token passed as a component method argument (`on_change`).
+    Callback(u64),
 }
 
 impl StyleArg {
     pub(crate) fn as_f32(&self) -> Result<f32, String> {
         match self {
             StyleArg::Number(value) => Ok(*value),
-            StyleArg::String(_) => Err("expected a number, got a string".into()),
+            StyleArg::String(_) | StyleArg::Enum(_) | StyleArg::Callback(_) => {
+                Err("expected a number, got a string".into())
+            }
         }
     }
 
     pub(crate) fn as_str(&self) -> Result<&str, String> {
         match self {
-            StyleArg::String(value) => Ok(value),
-            StyleArg::Number(_) => Err("expected a string, got a number".into()),
+            StyleArg::String(value) | StyleArg::Enum(value) => Ok(value),
+            StyleArg::Number(_) | StyleArg::Callback(_) => {
+                Err("expected a string, got a number".into())
+            }
         }
     }
 
@@ -54,7 +62,8 @@ impl StyleArg {
     pub(crate) fn is_truthy(&self) -> bool {
         match self {
             StyleArg::Number(value) => *value != 0.0 && !value.is_nan(),
-            StyleArg::String(value) => !value.is_empty(),
+            StyleArg::String(value) | StyleArg::Enum(value) => !value.is_empty(),
+            StyleArg::Callback(_) => true,
         }
     }
 

@@ -91,19 +91,19 @@ fn button_loading() -> MethodDescriptor {
 fn button_size() -> MethodDescriptor {
     MethodDescriptor::new(
         "size",
-        vec![ArgumentDescriptor::new("size", ArgumentSchema::Number)],
-        |args| {
-            let value = args
-                .first()
-                .and_then(ComponentArgument::as_f64)
-                .unwrap_or(2.0) as u64;
-            let size = match value {
-                0 => Size::XSmall,
-                1 => Size::Small,
-                3 => Size::Large,
-                _ => Size::Medium,
-            };
-            Ok(ComponentPayload::new(ButtonOp::Size(size)))
+        vec![ArgumentDescriptor::new(
+            "size",
+            ArgumentSchema::Enum(&["xsmall", "small", "medium", "large"]),
+        )],
+        |args| match args {
+            [ComponentArgument::Enum(value)] => match value.as_str() {
+                "xsmall" => Ok(ComponentPayload::new(ButtonOp::Size(Size::XSmall))),
+                "small" => Ok(ComponentPayload::new(ButtonOp::Size(Size::Small))),
+                "medium" => Ok(ComponentPayload::new(ButtonOp::Size(Size::Medium))),
+                "large" => Ok(ComponentPayload::new(ButtonOp::Size(Size::Large))),
+                _ => Err(format!("unsupported Button size `{value}`")),
+            },
+            _ => Err("Button.size expects a semantic size literal".into()),
         },
     )
     .with_documentation("Sets the semantic control size.")

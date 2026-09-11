@@ -1,11 +1,14 @@
-//! `Progress`: a determinate progress bar wrapping `gpui-component`'s
-//! `Progress`.
+//! `Progress`, ported from `component-shell`'s `compound/progress.rs`.
+//!
+//! A linear determinate or indeterminate progress indicator. The id is the
+//! constructor payload; value, loading, label, and size are recorded methods.
 
 use std::sync::Arc;
 
-use gpui::{div, AnyElement, ParentElement as _, SharedString, Styled as _};
-use gpui_component::progress::Progress;
+use gpui::{div, AnyElement, ParentElement as _, SharedString};
+use gpui_component::{progress::Progress, Sizable as _, Size};
 
+use super::common::{finite_f32, nonempty_id};
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
     ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
@@ -13,71 +16,67 @@ use crate::registry::{
 };
 
 #[derive(Clone)]
-struct IdPayload(String);
+struct ProgressPayload(String);
 
 #[derive(Clone)]
 enum ProgressOp {
     Value(f32),
     Loading(bool),
-}
-
-fn id_payload(arguments: &[ComponentArgument]) -> Result<ComponentPayload, String> {
-    match arguments {
-        [ComponentArgument::String(id)] => Ok(ComponentPayload::new(IdPayload(id.clone()))),
-        _ => Err("Progress(id) expects one string".into()),
-    }
-}
-
-fn value_method() -> MethodDescriptor {
-    MethodDescriptor::new(
-        "value",
-        vec![ArgumentDescriptor::new("value", ArgumentSchema::Number)],
-        |args| {
-            let value = args
-                .first()
-                .and_then(ComponentArgument::as_f64)
-                .unwrap_or(0.0) as f32;
-            Ok(ComponentPayload::new(ProgressOp::Value(value)))
-        },
-    )
-    .with_documentation("Sets the completion percentage, from 0 to 100.")
-}
-
-fn loading_method() -> MethodDescriptor {
-    MethodDescriptor::new(
-        "loading",
-        vec![ArgumentDescriptor::new("loading", ArgumentSchema::Boolean)],
-        |args| {
-            let value = args
-                .first()
-                .map(ComponentArgument::is_truthy)
-                .unwrap_or(true);
-            Ok(ComponentPayload::new(ProgressOp::Loading(value)))
-        },
-    )
-    .with_documentation("Shows the indeterminate loading animation.")
+    Label(String),
+    Size(Size),
 }
 
 struct ProgressMaterializer;
 
+impl ProgressMaterializer {
+    fn component<'a>(
+        payload: &ComponentPayload,
+        ops: impl IntoIterator<Item = &'a ProgressOp>,
+    ) -> Result<Progress, String> {
+        let id = &payload
+            .downcast_ref::<ProgressPayload>()
+            .ok_or_else(|| "Progress received an incompatible payload".to_string())?
+            .0;
+        Ok(ops.into_iter().fold(
+            Progress::new(SharedString::from(id.clone())),
+            |progress, op| match op {
+                ProgressOp::Value(value) => progress.value(*value),
+                ProgressOp::Loading(value) => progress.loading(*value),
+                ProgressOp::Label(value) => progress.accessibility_label(value.clone()),
+                ProgressOp::Size(value) => progress.with_size(*value),
+            },
+        ))
+    }
+}
+
 impl ComponentMaterializer for ProgressMaterializer {
     fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
-        let id = request
-            .payload()
-            .downcast_ref::<IdPayload>()
-            .ok_or_else(|| "Progress received an incompatible payload".to_string())?
-            .0
-            .clone();
-        let mut progress = Progress::new(SharedString::from(id));
-        for method in request.methods() {
-            match method.payload().downcast_ref::<ProgressOp>() {
-                Some(ProgressOp::Value(value)) => progress = progress.value(*value),
-                Some(ProgressOp::Loading(loading)) => progress = progress.loading(*loading),
-                None => {}
-            }
+        if request.children_len() != 0 {
+            return Err("Progress does not accept children".to_string());
         }
-        request.finish(div().w_full().child(progress))
+        let ops = request
+            .methods()
+            .filter_map(|m| m.payload().downcast_ref::<ProgressOp>());
+        let component = Self::component(request.payload(), ops)?;
+        request.finish(div().child(component))
     }
+}
+
+fn unary(
+    name: &'static str,
+    schema: ArgumentSchema,
+    documentation: &'static str,
+    factory: fn(&ComponentArgument) -> Result<ProgressOp, String>,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(name, schema)],
+        move |args| match args {
+            [arg] => factory(arg).map(ComponentPayload::new),
+            _ => Err(format!("Progress.{name}({name}) expects one argument")),
+        },
+    )
+    .with_documentation(documentation)
 }
 
 pub(super) fn register(registry: &mut ComponentRegistry) {
@@ -87,10 +86,97 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                 .with_constructors(vec![ConstructorDescriptor::new(
                     "Progress",
                     vec![ArgumentDescriptor::new("id", ArgumentSchema::String)],
-                    id_payload,
+                    |args| match args {
+                        [ComponentArgument::String(id)] => nonempty_id(id, "Progress")
+                            .map(ProgressPayload)
+                            .map(ComponentPayload::new),
+                        _ => Err("Progress(id) expects a string id".into()),
+                    },
                 )])
-                .with_methods(vec![value_method(), loading_method()])
-                .with_documentation("A determinate progress bar."),
+                .with_methods(vec![
+                    unary(
+                        "value",
+                        ArgumentSchema::Number,
+                        "Sets percentage progress; the component clamps it to 0–100.",
+                        |arguments| {
+                            match arguments {
+                            ComponentArgument::Number(value) => {
+                                finite_f32(*value, "Progress.value(value)").map(ProgressOp::Value)
+                            }
+                            _ => Err(
+                                "Progress.value(value) expects a finite number representable as f32"
+                                    .into(),
+                            ),
+                        }
+                        },
+                    ),
+                    unary(
+                        "loading",
+                        ArgumentSchema::Boolean,
+                        "Enables indeterminate loading animation.",
+                        |arguments| match arguments {
+                            ComponentArgument::Boolean(value) => Ok(ProgressOp::Loading(*value)),
+                            _ => Err("Progress.loading(loading) expects a boolean".into()),
+                        },
+                    ),
+                    unary(
+                        "accessibility_label",
+                        ArgumentSchema::String,
+                        "Sets the accessible name.",
+                        |arguments| match arguments {
+                            ComponentArgument::String(value) => {
+                                Ok(ProgressOp::Label(value.clone()))
+                            }
+                            _ => Err("Progress.accessibility_label(label) expects a string".into()),
+                        },
+                    ),
+                    unary(
+                        "size",
+                        ArgumentSchema::Enum(&["xsmall", "small", "medium", "large"]),
+                        "Sets the semantic size.",
+                        |arguments| match arguments {
+                            ComponentArgument::Enum(value) => match value.as_str() {
+                                "xsmall" => Ok(ProgressOp::Size(Size::XSmall)),
+                                "small" => Ok(ProgressOp::Size(Size::Small)),
+                                "medium" => Ok(ProgressOp::Size(Size::Medium)),
+                                "large" => Ok(ProgressOp::Size(Size::Large)),
+                                _ => Err(format!("unsupported Progress size `{value}`")),
+                            },
+                            _ => Err("Progress.size(size) expects a size literal".into()),
+                        },
+                    ),
+                ])
+                .with_documentation("A linear determinate or indeterminate progress indicator."),
         )
         .expect("the built-in Progress descriptor is valid");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_progress_accepts_value() {
+        let payload = ComponentPayload::new(ProgressPayload("p".into()));
+        let component = ProgressMaterializer::component(&payload, [&ProgressOp::Value(42.)]);
+        assert!(component.is_ok());
+    }
+
+    #[test]
+    fn invalid_payload_fails() {
+        let payload = ComponentPayload::new(());
+        assert!(ProgressMaterializer::component(&payload, []).is_err());
+    }
+
+    #[test]
+    fn value_rejects_f64_values_outside_the_f32_range() {
+        assert!(finite_f32((f32::MAX as f64) * 2.0, "Progress.value(value)").is_err());
+        assert!(finite_f32(f64::NEG_INFINITY, "Progress.value(value)").is_err());
+    }
+
+    #[test]
+    fn id_rejects_empty_and_whitespace_only_values() {
+        assert!(nonempty_id("", "Progress").is_err());
+        assert!(nonempty_id("   ", "Progress").is_err());
+    }
 }

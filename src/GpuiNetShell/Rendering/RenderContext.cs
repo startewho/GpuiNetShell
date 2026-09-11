@@ -1,4 +1,3 @@
-using System.Globalization;
 using GpuiNetShell.Elements;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
@@ -81,13 +80,9 @@ public sealed class RenderContext
         return new LabelElement(this, index);
     }
 
-    /// <summary>Declares a count badge.</summary>
-    public BadgeElement Badge(int count)
-    {
-        var index = _arena.AddNode(NativeProtocol.ComponentBadge);
-        _arena.SetNodeData(index, count.ToString(CultureInfo.InvariantCulture));
-        return new BadgeElement(this, index);
-    }
+    /// <summary>Declares a count or dot badge configured through methods.</summary>
+    public BadgeElement Badge() =>
+        new BadgeElement(this, _arena.AddNode(NativeProtocol.ComponentBadge));
 
     /// <summary>Declares a progress bar. <paramref name="id"/> is its stable identity.</summary>
     public ProgressElement Progress(string id)
@@ -145,11 +140,14 @@ public sealed class RenderContext
         return new ResizableElement(this, index);
     }
 
-    /// <summary>Declares an anchored popover. <paramref name="id"/> is its stable identity.</summary>
-    public PopoverElement Popover(string id)
+    /// <summary>
+    /// Declares an anchored popover. <paramref name="id"/> is its stable
+    /// identity; <paramref name="label"/> is the trigger's label.
+    /// </summary>
+    public PopoverElement Popover(string id, string label)
     {
         var index = _arena.AddNode(NativeProtocol.ComponentPopover);
-        _arena.SetNodeData(index, id);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
         return new PopoverElement(this, index);
     }
 

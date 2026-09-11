@@ -100,6 +100,9 @@ fn materialize_node(
 }
 
 /// Runs the descriptor's constructor with the node's identity data.
+///
+/// A constructor taking several string arguments receives them packed into the
+/// node's data, separated by [`crate::schema::CONSTRUCTOR_ARG_SEPARATOR`].
 fn build_payload(
     descriptor: &ComponentDescriptor,
     node: &Node,
@@ -108,10 +111,27 @@ fn build_payload(
         .constructors()
         .first()
         .ok_or_else(|| format!("{} has no constructor", descriptor.name()))?;
-    let arguments = if constructor.arguments().is_empty() {
+    let arity = constructor.arguments().len();
+    let arguments = if arity == 0 {
         Vec::new()
-    } else {
+    } else if arity == 1 {
         vec![ComponentArgument::String(node.data.clone())]
+    } else {
+        let parts = node
+            .data
+            .split(crate::schema::CONSTRUCTOR_ARG_SEPARATOR)
+            .collect::<Vec<_>>();
+        if parts.len() != arity {
+            return Err(format!(
+                "{} expects {arity} constructor arguments, got {}",
+                descriptor.name(),
+                parts.len()
+            ));
+        }
+        parts
+            .into_iter()
+            .map(|part| ComponentArgument::String(part.to_string()))
+            .collect()
     };
     constructor.payload(&arguments)
 }
@@ -138,6 +158,8 @@ fn argument_list(argument: Option<&StyleArg>) -> Vec<ComponentArgument> {
         None => Vec::new(),
         Some(StyleArg::Number(value)) => vec![ComponentArgument::Number(f64::from(*value))],
         Some(StyleArg::String(value)) => vec![ComponentArgument::String(value.clone())],
+        Some(StyleArg::Enum(value)) => vec![ComponentArgument::Enum(value.clone())],
+        Some(StyleArg::Callback(token)) => vec![ComponentArgument::Callback(*token)],
     }
 }
 
@@ -183,6 +205,12 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
             Op::Callback(name, token) => {
                 if name == "on_click" {
                     behavior.on_click = Some(*token);
+                } else {
+                    // A callback passed as a component method argument, such as
+                    // `Radio.on_change` or `Popover.on_open_change`.
+                    behavior
+                        .methods
+                        .push((name.clone(), Some(StyleArg::Callback(*token))));
                 }
             }
             Op::Slot(..) => {}

@@ -7,12 +7,12 @@ public sealed class NativeProtocolTests
     [Fact]
     public void SchemaHashMatchesTheNativeLiteral()
     {
-        Assert.Equal(0x6E65_7473_6865_6C73UL, NativeProtocol.SchemaHash);
+        Assert.Equal(0x6E65_7473_6865_6C32UL, NativeProtocol.SchemaHash);
     }
 
     [Fact]
-    public void AbiVersionIsOne()
+    public void AbiVersionMatchesTheNativeLiteral()
     {
-        Assert.Equal(1u, NativeProtocol.AbiVersion);
+        Assert.Equal(2u, NativeProtocol.AbiVersion);
     }
 }

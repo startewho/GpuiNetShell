@@ -106,6 +106,16 @@ internal sealed unsafe class RenderArena : IDisposable
             PackString(value)
         );
 
+    /// <summary>Records a component behavior method taking a closed-set literal argument.</summary>
+    internal void AddMethodEnum(int node, string method, string value)
+        => AddOp(
+            node,
+            NativeProtocol.OpMethod,
+            NativeProtocol.ArgEnum,
+            PackString(method),
+            PackString(value)
+        );
+
     /// <summary>Records an event binding by name and callback token.</summary>
     internal void AddCallback(int node, string name, ulong token)
         => AddOp(node, NativeProtocol.OpCallback, NativeProtocol.ArgNone, PackString(name), token);

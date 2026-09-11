@@ -14,10 +14,16 @@ namespace GpuiNetShell.Interop;
 /// </remarks>
 public static class NativeProtocol
 {
-    public const uint AbiVersion = 1;
+    public const uint AbiVersion = 2;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C73;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C32;
+
+    /// <summary>
+    /// Separates the string arguments of a multi-argument constructor inside one
+    /// node's identity data, mirroring <c>schema.rs</c>.
+    /// </summary>
+    public const char ConstructorArgSeparator = '\u001F';
 
     // Components. Ids are registry indices: the native host resolves them
     // against the registered component catalog.
@@ -47,6 +53,14 @@ public static class NativeProtocol
     public const ushort ArgNone = 0;
     public const ushort ArgNumber = 1;
     public const ushort ArgString = 2;
+    /// <summary>A closed-set literal for a component method, packed like <see cref="ArgString"/>.</summary>
+    public const ushort ArgEnum = 3;
+
+    // Callback value kinds delivered through the `invoke` callback.
+    public const uint CallbackValueNone = 0;
+    public const uint CallbackValueBoolean = 1;
+    public const uint CallbackValueNumber = 2;
+    public const uint CallbackValueString = 3;
 
     // Notification severities.
     public const uint NotificationInfo = 0;

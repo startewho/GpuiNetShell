@@ -204,6 +204,10 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
                 name,
                 Some(StyleArg::String(read_word(utf8, record.b)?)),
             )),
+            ARG_ENUM => Ok(Op::Method(
+                name,
+                Some(StyleArg::Enum(read_word(utf8, record.b)?)),
+            )),
             _ => Err(STATUS_INVALID_ARGUMENT),
         },
         OP_CALLBACK => {
@@ -226,6 +230,7 @@ fn read_arg(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<StyleArg, i32
     match record.flags {
         ARG_NUMBER => Ok(StyleArg::Number(number(record.b)?)),
         ARG_STRING => Ok(StyleArg::String(read_word(utf8, record.b)?)),
+        ARG_ENUM => Ok(StyleArg::Enum(read_word(utf8, record.b)?)),
         _ => Err(STATUS_INVALID_ARGUMENT),
     }
 }
@@ -556,6 +561,7 @@ mod tests {
             render_completed: None,
             click: None,
             retire_callbacks: Some(retire),
+            invoke: None,
         };
         let snapshot = Snapshot {
             root: 0,

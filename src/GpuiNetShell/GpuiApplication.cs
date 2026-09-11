@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
@@ -73,6 +74,37 @@ public sealed class GpuiApplication
 
     internal int OnClick(ulong token) =>
         _events.Dispatch(token) ? NativeProtocol.StatusOk : -1;
+
+    /// <summary>
+    /// Delivers a typed callback value (a boolean, number, or string) to the
+    /// handler registered for <paramref name="token"/>.
+    /// </summary>
+    internal unsafe int OnInvoke(
+        ulong token,
+        uint kind,
+        double number,
+        byte* data,
+        uint dataLength
+    )
+    {
+        var value = kind switch
+        {
+            NativeProtocol.CallbackValueBoolean => EventValue.FromBoolean(number != 0),
+            NativeProtocol.CallbackValueNumber => EventValue.FromNumber(number),
+            NativeProtocol.CallbackValueString => EventValue.FromString(ReadUtf8(data, dataLength)),
+            _ => EventValue.None,
+        };
+        return _events.DispatchValue(token, value) ? NativeProtocol.StatusOk : -1;
+    }
+
+    private static unsafe string ReadUtf8(byte* data, uint length)
+    {
+        if (data == null || length == 0)
+        {
+            return string.Empty;
+        }
+        return Marshal.PtrToStringUTF8((IntPtr)data, (int)length) ?? string.Empty;
+    }
 
     /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
     internal int OnRetireCallbacks(ulong generation)

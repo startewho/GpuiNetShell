@@ -20,6 +20,7 @@ internal static unsafe class ManagedCallbacks
         RenderCompleted = &RenderCompletedCallback,
         Click = &ClickCallback,
         RetireCallbacks = &RetireCallbacksCallback,
+        Invoke = &InvokeCallback,
     };
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -110,6 +111,28 @@ internal static unsafe class ManagedCallbacks
             return GpuiApplication.Find(sessionId) is { } application
                 ? application.OnRetireCallbacks(generation)
                 : NativeProtocol.StatusOk;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int InvokeCallback(
+        ulong sessionId,
+        ulong token,
+        uint kind,
+        double number,
+        byte* data,
+        uint dataLength
+    )
+    {
+        try
+        {
+            return GpuiApplication.Find(sessionId) is { } application
+                ? application.OnInvoke(token, kind, number, data, dataLength)
+                : -1;
         }
         catch
         {

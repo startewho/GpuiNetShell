@@ -58,13 +58,14 @@ pub enum ComponentArgument {
     String(String),
     Number(f64),
     Boolean(bool),
+    Enum(String),
     Callback(u64),
 }
 
 impl ComponentArgument {
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            Self::String(value) => Some(value),
+            Self::String(value) | Self::Enum(value) => Some(value),
             _ => None,
         }
     }
@@ -81,7 +82,7 @@ impl ComponentArgument {
         match self {
             Self::Boolean(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
-            Self::String(value) => !value.is_empty(),
+            Self::String(value) | Self::Enum(value) => !value.is_empty(),
             Self::Callback(_) => true,
         }
     }
@@ -93,6 +94,8 @@ pub enum ArgumentSchema {
     String,
     Number,
     Boolean,
+    /// A closed set of string literals a method accepts.
+    Enum(&'static [&'static str]),
     Callback,
 }
 
@@ -247,6 +250,82 @@ impl RecordedComponentMethod {
     }
 }
 
+/// One value carried back to a managed callback.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ComponentCallbackArgument {
+    Boolean(bool),
+    Number(f64),
+    String(String),
+}
+
+/// A callback resolved from a component's recorded method arguments.
+///
+/// The token identifies a managed handler registered for the current rendering
+/// generation; the [`HostContext`] carries the native callback table used to
+/// invoke it. This is what lets a control whose value changes — a radio, a
+/// popover's open state — report that value, rather than only that it was
+/// interacted with.
+#[derive(Clone)]
+pub struct ComponentCallback {
+    host: HostContext,
+    token: u64,
+}
+
+impl ComponentCallback {
+    pub fn token(&self) -> u64 {
+        self.token
+    }
+
+    /// Invokes the managed handler with no value, then requests a repaint.
+    pub fn invoke(&self, _window: &mut Window, cx: &mut App) {
+        self.dispatch(&[], cx);
+    }
+
+    /// Invokes the managed handler with one value, then requests a repaint.
+    pub fn invoke_with(
+        &self,
+        _context: &str,
+        arguments: &[ComponentCallbackArgument],
+        _window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.dispatch(arguments, cx);
+    }
+
+    fn dispatch(&self, arguments: &[ComponentCallbackArgument], cx: &mut App) {
+        if let Some(invoke) = self.host.callbacks.invoke {
+            for argument in arguments {
+                let (kind, number, data, len) = match argument {
+                    ComponentCallbackArgument::Boolean(value) => (
+                        crate::schema::CALLBACK_VALUE_BOOLEAN,
+                        if *value { 1.0 } else { 0.0 },
+                        std::ptr::null(),
+                        0,
+                    ),
+                    ComponentCallbackArgument::Number(value) => (
+                        crate::schema::CALLBACK_VALUE_NUMBER,
+                        *value,
+                        std::ptr::null(),
+                        0,
+                    ),
+                    ComponentCallbackArgument::String(value) => (
+                        crate::schema::CALLBACK_VALUE_STRING,
+                        0.0,
+                        value.as_ptr(),
+                        value.len() as u32,
+                    ),
+                };
+                // SAFETY: the managed callback copies anything it retains before
+                // returning; `data` points at a live String for the call.
+                unsafe {
+                    let _ = invoke(self.host.session_id, self.token, kind, number, data, len);
+                }
+            }
+        }
+        (self.host.invalidate)(cx);
+    }
+}
+
 /// Turns a recorded component into an element.
 pub trait ComponentMaterializer: Send + Sync + 'static {
     fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String>;
@@ -328,6 +407,21 @@ impl<'a> MaterializeRequest<'a> {
 
     pub fn on_click(&self) -> Option<u64> {
         self.on_click
+    }
+
+    /// Resolves a callback argument recorded by a component method into an
+    /// invokable handle. Fails when the argument is not a callback token.
+    pub fn resolve_callback(
+        &self,
+        argument: &ComponentArgument,
+    ) -> Result<ComponentCallback, String> {
+        match argument {
+            ComponentArgument::Callback(token) => Ok(ComponentCallback {
+                host: self.host.clone(),
+                token: *token,
+            }),
+            other => Err(format!("expected a callback argument, got {other:?}")),
+        }
     }
 
     pub fn children_len(&self) -> usize {

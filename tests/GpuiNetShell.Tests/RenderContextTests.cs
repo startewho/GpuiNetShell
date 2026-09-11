@@ -85,7 +85,7 @@ public sealed unsafe class RenderContextTests
         var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
         ui.Label("Name");
-        ui.Badge(7).Dot();
+        ui.Badge().Count(7).Dot();
         ui.Progress("bar").Value(50).Loading(false);
 
         var descriptor = arena.Publish();
@@ -93,10 +93,10 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentLabel, descriptor.Nodes[0].Component);
         Assert.Equal((uint)NativeProtocol.ComponentBadge, descriptor.Nodes[1].Component);
         Assert.Equal((uint)NativeProtocol.ComponentProgress, descriptor.Nodes[2].Component);
-        // dot + value + loading
-        Assert.Equal(3u, descriptor.OpsLen);
+        // badge count + dot; progress value + loading
+        Assert.Equal(4u, descriptor.OpsLen);
         Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
-        Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[0].Flags);
+        Assert.Equal(NativeProtocol.ArgNumber, descriptor.Ops[0].Flags);
     }
 
     [Fact]
@@ -150,14 +150,14 @@ public sealed unsafe class RenderContextTests
         using var arena = new RenderArena();
         var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
-        ui.Radio("r").Label("Light").Checked().OnClick(() => { });
+        ui.Radio("r").Label("Light").Checked().OnChange(_ => { });
         ui.Tabs("t").Options("A", "B").Selected(1).OnChange(_ => { });
 
         var descriptor = arena.Publish();
         Assert.Equal(2u, descriptor.NodesLen);
         Assert.Equal((uint)NativeProtocol.ComponentRadio, descriptor.Nodes[0].Component);
         Assert.Equal((uint)NativeProtocol.ComponentTabs, descriptor.Nodes[1].Component);
-        // radio: label + checked + on_click; tabs: options + selected + tokens
+        // radio: label + checked + on_change; tabs: options + selected + tokens
         Assert.Equal(6u, descriptor.OpsLen);
     }
 
@@ -167,18 +167,17 @@ public sealed unsafe class RenderContextTests
         using var arena = new RenderArena();
         var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
-        var trigger = ui.Button("t").Label("Open");
-        ui.Popover("p").Trigger(trigger).Content(ui.Label("Body")).DefaultOpen();
+        ui.Popover("p", "Open").Content(ui.Label("Body")).DefaultOpen();
         ui.Scroll("s").Axis(ScrollAxis.Vertical);
         ui.Resizable("r").Axis(ResizeAxis.Horizontal).Sizes("100", "*");
 
         var descriptor = arena.Publish();
-        Assert.Equal(5u, descriptor.NodesLen);
-        Assert.Equal((uint)NativeProtocol.ComponentPopover, descriptor.Nodes[1].Component);
-        Assert.Equal((uint)NativeProtocol.ComponentScroll, descriptor.Nodes[3].Component);
-        Assert.Equal((uint)NativeProtocol.ComponentResizable, descriptor.Nodes[4].Component);
-        // button label; popover slot+slot+default_open; scroll axis; resizable axis+sizes
-        Assert.Equal(7u, descriptor.OpsLen);
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentPopover, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentScroll, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentResizable, descriptor.Nodes[3].Component);
+        // popover content + default_open; scroll axis; resizable axis + sizes
+        Assert.Equal(5u, descriptor.OpsLen);
         var codes = Enumerable
             .Range(0, (int)descriptor.OpsLen)
             .Select(index => descriptor.Ops[index].Code)

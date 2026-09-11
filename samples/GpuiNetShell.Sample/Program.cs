@@ -133,11 +133,11 @@ internal sealed class GalleryView : View
                     .ItemsCenter(),
                 ui.HStack(
                         ui.Label("Inbox"),
-                        ui.Badge(12),
+                        ui.Badge().Count(12),
                         ui.Label("Errors"),
-                        ui.Badge(3),
+                        ui.Badge().Count(3),
                         ui.Label("Online"),
-                        ui.Badge(1).Dot()
+                        ui.Badge().Dot()
                     )
                     .Gap(12)
                     .ItemsCenter()
@@ -177,15 +177,15 @@ internal sealed class GalleryView : View
                         ui.Radio("r-light")
                             .Label("Light")
                             .Checked(_radioIndex == 0)
-                            .OnClick(() => _radioIndex = 0),
+                            .OnChange(_ => _radioIndex = 0),
                         ui.Radio("r-dark")
                             .Label("Dark")
                             .Checked(_radioIndex == 1)
-                            .OnClick(() => _radioIndex = 1),
+                            .OnChange(_ => _radioIndex = 1),
                         ui.Radio("r-system")
                             .Label("System")
                             .Checked(_radioIndex == 2)
-                            .OnClick(() => _radioIndex = 2)
+                            .OnChange(_ => _radioIndex = 2)
                     )
                     .Gap(16)
                     .ItemsCenter(),
@@ -275,11 +275,10 @@ internal sealed class GalleryView : View
 
     private Element PopoverPage(ref RenderContext ui) =>
         ui.VStack(
-                Section(ref ui, "Popover", "A trigger with anchored content in the `content` slot."),
-                ui.Popover("popover")
+                Section(ref ui, "Popover", "A button trigger with anchored content in the `content` slot."),
+                ui.Popover("popover", "Show details")
                     .DefaultOpen()
                     .OverlayClosable()
-                    .Trigger(ui.Button("popover-trigger").Label("Show details"))
                     .Content(
                         ui.VStack(
                                 ui.Label("Details"),

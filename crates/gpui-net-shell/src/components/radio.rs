@@ -1,61 +1,32 @@
-//! `Radio`: one controlled option, matching `gpui-component`'s `Radio`.
+//! `Radio`, ported from `component-shell`'s `compound/radio.rs`.
 //!
-//! Like `Checkbox`, it holds nothing — the managed host says which option is
-//! checked and re-reads its state every render. A radio cannot deselect itself,
-//! so the callback only fires for a newly chosen option.
+//! A controlled radio control. Selected and disabled common behavior is read
+//! from the request; a radio used on its own reports its click through an
+//! `on_change` callback carrying the new checked value.
 
 use std::sync::Arc;
 
 use gpui::{div, AnyElement, ParentElement as _, SharedString};
-use gpui_component::radio::Radio;
+use gpui_component::{radio::Radio, Sizable as _, Size};
 
+use super::common::nonempty_id;
 use crate::registry::{
-    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
-    ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
-    MaterializeRequest, MethodDescriptor,
+    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallbackArgument,
+    ComponentDescriptor, ComponentMaterializer, ComponentPayload, ComponentRegistry,
+    ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
 };
 
 #[derive(Clone)]
-struct IdPayload(String);
+struct RadioPayload(String);
 
 #[derive(Clone)]
-struct LabelOp(String);
-
-#[derive(Clone)]
-struct CheckedOp(bool);
-
-fn id_payload(arguments: &[ComponentArgument]) -> Result<ComponentPayload, String> {
-    match arguments {
-        [ComponentArgument::String(id)] => Ok(ComponentPayload::new(IdPayload(id.clone()))),
-        _ => Err("Radio(id) expects one string".into()),
-    }
-}
-
-fn label_method() -> MethodDescriptor {
-    MethodDescriptor::new(
-        "label",
-        vec![ArgumentDescriptor::new("label", ArgumentSchema::String)],
-        |args| match args {
-            [ComponentArgument::String(value)] => Ok(ComponentPayload::new(LabelOp(value.clone()))),
-            _ => Err("Radio.label expects one string".into()),
-        },
-    )
-    .with_documentation("Sets the option label.")
-}
-
-fn checked_method() -> MethodDescriptor {
-    MethodDescriptor::new(
-        "checked",
-        vec![ArgumentDescriptor::new("checked", ArgumentSchema::Boolean)],
-        |args| {
-            let value = args
-                .first()
-                .map(ComponentArgument::is_truthy)
-                .unwrap_or(true);
-            Ok(ComponentPayload::new(CheckedOp(value)))
-        },
-    )
-    .with_documentation("Sets the controlled checked state.")
+enum RadioOp {
+    OnChange(ComponentArgument),
+    Label(String),
+    A11y(String),
+    Checked(bool),
+    TabStop(bool),
+    Size(Size),
 }
 
 struct RadioMaterializer;
@@ -64,51 +35,69 @@ impl ComponentMaterializer for RadioMaterializer {
     fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let id = request
             .payload()
-            .downcast_ref::<IdPayload>()
+            .downcast_ref::<RadioPayload>()
             .ok_or_else(|| "Radio received an incompatible payload".to_string())?
             .0
             .clone();
-
-        let mut label = None;
-        let mut checked = false;
-        for method in request.methods() {
-            match method.name() {
-                "label" => {
-                    if let Some(op) = method.payload().downcast_ref::<LabelOp>() {
-                        label = Some(op.0.clone());
-                    }
-                }
-                "checked" => {
-                    if let Some(op) = method.payload().downcast_ref::<CheckedOp>() {
-                        checked = op.0;
-                    }
-                }
-                _ => {}
-            }
-        }
-
+        let ops = request
+            .methods()
+            .filter_map(|method| method.payload().downcast_ref::<RadioOp>().cloned())
+            .collect::<Vec<_>>();
+        // A `Radio` inside a `RadioGroup` is driven by the group, which reports
+        // the selected index itself. One standing on its own has nothing above
+        // it, so it reports its own click.
+        let change = ops
+            .iter()
+            .filter_map(|op| match op {
+                RadioOp::OnChange(argument) => Some(argument.clone()),
+                _ => None,
+            })
+            .next_back();
         let mut radio = Radio::new(SharedString::from(id))
-            .checked(checked)
-            .disabled(request.disabled());
-        if let Some(label) = label {
-            radio = radio.label(SharedString::from(label));
-        }
-
-        if let Some(token) = request.on_click() {
-            let host = request.host().clone();
-            radio = radio.on_change(move |_checked, _window, cx| {
-                if let Some(click) = host.callbacks.click {
-                    // SAFETY: the managed callback copies anything it keeps.
-                    unsafe {
-                        let _ = click(host.session_id, token);
-                    }
+            .disabled(request.disabled())
+            .checked(request.selected());
+        for op in &ops {
+            radio = match op {
+                RadioOp::Label(value) => radio.label(SharedString::from(value.clone())),
+                RadioOp::A11y(value) => {
+                    radio.accessibility_label(SharedString::from(value.clone()))
                 }
-                (host.invalidate)(cx);
+                RadioOp::Checked(value) => radio.checked(*value),
+                RadioOp::TabStop(value) => radio.tab_stop(*value),
+                RadioOp::Size(value) => radio.with_size(*value),
+                RadioOp::OnChange(_) => radio,
+            };
+        }
+        if let Some(argument) = change {
+            let callback = request.resolve_callback(&argument)?;
+            radio = radio.on_click(move |checked, window, cx| {
+                callback.invoke_with(
+                    "Radio.on_change callback failed",
+                    &[ComponentCallbackArgument::Boolean(*checked)],
+                    window,
+                    cx,
+                );
             });
         }
-
         request.finish(div().child(radio))
     }
+}
+
+fn method(
+    name: &'static str,
+    schema: ArgumentSchema,
+    doc: &'static str,
+    f: fn(&ComponentArgument) -> Result<RadioOp, String>,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(name, schema)],
+        move |arguments| match arguments {
+            [value] => f(value).map(ComponentPayload::new),
+            _ => Err(format!("Radio.{name}({name}) expects one argument")),
+        },
+    )
+    .with_documentation(doc)
 }
 
 pub(super) fn register(registry: &mut ComponentRegistry) {
@@ -118,10 +107,101 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                 .with_constructors(vec![ConstructorDescriptor::new(
                     "Radio",
                     vec![ArgumentDescriptor::new("id", ArgumentSchema::String)],
-                    id_payload,
+                    |arguments| match arguments {
+                        [ComponentArgument::String(id)] => nonempty_id(id, "Radio")
+                            .map(RadioPayload)
+                            .map(ComponentPayload::new),
+                        _ => Err("Radio(id) expects a string id".into()),
+                    },
                 )])
-                .with_methods(vec![label_method(), checked_method()])
-                .with_documentation("A controlled radio option."),
+                .with_methods(vec![
+                    method(
+                        "label",
+                        ArgumentSchema::String,
+                        "Sets the visible label.",
+                        |value| match value {
+                            ComponentArgument::String(x) => Ok(RadioOp::Label(x.clone())),
+                            _ => Err("Radio.label(label) expects a string".into()),
+                        },
+                    ),
+                    method(
+                        "accessibility_label",
+                        ArgumentSchema::String,
+                        "Overrides the announced name.",
+                        |value| match value {
+                            ComponentArgument::String(x) => Ok(RadioOp::A11y(x.clone())),
+                            _ => Err("Radio.accessibility_label(label) expects a string".into()),
+                        },
+                    ),
+                    method(
+                        "checked",
+                        ArgumentSchema::Boolean,
+                        "Controls checked state.",
+                        |value| match value {
+                            ComponentArgument::Boolean(x) => Ok(RadioOp::Checked(*x)),
+                            _ => Err("Radio.checked(checked) expects a boolean".into()),
+                        },
+                    ),
+                    method(
+                        "tab_stop",
+                        ArgumentSchema::Boolean,
+                        "Controls keyboard tab-stop participation.",
+                        |value| match value {
+                            ComponentArgument::Boolean(x) => Ok(RadioOp::TabStop(*x)),
+                            _ => Err("Radio.tab_stop(tabStop) expects a boolean".into()),
+                        },
+                    ),
+                    method(
+                        "size",
+                        ArgumentSchema::Enum(&["xsmall", "small", "medium", "large"]),
+                        "Sets semantic size.",
+                        |value| match value {
+                            ComponentArgument::Enum(x) => match x.as_str() {
+                                "xsmall" => Ok(RadioOp::Size(Size::XSmall)),
+                                "small" => Ok(RadioOp::Size(Size::Small)),
+                                "medium" => Ok(RadioOp::Size(Size::Medium)),
+                                "large" => Ok(RadioOp::Size(Size::Large)),
+                                _ => Err(format!("unsupported Radio size `{x}`")),
+                            },
+                            _ => Err("Radio.size(size) expects a size literal".into()),
+                        },
+                    ),
+                    MethodDescriptor::new(
+                        "on_change",
+                        vec![ArgumentDescriptor::new(
+                            "on_change",
+                            ArgumentSchema::Callback,
+                        )],
+                        |arguments| match arguments {
+                            [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
+                                RadioOp::OnChange(ComponentArgument::Callback(*token)),
+                            )),
+                            [ComponentArgument::Number(token)] => Ok(ComponentPayload::new(
+                                RadioOp::OnChange(ComponentArgument::Callback(*token as u64)),
+                            )),
+                            _ => Err("Radio.on_change expects one callback".into()),
+                        },
+                    )
+                    .with_documentation(
+                        "Reports a click on a radio used on its own. Inside a `RadioGroup` the \
+                         group reports the selected index instead.",
+                    ),
+                ])
+                .with_documentation(
+                    "A controlled radio control; selected and disabled common behavior is supported.",
+                ),
         )
         .expect("the built-in Radio descriptor is valid");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_rejects_empty_and_whitespace_only_values() {
+        assert!(nonempty_id("", "Radio").is_err());
+        assert!(nonempty_id(" \t ", "Radio").is_err());
+        assert_eq!(nonempty_id("choice-a", "Radio").unwrap(), "choice-a");
+    }
 }

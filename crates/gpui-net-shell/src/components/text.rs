@@ -1,8 +1,12 @@
-//! `Text`: a constructor with one string payload, styled through a wrapper div.
+//! `Text`, ported from `component-shell`'s `basic/text.rs`.
+//!
+//! Plain `gpui-component` text in a styleable wrapper. `Text` takes its content
+//! through the constructor and accepts no children.
 
 use std::sync::Arc;
 
-use gpui::{div, AnyElement, ParentElement as _, SharedString};
+use gpui::{div, AnyElement, ParentElement as _};
+use gpui_component::text::Text;
 
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
@@ -30,7 +34,12 @@ impl ComponentMaterializer for TextMaterializer {
             .ok_or_else(|| "Text received an incompatible payload".to_string())?
             .0
             .clone();
-        request.finish(div().child(SharedString::from(value)))
+        if request.children_len() != 0 {
+            return Err(
+                "Text does not accept children; pass its content to Text(value)".to_string(),
+            );
+        }
+        request.finish(div().child(Text::from(value)))
     }
 }
 
@@ -44,7 +53,10 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     text_payload,
                 )])
                 .with_methods(Vec::new())
-                .with_documentation("Plain text content; style it on the surrounding container."),
+                .with_documentation(
+                    "Plain gpui-component Text content in a styleable shell wrapper. \
+                     Text accepts no children.",
+                ),
         )
         .expect("the built-in Text descriptor is valid");
 }

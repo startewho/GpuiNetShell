@@ -27,7 +27,7 @@ public sealed class ButtonElement : Element
 
     public ButtonElement Size(ButtonSize size)
     {
-        Arena.AddMethodNumber(Index, "size", (double)(int)size);
+        Arena.AddMethodEnum(Index, "size", SizeName(size));
         return this;
     }
 
@@ -98,5 +98,14 @@ public sealed class ButtonElement : Element
             ButtonVariant.Ghost => "ghost",
             ButtonVariant.Link => "link",
             _ => "default",
+        };
+
+    private static string SizeName(ButtonSize size) =>
+        size switch
+        {
+            ButtonSize.ExtraSmall => "xsmall",
+            ButtonSize.Small => "small",
+            ButtonSize.Large => "large",
+            _ => "medium",
         };
 }
