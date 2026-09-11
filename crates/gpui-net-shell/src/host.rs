@@ -10,6 +10,7 @@ use std::sync::{Mutex, OnceLock};
 
 use gpui::prelude::*;
 use gpui::{px, size, App, Bounds, TitlebarOptions, WindowBounds, WindowOptions};
+use gpui_base::Placement;
 
 use crate::abi::GpuiNetCallbacks;
 use crate::root::{NotificationLevel, PopupItem, Root};
@@ -31,6 +32,12 @@ enum Command {
         body: String,
     },
     CloseDialog,
+    OpenSheet {
+        placement: Placement,
+        title: String,
+        body: String,
+    },
+    CloseSheet,
     Notify {
         message: String,
         level: NotificationLevel,
@@ -82,6 +89,23 @@ pub fn close_dialog(session_id: u64) -> i32 {
     send(session_id, Command::CloseDialog)
 }
 
+/// Opens a sheet on the given edge from any thread.
+pub fn open_sheet(session_id: u64, placement: Placement, title: String, body: String) -> i32 {
+    send(
+        session_id,
+        Command::OpenSheet {
+            placement,
+            title,
+            body,
+        },
+    )
+}
+
+/// Closes the sheet from any thread.
+pub fn close_sheet(session_id: u64) -> i32 {
+    send(session_id, Command::CloseSheet)
+}
+
 /// Posts a notification from any thread.
 pub fn push_notification(session_id: u64, message: String, level: NotificationLevel) -> i32 {
     send(session_id, Command::Notify { message, level })
@@ -107,34 +131,16 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
 
             let registry = crate::components::catalog();
             let view = cx.new(|_| ShellView::new(application_id, callbacks, registry));
-            let root = cx.new(|_| Root::new(view, application_id, callbacks));
+            let root = cx.new(|cx| Root::new(view, application_id, callbacks, cx));
+            let weak_root = root.downgrade();
 
-            // Any-thread commands are delivered here, on the GPUI thread.
+            // Any-thread commands are delivered here, on the GPUI thread, with
+            // the window's current handle so overlay operations are
+            // window-scoped.
             let (sender, receiver) = async_channel::bounded(64);
             if let Ok(mut sessions) = ingress().lock() {
                 sessions.insert(application_id, sender);
             }
-            let weak_root = root.downgrade();
-            cx.spawn(async move |cx| {
-                while let Ok(command) = receiver.recv().await {
-                    cx.update(|cx| {
-                        let _ = weak_root.update(cx, |root, cx| match command {
-                            Command::Invalidate => root.invalidate_view(cx),
-                            Command::OpenPopup { items } => root.open_popup(items, cx),
-                            Command::OpenDialog { title, body } => {
-                                root.open_dialog(title, body, cx)
-                            }
-                            Command::CloseDialog => {
-                                root.close_dialog(cx);
-                            }
-                            Command::Notify { message, level } => {
-                                root.push_notification(message, level, cx)
-                            }
-                        });
-                    });
-                }
-            })
-            .detach();
 
             let bounds = Bounds::centered(None, size(px(900.0), px(600.0)), cx);
             let opened = cx.open_window(
@@ -146,11 +152,48 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                     }),
                     ..Default::default()
                 },
-                move |window, cx| cx.new(|cx| gpui_component::Root::new(root.clone(), window, cx)),
+                move |window, cx| cx.new(|cx| gpui_component::Root::new(root, window, cx)),
             );
-            if let Err(error) = opened {
-                eprintln!("gpui-net-shell: failed to open the window: {error}");
-            }
+            let window = match opened {
+                Ok(window) => window,
+                Err(error) => {
+                    eprintln!("gpui-net-shell: failed to open the window: {error}");
+                    cx.activate(true);
+                    return;
+                }
+            };
+
+            cx.spawn(async move |cx| {
+                while let Ok(command) = receiver.recv().await {
+                    cx.update(|cx| {
+                        let _ = window.update(cx, |_root, window, cx| {
+                            let _ = weak_root.update(cx, |root, cx| match command {
+                                Command::Invalidate => root.invalidate_view(cx),
+                                Command::OpenPopup { items } => root.open_popup(items, window, cx),
+                                Command::OpenDialog { title, body } => {
+                                    root.open_message_dialog(title, body, window, cx)
+                                }
+                                Command::CloseDialog => {
+                                    root.close_dialog(window, cx);
+                                }
+                                Command::OpenSheet {
+                                    placement,
+                                    title,
+                                    body,
+                                } => root.open_message_sheet(placement, title, body, window, cx),
+                                Command::CloseSheet => {
+                                    root.close_sheet(window, cx);
+                                }
+                                Command::Notify { message, level } => {
+                                    root.push_notification(message, level, window, cx)
+                                }
+                            });
+                        });
+                    });
+                }
+            })
+            .detach();
+
             cx.activate(true);
         });
 

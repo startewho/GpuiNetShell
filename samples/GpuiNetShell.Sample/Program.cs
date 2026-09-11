@@ -49,7 +49,7 @@ internal sealed class GalleryView : View
                     .ItemsCenter()
                    ,
                 ui.Text($"Count: {_count}").TextSize(28),
-                ui.Progress("progress").Value(_count / 101).P(20),
+                ui.Progress("progress").Value(_count).P(20),
                 ui.HStack(
                         ui.Label("Theme"),
                         ui.Combobox("theme")
@@ -69,7 +69,12 @@ internal sealed class GalleryView : View
                             .Label("Increment")
                             .Primary()
                             .Tooltip("Increments the counter")
-                            .OnClick(() => _count++),
+                            .OnClick(() =>
+                            {
+                                _count++;
+                                this.Invalidate();
+                            }),
+
                         ui.Button("reset").Label("Reset").Secondary().OnClick(() => _count = 0),
                         ui.Button("dialog")
                             .Label("Open dialog")
@@ -77,6 +82,15 @@ internal sealed class GalleryView : View
                                 _application.OpenDialog(
                                     "About GpuiNetShell",
                                     "A C#-hosted GPUI shell: managed state, native rendering."
+                                )
+                            ),
+                        ui.Button("sheet")
+                            .Label("Open sheet")
+                            .OnClick(() =>
+                                _application.OpenSheet(
+                                    SheetPlacement.Right,
+                                    "Details",
+                                    "A sheet is a place in the window, below the dialog stack."
                                 )
                             ),
                         ui.Button("notify")

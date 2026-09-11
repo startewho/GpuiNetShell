@@ -35,18 +35,21 @@ does.
 Each published render is a frozen `RenderSnapshot` that owns its generation.
 The native `ShellView` keeps the current and previous snapshots; when one is
 replaced its generation is retired and the managed host releases exactly that
-generation's event handlers. `View.Invalidate()` is the managed equivalent of
-`cx.notify()`.
+generation's event handlers. `View.Invalidate()` and `RenderContext.Notify()`
+are the managed equivalents of `cx.notify()`: both request a native re-render.
+`Notify()` is refused during `Render`, exactly as gpui refuses a self-notify
+while rendering.
 
-The overlay host (`src/root.rs`) wraps the content view and paints a popup, a
+The overlay host (`src/root.rs`) wraps the content view and paints one sheet, a
 dialog stack, and a notification stack over it; the managed `GpuiApplication`
-drives dialogs and notifications with `OpenDialog`, `CloseDialog`, and
-`PushNotification`, while a `Combobox` opens the popup with one callback token
-per option. Tooltips ride the `gpui-component` window root. Components are
-registered descriptors in `src/components/` (`Div`, `Text`, `Button`, `Label`,
-`Badge`, `Progress`, `Combobox`); adding one is a descriptor, a materializer,
-and a managed builder. Every overlay mutation ends in `Context::notify`, and
-re-rendering the content is the separate `View.Invalidate()` step.
+drives them with `OpenDialog`, `OpenSheet`, `CloseDialog`, `CloseSheet`, and
+`PushNotification`, while a `Combobox` opens its option menu as a `Bottom` sheet
+(one callback token per option). Tooltips ride the `gpui-component` window root.
+Components are registered descriptors in `src/components/` (`Div`, `Text`,
+`Button`, `Label`, `Badge`, `Progress`, `Combobox`); adding one is a descriptor,
+a materializer, and a managed builder. Every overlay mutation takes the current
+window and ends in `Context::notify`, and re-rendering the content is the
+separate `View.Invalidate()` step.
 
 ## Repository layout
 
@@ -62,7 +65,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/context.rs                 HostContext: session, callbacks, invalidate
   src/materialize.rs             op resolution + registry dispatch
   src/view.rs                    ShellView: dirty/current/previous + rebuild
-  src/root.rs                    Root: content + popup + dialog + notification
+  src/root.rs                    Root: content + sheet + dialog + notification
   src/host.rs                    GPUI application, window, ingress
   src/ffi.rs                     panic-safe C entry points
 src/GpuiNetShell/              Managed runtime library

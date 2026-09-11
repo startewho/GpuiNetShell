@@ -13,16 +13,45 @@ public sealed class RenderContext
 {
     private readonly RenderArena _arena;
     private readonly EventRegistry _events;
+    private readonly Action _notify;
+    private bool _rendering;
 
-    internal RenderContext(RenderArena arena, EventRegistry events)
+    internal RenderContext(RenderArena arena, EventRegistry events, Action notify)
     {
         _arena = arena;
         _events = events;
+        _notify = notify;
     }
 
     internal RenderArena Arena => _arena;
 
     internal EventRegistry Events => _events;
+
+    /// <summary>
+    /// Requests a native re-render, the managed equivalent of gpui's
+    /// <c>cx.notify()</c>. Call it from an event or task after changing state
+    /// that <see cref="View.Render"/> reads.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when called during <see cref="View.Render"/>, where requesting
+    /// another render would loop, matching gpui's own rule.
+    /// </exception>
+    public void Notify()
+    {
+        if (_rendering)
+        {
+            throw new InvalidOperationException(
+                "Cannot notify during Render(); change state from an event or task instead."
+            );
+        }
+        _notify();
+    }
+
+    /// <summary>Marks that managed rendering has begun, so <see cref="Notify"/> is refused.</summary>
+    internal void BeginRender() => _rendering = true;
+
+    /// <summary>Marks that managed rendering has ended.</summary>
+    internal void EndRender() => _rendering = false;
 
     /// <summary>Declares a button. <paramref name="id"/> is its stable identity.</summary>
     public ButtonElement Button(string id)

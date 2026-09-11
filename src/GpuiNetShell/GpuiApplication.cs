@@ -21,11 +21,13 @@ public sealed class GpuiApplication
     private readonly EventRegistry _events = new();
     private readonly RenderArena _arena = new();
 
+    private RenderContext _renderContext = null!;
     private View? _root;
 
     public GpuiApplication(Func<View> rootFactory)
     {
         _rootFactory = rootFactory ?? throw new ArgumentNullException(nameof(rootFactory));
+        _renderContext = new RenderContext(_arena, _events, Invalidate);
         lock (Gate)
         {
             _sessionId = ++_nextSession;
@@ -55,10 +57,12 @@ public sealed class GpuiApplication
         _arena.Reset();
         _events.BeginGeneration(generation);
 
-        var ui = new RenderContext(_arena, _events);
         _root ??= _rootFactory();
         _root.AttachInvalidator(Invalidate);
-        var element = _root.RenderRoot(ref ui);
+
+        _renderContext.BeginRender();
+        var element = _root.RenderRoot(ref _renderContext);
+        _renderContext.EndRender();
 
         *arena = _arena.Publish();
         *root = (uint)element.Index;
@@ -123,6 +127,41 @@ public sealed class GpuiApplication
             return;
         }
         _ = api->CloseDialog(_sessionId);
+    }
+
+    /// <summary>Opens a sheet on an edge with a plain-text title and body, from any thread.</summary>
+    public unsafe void OpenSheet(SheetPlacement placement, string title, string body)
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->OpenSheet == null)
+        {
+            return;
+        }
+        var titleBytes = Encoding.UTF8.GetBytes(title ?? string.Empty);
+        var bodyBytes = Encoding.UTF8.GetBytes(body ?? string.Empty);
+        fixed (byte* titlePointer = titleBytes)
+        fixed (byte* bodyPointer = bodyBytes)
+        {
+            _ = api->OpenSheet(
+                _sessionId,
+                (uint)placement,
+                titlePointer,
+                (uint)titleBytes.Length,
+                bodyPointer,
+                (uint)bodyBytes.Length
+            );
+        }
+    }
+
+    /// <summary>Closes the sheet, from any thread.</summary>
+    public unsafe void CloseSheet()
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->CloseSheet == null)
+        {
+            return;
+        }
+        _ = api->CloseSheet(_sessionId);
     }
 
     /// <summary>Posts a notification, from any thread.</summary>

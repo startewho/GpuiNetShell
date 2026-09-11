@@ -46,7 +46,7 @@ materialize -> ComponentRegistry -> materializers -> elements
 
 A clean GPUI repaint re-materializes the retained snapshot without calling
 managed `Render`. `Render` runs only when the view is dirty, which is set on
-first mount, by an event binding, or by `View.Invalidate()`.
+first mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Notify()`.
 
 ## View and snapshots
 
@@ -68,6 +68,13 @@ its generation. When it is dropped, it calls the managed `retire_callbacks`
 with its generation, and the managed host releases exactly that generation's
 event handlers. That is what keeps callback lifetime tied to a description
 rather than to a frame or a global counter.
+
+Managed code requests a rebuild through `View.Invalidate()` or
+`RenderContext.Notify()`, both of which post the native `invalidate` command.
+`Notify()` throws when called during `Render`, mirroring gpui's rule that a
+render may not request another render of itself; state changes belong in events
+or tasks. The managed `RenderContext` is one stable instance per session, so a
+handler can hold it and notify later.
 
 ## The render arena
 
@@ -143,31 +150,56 @@ and `Combobox`; each is one file in `src/components/`.
 ## Root and overlays
 
 `crates/gpui-net-shell/src/root.rs` mirrors `gpui-shell`'s `root.rs`. `Root`
-owns the managed content view and paints the layers over it, back to front:
+owns the managed content view and paints the layers over it. Each layer is
+deferred at its own priority, so the paint order is independent of construction
+order:
 
 1. **Content** — the `ShellView` the managed host describes.
-2. **Popup** — one menu of items, each carrying a managed callback token; the
-   backdrop dismisses. `Combobox` opens it through the ingress.
-3. **Dialog stack** — a stack of title/body cards; only the topmost is
-   interactive, and a single backdrop dims the content beneath the stack.
-4. **Notifications** — a top-right stack that dismisses itself after a short
-   lifetime.
+2. **Sheet** (`8`) — at most one, anchored to a viewport edge. Replacing, not
+   stacking, keeps the focus record honest: the incoming sheet inherits the
+   outgoing one's restore target. The combobox popup is a sheet too: it opens a
+   `Bottom` sheet whose content is the option menu, so there is no separate
+   popup layer.
+3. **Dialog stack** (`10 + index`) — a stack of `AnyView` cards. Only the
+   topmost is interactive and only it draws a backdrop, so a stack of three
+   dialogs dims the window once. Opening a dialog records the focused handle and
+   focuses the dialog; closing it restores that handle.
+4. **Notifications** (`100`) — a top-right stack that dismisses itself.
+
+Open overlays use the same shapes as `gpui-shell`:
+
+```text
+struct ActiveDialog { content: AnyView, focus_handle: FocusHandle,
+                      restore_focus: Option<WeakFocusHandle>, options: DialogOptions }
+struct ActiveSheet  { content: AnyView, placement: gpui_base::Placement,
+                      focus_handle: FocusHandle, restore_focus: Option<WeakFocusHandle> }
+```
+
+`DialogOptions` carries `escape_dismissable` and `backdrop_dismissable` (both
+default `true`). Escape closes the topmost dismissable dialog, otherwise the
+sheet (including a combobox popup); a backdrop press closes the topmost dialog
+only when it allows it, and closes the sheet when no dialog is open. The root
+installs the Escape key binding once per `App` and guards it with a global.
+
+The managed host opens text dialogs/sheets through `open_message_dialog` /
+`open_message_sheet`, which wrap a small `MessageView` as the `AnyView` content,
+so the struct stays exactly the shell's.
 
 The window is rooted at `gpui_component::Root` wrapping our `Root`, so
 `gpui-component` tooltips (attached through component methods such as
 `Button.Tooltip`) render on the window's own tooltip layer.
 
-Overlays are native: the managed host opens them through the command ingress
-(`OpenDialog`, `CloseDialog`, `PushNotification`, and a component-triggered
-popup), and the content is built from the request, so no overlay state crosses
-the ABI. The any-thread commands are delivered on the GPUI thread by the task
-`host::run` spawns.
+Overlays are native and window-scoped: the managed host opens them through the
+command ingress (`OpenDialog`, `CloseDialog`, `PushNotification`, and a
+component-triggered popup), and the ingress task holds the window handle so each
+operation receives the current `&mut Window`. The content is built from the
+request, so no overlay state crosses the ABI.
 
-Every overlay mutation ends in `Context::notify`, so the repaint is scheduled
-exactly like any other view change. Re-rendering the *content* is deliberately
-separate: `Root::invalidate_view` calls the managed `ShellView::refresh`, which
-marks the view dirty and notifies, so a clean content snapshot is not rebuilt
-just because an overlay opened.
+Every overlay mutation takes the current window and ends in `Context::notify`,
+so the repaint is scheduled exactly like any other view change. Re-rendering the
+*content* is deliberately separate: `Root::invalidate_view` calls the managed
+`ShellView::refresh`, which marks the view dirty and notifies, so a clean content
+snapshot is not rebuilt just because an overlay opened.
 
 ## Application and events
 
@@ -197,6 +229,8 @@ struct GpuiNetShellApi {
     int32_t (*invalidate)(uint64_t session);
     int32_t (*open_dialog)(uint64_t, const uint8_t* title, uint32_t, const uint8_t* body, uint32_t);
     int32_t (*close_dialog)(uint64_t session);
+    int32_t (*open_sheet)(uint64_t, uint32_t placement, const uint8_t* title, uint32_t, const uint8_t* body, uint32_t);
+    int32_t (*close_sheet)(uint64_t session);
     int32_t (*push_notification)(uint64_t, const uint8_t* message, uint32_t, uint32_t level);
     uint64_t reserved;
 };
@@ -204,9 +238,10 @@ struct GpuiNetShellApi {
 
 `run_application` blocks in the GPUI event loop. `invalidate` is the any-thread
 request behind `View.Invalidate()`: it posts to the session's view, which marks
-itself dirty and repaints. `open_dialog`, `close_dialog`, and
-`push_notification` post overlay commands to the same ingress; `Root` applies
-them on the GPUI thread.
+itself dirty and repaints. `open_dialog`, `close_dialog`, `open_sheet`,
+`close_sheet`, and `push_notification` post overlay commands to the same
+ingress; `Root` applies them on the GPUI thread with the window handle it
+captured when the window opened.
 
 `GpuiNetCallbacks` carries the managed `application_started`, `window_closed`,
 `render(session, generation, arena, root)`, `render_completed(session,

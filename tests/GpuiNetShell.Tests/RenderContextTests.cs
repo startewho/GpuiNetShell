@@ -11,7 +11,7 @@ public sealed unsafe class RenderContextTests
     public void ButtonBuildsIdentityLabelVariantAndClick()
     {
         using var arena = new RenderArena();
-        var ui = new RenderContext(arena, new EventRegistry());
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
         var calls = 0;
 
         ui.Button("save").Label("Save").Primary().OnClick(() => calls++);
@@ -38,7 +38,7 @@ public sealed unsafe class RenderContextTests
     public void ContainerRecordsChildEdgesAndStyleCalls()
     {
         using var arena = new RenderArena();
-        var ui = new RenderContext(arena, new EventRegistry());
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
         ui.VStack(ui.Text("one"), ui.Text("two")).Gap(8);
 
@@ -60,7 +60,7 @@ public sealed unsafe class RenderContextTests
     public void StyleCallsRecordTheGpuiMethodNameAndArgument()
     {
         using var arena = new RenderArena();
-        var ui = new RenderContext(arena, new EventRegistry());
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
         ui.Div().P(12).Bg("#112233").Full();
 
@@ -82,7 +82,7 @@ public sealed unsafe class RenderContextTests
     public void LabelBadgeAndProgressRecordTheirIdentitiesAndMethods()
     {
         using var arena = new RenderArena();
-        var ui = new RenderContext(arena, new EventRegistry());
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
         ui.Label("Name");
         ui.Badge(7).Dot();
@@ -103,7 +103,7 @@ public sealed unsafe class RenderContextTests
     public void ComboboxRecordsOptionsSelectionAndTokens()
     {
         using var arena = new RenderArena();
-        var ui = new RenderContext(arena, new EventRegistry());
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
 
         ui.Combobox("theme").Options("Light", "Dark").Selected(1).OnChange(_ => { });
 
@@ -119,6 +119,31 @@ public sealed unsafe class RenderContextTests
         Assert.Equal("tokens", DecodePacked(descriptor.Ops[2].A, utf8));
     }
 
+    [Fact]
+    public void NotifyInvokesTheInvalidator()
+    {
+        using var arena = new RenderArena();
+        var calls = 0;
+        var ui = new RenderContext(arena, new EventRegistry(), () => calls++);
+
+        ui.Notify();
+
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void NotifyDuringRenderThrowsAndWorksOutsideIt()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.BeginRender();
+        Assert.Throws<InvalidOperationException>(() => ui.Notify());
+        ui.EndRender();
+
+        ui.Notify();
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);
@@ -126,3 +151,4 @@ public sealed unsafe class RenderContextTests
         return System.Text.Encoding.UTF8.GetString(utf8.Slice(offset, length));
     }
 }
+

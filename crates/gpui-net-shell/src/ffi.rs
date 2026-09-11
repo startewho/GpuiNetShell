@@ -19,6 +19,8 @@ static API: GpuiNetShellApi = GpuiNetShellApi {
     invalidate: Some(invalidate),
     open_dialog: Some(open_dialog),
     close_dialog: Some(close_dialog),
+    open_sheet: Some(open_sheet),
+    close_sheet: Some(close_sheet),
     push_notification: Some(push_notification),
     _reserved: 0,
 };
@@ -80,6 +82,30 @@ unsafe extern "C" fn open_dialog(
 
 unsafe extern "C" fn close_dialog(session_id: u64) -> i32 {
     guard(|| Ok(crate::host::close_dialog(session_id)))
+}
+
+unsafe extern "C" fn open_sheet(
+    session_id: u64,
+    placement: u32,
+    title: *const u8,
+    title_len: u32,
+    body: *const u8,
+    body_len: u32,
+) -> i32 {
+    guard(|| {
+        let title = read_utf8(title, title_len)?;
+        let body = read_utf8(body, body_len)?;
+        Ok(crate::host::open_sheet(
+            session_id,
+            crate::root::placement_from_wire(placement),
+            title,
+            body,
+        ))
+    })
+}
+
+unsafe extern "C" fn close_sheet(session_id: u64) -> i32 {
+    guard(|| Ok(crate::host::close_sheet(session_id)))
 }
 
 unsafe extern "C" fn push_notification(
