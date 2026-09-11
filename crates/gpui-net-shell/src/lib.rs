@@ -11,9 +11,14 @@
 //! mirrored in `src/GpuiNetShell/Interop/NativeProtocol.cs`.
 
 mod abi;
+mod components;
 mod ffi;
 mod host;
 mod materialize;
+// The registry exposes a descriptor API that the built-in catalog uses a subset
+// of today; the rest is the seam components are added through.
+#[allow(dead_code)]
+mod registry;
 mod schema;
 mod snapshot;
 mod style;

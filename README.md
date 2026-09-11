@@ -22,7 +22,7 @@ gpui-net-shell native host  (Rust)
         ├─ app host: gpui::Application, window, event loop
         ├─ snapshot decode -> owned description
         ├─ style.rs: reflected GPUI style table
-        └─ materialize.rs: Component dispatch + Behavior + finish
+        └─ materialize.rs -> ComponentRegistry descriptors -> materializer
 ```
 
 The split mirrors `gpui-shell`: a description is published only when state
@@ -41,7 +41,9 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/abi.rs                     C layouts and the API table
   src/snapshot.rs                arena decode + validation
   src/style.rs                   reflected GPUI style table (shell-style)
-  src/materialize.rs             Component dispatch, Behavior, finish
+  src/registry.rs                ComponentRegistry / Descriptor / Materializer
+  src/components/                Div, Text, Button descriptors + materializers
+  src/materialize.rs             op resolution + registry dispatch
   src/host.rs                    GPUI application and window
   src/ffi.rs                     panic-safe C entry points
 src/GpuiNetShell/              Managed runtime library

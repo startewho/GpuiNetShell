@@ -92,19 +92,10 @@ impl Snapshot {
         if (root as usize) >= nodes.len() {
             return Err(STATUS_BAD_INDEX);
         }
-        for node in &nodes {
-            if !is_known_component(node.component) {
-                return Err(STATUS_UNKNOWN_COMPONENT);
-            }
-        }
         detect_cycle(&nodes)?;
 
         Ok(Self { root, nodes })
     }
-}
-
-pub fn is_known_component(component: u32) -> bool {
-    matches!(component, COMPONENT_DIV | COMPONENT_TEXT | COMPONENT_BUTTON)
 }
 
 fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
@@ -361,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_out_of_range_child_and_unknown_component() {
+    fn rejects_out_of_range_child() {
         let mut arena = RawArena {
             nodes: vec![GpuiNetNode {
                 component: COMPONENT_DIV,
@@ -380,11 +371,7 @@ mod tests {
         );
 
         arena.children.clear();
-        arena.nodes[0].component = 99;
-        assert_eq!(
-            Snapshot::decode(&arena.descriptor(), 0),
-            Err(STATUS_UNKNOWN_COMPONENT)
-        );
+        assert!(Snapshot::decode(&arena.descriptor(), 0).is_ok());
     }
 
     #[test]

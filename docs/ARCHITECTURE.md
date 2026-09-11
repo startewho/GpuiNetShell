@@ -44,9 +44,9 @@ render_completed(session, revision)    Rust -> C# acknowledgement
 ShellView::render -> materialize        Rust
         │ resolve_ops -> (StyleRefinement, Behavior)
         │ materialize_node -> recurse children
-        │ materialize_component -> match on Component
+        │ ComponentRegistry::descriptor(id) -> MaterializeRequest
         ▼
-Div / Text / Button -> gpui-component elements
+Div / Text / Button materializers -> gpui-component elements
 ```
 
 A clean GPUI repaint re-materializes the retained snapshot without calling
@@ -94,27 +94,32 @@ applied.
 ## Components and behavior
 
 `crates/gpui-net-shell/src/materialize.rs` mirrors `gpui-shell`'s
-`materialize.rs`:
+`materialize.rs` and dispatches to a component registry:
 
 - `resolve_ops` performs one pass over a node's ops: style calls fold into a
-  `StyleRefinement`, generic `Method` ops accumulate into a `Behavior`, and
-  `Callback` ops set the behavior's event tokens.
-- `materialize_node` builds children first, then dispatches.
-- `materialize_component` is a single `match` on the `Component` (Div, Text,
-  Button).
-- `finish(element, refinement, children)` applies the refinement and children
-  and produces the `AnyElement`.
+  `StyleRefinement`, `Method` ops split into shell behavior (`disabled`,
+  `selected`) and recorded component methods, and `Callback` ops set the event
+  tokens.
+- `materialize_node` builds children first, then asks
+  `FrozenComponentRegistry::descriptor(id)` for the component, runs its
+  constructor with the node identity, records its methods, and hands a
+  `MaterializeRequest` to the descriptor's `ComponentMaterializer`.
+- The materializer builds the element and calls `request.finish(element)`, which
+  applies the `StyleRefinement` and the ordinary children and returns an
+  `AnyElement`.
 
-Adding a component is:
+The registry (`src/registry.rs`) is the seam adapted from `gpui-shell`'s
+`component_registry.rs`: a `ComponentDescriptor` owns its constructors, methods,
+and materializer. Adding a component is:
 
-1. a `COMPONENT_*` constant and its `is_known_component` arm in `schema.rs`;
-2. a `NativeProtocol.Component*` constant in C#;
-3. one `Component` variant and one `match` arm in `materialize.rs`.
+1. a registry index constant in `schema.rs` and its `NativeProtocol` mirror;
+2. a `ComponentMaterializer` and a `register` call in `components/`.
 
-Component behavior is not enumerated per method: `apply_behavior` maps a method
-name (`disabled`, `label`, `primary`, `size`, …) onto the shared `Behavior`, so
-the managed builders only name methods. `resolve_ops` and `apply_behavior` are
-pure and tested without a window.
+The runtime never names a concrete component: the decoder knows only an id, and
+`materialize.rs` knows only a descriptor. Component methods are not enumerated
+per method either: `ComponentDescriptor::method(name)` resolves a recorded name
+to its recorder. `resolve_ops` and the descriptor recorders are pure and tested
+without a window.
 
 ## Application and events
 
@@ -164,10 +169,11 @@ unwind across the C boundary.
   `StyleExtensions` for a name the reflected table already knows, or add a
   name to `PARAM_STYLES` and one arm in `apply_param` for a method that takes
   an argument.
-- A new **component behavior method** is one arm in `apply_behavior` (or
-  `apply_callback`) and whatever the component arm reads; the managed side only
-  names the method.
-- A new **component** is a `Component` variant and a `match` arm, as above.
+- A new **component method** is a `MethodDescriptor` on that component's
+  descriptor plus one arm in its materializer; the managed side only names the
+  method.
+- A new **component** is a descriptor and a materializer registered in
+  `components/`, as above.
 
 When a component id or payload rule changes, bump `SCHEMA_HASH` on both sides.
 When a C record layout changes, bump `ABI_VERSION` and update both sides

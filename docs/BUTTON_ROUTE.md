@@ -53,28 +53,32 @@ success the host acknowledges with `render_completed(session, revision, 0)`.
 - `resolve_ops(node)` makes one pass:
   - `NullaryStyle`/`ParamStyle` fold into a `StyleRefinement` through
     `style::apply_nullary_name` / `style::apply_param`;
-  - `Method` accumulates into a `Behavior` through `apply_behavior`;
-  - `Callback` sets the behavior's event token through `apply_callback`.
-- `materialize_node` builds the children first.
-- `materialize_component` matches the `Component`:
+  - `Method` splits into shell behavior (`disabled`, `selected`) and the
+    recorded component methods, in order;
+  - `Callback` sets the `on_click` token.
+- `materialize_node` builds the children first, then resolves the node's
+  component with `FrozenComponentRegistry::descriptor(id)`.
+- It runs the descriptor's constructor with the node's identity, records each
+  method through `ComponentDescriptor::method(name)` (dropping unknown names),
+  and constructs a `MaterializeRequest` carrying the payload, recorded methods,
+  style, children, and behavior.
+- The descriptor's `ComponentMaterializer` builds the element and calls
+  `request.finish(element)`, which applies the `StyleRefinement` and children.
 
-  ```text
-  Component::Div          -> finish(div(), refinement, children)
-  Component::Text(value)  -> finish(div().child(value), refinement, children)
-  Component::Button(id)   -> Button::new(id)
-                               .loading(behavior.loading)
-                               .disabled(behavior.disabled)
-                               .selected(behavior.selected)
-                               // variant, size, label, tooltip, on_click
-                               -> finish(button, refinement, children)
-  ```
+The `Button` descriptor (`src/components/button.rs`) is ported from
+`component-shell`'s `action.rs`:
 
-- `finish(element, refinement, children)` applies the refinement, extends the
-  children, and produces the `AnyElement`.
+```text
+ButtonMaterializer::materialize(request):
+  Button::new(payload.id)
+    .disabled(request.disabled()).selected(request.selected())
+    // for each recorded method: label, tooltip, loading, size, compact, variant
+    // request.on_click() -> managed click + invalidate
+  request.finish(button)
+```
 
-Styles are applied only through `StyleRefinement`, so the same `finish` serves
-every component. The `Button` arm reads the shared `Behavior`, exactly as the
-shell's `Component::Button` arm does.
+Styles are applied only through `finish`, so the same exit point serves every
+component, and the runtime never names `Button` itself.
 
 ## 5. Activation
 
@@ -89,9 +93,11 @@ all UI state stay managed.
 ## Tests covering the route
 
 - Rust `snapshot::tests` — decoding styles/methods/callbacks, argument kinds,
-  cycles, unknown components/operations.
-- Rust `materialize::tests` — component identity, behavior accumulation, style
-  folding, and that unknown methods are inert.
+  cycles, unknown operations.
+- Rust `materialize::tests` — op resolution, catalog method recording, and
+  constructor payloads.
+- Rust `registry::tests` — descriptor registration and lookup.
+- Rust `components::button::tests` — constructor/method payload recording.
 - Rust `style::tests` — the reflection table, parameter binding, and color
   parsing.
 - C# `RenderArenaTests` / `RenderContextTests` — arena encoding and the Button

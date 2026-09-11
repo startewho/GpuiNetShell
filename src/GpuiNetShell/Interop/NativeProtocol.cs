@@ -17,12 +17,13 @@ public static class NativeProtocol
     public const uint AbiVersion = 1;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C6E;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C6F;
 
-    // Components.
-    public const uint ComponentDiv = 1;
-    public const uint ComponentText = 2;
-    public const uint ComponentButton = 3;
+    // Components. Ids are registry indices: the native host resolves them
+    // against the registered component catalog.
+    public const uint ComponentDiv = 0;
+    public const uint ComponentText = 1;
+    public const uint ComponentButton = 2;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.
