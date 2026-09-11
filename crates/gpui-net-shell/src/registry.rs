@@ -14,24 +14,11 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt;
-use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{AnyElement, App, IntoElement, ParentElement, Refineable as _, StyleRefinement, Styled};
+use gpui::{AnyElement, IntoElement, ParentElement, Refineable as _, StyleRefinement, Styled};
 
-use crate::abi::GpuiNetCallbacks;
-
-/// Requests one managed re-render from inside a native callback that only has
-/// `&mut App`.
-pub type Invalidate = Rc<dyn Fn(&mut App)>;
-
-/// The native capabilities a materializer needs to bind events.
-#[derive(Clone)]
-pub struct HostContext {
-    pub session_id: u64,
-    pub callbacks: GpuiNetCallbacks,
-    pub invalidate: Invalidate,
-}
+use crate::context::HostContext;
 
 /// A registered component's position in the registry.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

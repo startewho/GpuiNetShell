@@ -20,8 +20,9 @@ use gpui::prelude::*;
 use gpui::{div, px, rgba, AnyElement, App, Context, IntoElement, Render, Window};
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
+use crate::context::{HostContext, Invalidate};
 use crate::materialize::materialize;
-use crate::registry::{FrozenComponentRegistry, HostContext, Invalidate};
+use crate::registry::FrozenComponentRegistry;
 use crate::schema::STATUS_OK;
 use crate::snapshot::{RenderSnapshot, Snapshot};
 

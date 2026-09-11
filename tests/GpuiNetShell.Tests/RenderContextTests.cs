@@ -99,6 +99,26 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[0].Flags);
     }
 
+    [Fact]
+    public void ComboboxRecordsOptionsSelectionAndTokens()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry());
+
+        ui.Combobox("theme").Options("Light", "Dark").Selected(1).OnChange(_ => { });
+
+        var descriptor = arena.Publish();
+        Assert.Equal(1u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentCombobox, descriptor.Nodes[0].Component);
+        // options + selected + tokens
+        Assert.Equal(3u, descriptor.OpsLen);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("options", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("Light\nDark", DecodePacked(descriptor.Ops[0].B, utf8));
+        Assert.Equal("tokens", DecodePacked(descriptor.Ops[2].A, utf8));
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

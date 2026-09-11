@@ -12,6 +12,7 @@
 
 mod abi;
 mod components;
+mod context;
 mod ffi;
 mod host;
 mod materialize;

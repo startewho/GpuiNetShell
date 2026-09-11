@@ -15,7 +15,7 @@ pub const ABI_VERSION: u32 = 1;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C70;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C71;
 
 // ---------------------------------------------------------------------------
 // Components
@@ -36,6 +36,8 @@ pub const COMPONENT_LABEL: u32 = 3;
 pub const COMPONENT_BADGE: u32 = 4;
 #[allow(dead_code)]
 pub const COMPONENT_PROGRESS: u32 = 5;
+#[allow(dead_code)]
+pub const COMPONENT_COMBOBOX: u32 = 6;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -81,7 +83,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C70);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C71);
     }
 
     #[test]

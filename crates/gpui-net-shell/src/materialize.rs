@@ -8,8 +8,9 @@
 
 use gpui::{AnyElement, StyleRefinement};
 
+use crate::context::HostContext;
 use crate::registry::{
-    ComponentArgument, ComponentDescriptor, ComponentPayload, FrozenComponentRegistry, HostContext,
+    ComponentArgument, ComponentDescriptor, ComponentPayload, FrozenComponentRegistry,
     MaterializeRequest, RecordedComponentMethod,
 };
 use crate::snapshot::{Node, Op, RenderSnapshot};

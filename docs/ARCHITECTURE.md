@@ -137,8 +137,8 @@ per method either: `ComponentDescriptor::method(name)` resolves a recorded name
 to its recorder. `resolve_ops` and the descriptor recorders are pure and tested
 without a window.
 
-The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, and
-`Progress`; each is one file in `src/components/`.
+The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, `Progress`,
+and `Combobox`; each is one file in `src/components/`.
 
 ## Root and overlays
 
@@ -146,9 +146,11 @@ The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, and
 owns the managed content view and paints the layers over it, back to front:
 
 1. **Content** — the `ShellView` the managed host describes.
-2. **Dialog stack** — a stack of title/body cards; only the topmost is
+2. **Popup** — one menu of items, each carrying a managed callback token; the
+   backdrop dismisses. `Combobox` opens it through the ingress.
+3. **Dialog stack** — a stack of title/body cards; only the topmost is
    interactive, and a single backdrop dims the content beneath the stack.
-3. **Notifications** — a top-right stack that dismisses itself after a short
+4. **Notifications** — a top-right stack that dismisses itself after a short
    lifetime.
 
 The window is rooted at `gpui_component::Root` wrapping our `Root`, so
@@ -156,9 +158,16 @@ The window is rooted at `gpui_component::Root` wrapping our `Root`, so
 `Button.Tooltip`) render on the window's own tooltip layer.
 
 Overlays are native: the managed host opens them through the command ingress
-(`OpenDialog`, `CloseDialog`, `PushNotification`), and the content is built from
-the request, so no overlay state crosses the ABI. The any-thread commands are
-delivered on the GPUI thread by the task `host::run` spawns.
+(`OpenDialog`, `CloseDialog`, `PushNotification`, and a component-triggered
+popup), and the content is built from the request, so no overlay state crosses
+the ABI. The any-thread commands are delivered on the GPUI thread by the task
+`host::run` spawns.
+
+Every overlay mutation ends in `Context::notify`, so the repaint is scheduled
+exactly like any other view change. Re-rendering the *content* is deliberately
+separate: `Root::invalidate_view` calls the managed `ShellView::refresh`, which
+marks the view dirty and notifies, so a clean content snapshot is not rebuilt
+just because an overlay opened.
 
 ## Application and events
 

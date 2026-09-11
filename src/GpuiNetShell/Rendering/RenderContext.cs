@@ -68,6 +68,14 @@ public sealed class RenderContext
         return new ProgressElement(this, index);
     }
 
+    /// <summary>Declares a combobox. <paramref name="id"/> is its stable identity.</summary>
+    public ComboboxElement Combobox(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCombobox);
+        _arena.SetNodeData(index, id);
+        return new ComboboxElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

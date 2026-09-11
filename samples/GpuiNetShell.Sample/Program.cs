@@ -30,7 +30,9 @@ return 0;
 internal sealed class GalleryView : View
 {
     private readonly GpuiApplication _application;
+    private readonly string[] _themes = ["Light", "Dark", "System"];
     private int _count;
+    private int _themeIndex;
 
     public GalleryView(GpuiApplication application)
     {
@@ -48,6 +50,20 @@ internal sealed class GalleryView : View
                    ,
                 ui.Text($"Count: {_count}").TextSize(28),
                 ui.Progress("progress").Value(_count / 101).P(20),
+                ui.HStack(
+                        ui.Label("Theme"),
+                        ui.Combobox("theme")
+                            .Options(_themes)
+                            .Selected(_themeIndex)
+                            .OnChange(index =>
+                            {
+                                _themeIndex = index;
+                                _application.PushNotification($"Theme: {_themes[index]}");
+                            })
+                    )
+                    .Gap(8)
+                    .ItemsCenter()
+                    .P(8),
                 ui.HStack(
                         ui.Button("increment")
                             .Label("Increment")

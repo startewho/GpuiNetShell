@@ -6,6 +6,7 @@
 
 pub mod badge;
 pub mod button;
+pub mod combobox;
 pub mod div;
 pub mod label;
 pub mod progress;
@@ -21,6 +22,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     label::register(registry);
     badge::register(registry);
     progress::register(registry);
+    combobox::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -42,7 +44,7 @@ mod tests {
                 .descriptors()
                 .map(|descriptor| descriptor.name())
                 .collect::<Vec<_>>(),
-            ["Div", "Text", "Button", "Label", "Badge", "Progress"]
+            ["Div", "Text", "Button", "Label", "Badge", "Progress", "Combobox"]
         );
     }
 }

@@ -12,7 +12,7 @@ use gpui::prelude::*;
 use gpui::{px, size, App, Bounds, TitlebarOptions, WindowBounds, WindowOptions};
 
 use crate::abi::GpuiNetCallbacks;
-use crate::root::{NotificationLevel, Root};
+use crate::root::{NotificationLevel, PopupItem, Root};
 use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK};
 use crate::view::ShellView;
 
@@ -23,6 +23,9 @@ const STATUS_INGRESS_POISONED: i32 = -22;
 /// A managed request delivered on the GPUI thread.
 enum Command {
     Invalidate,
+    OpenPopup {
+        items: Vec<PopupItem>,
+    },
     OpenDialog {
         title: String,
         body: String,
@@ -64,6 +67,11 @@ pub fn invalidate(session_id: u64) -> i32 {
     send(session_id, Command::Invalidate)
 }
 
+/// Opens the session's popup with the given items from any thread.
+pub fn open_popup(session_id: u64, items: Vec<PopupItem>) -> i32 {
+    send(session_id, Command::OpenPopup { items })
+}
+
 /// Opens a dialog with the given title and body from any thread.
 pub fn open_dialog(session_id: u64, title: String, body: String) -> i32 {
     send(session_id, Command::OpenDialog { title, body })
@@ -99,7 +107,7 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
 
             let registry = crate::components::catalog();
             let view = cx.new(|_| ShellView::new(application_id, callbacks, registry));
-            let root = cx.new(|_| Root::new(view));
+            let root = cx.new(|_| Root::new(view, application_id, callbacks));
 
             // Any-thread commands are delivered here, on the GPUI thread.
             let (sender, receiver) = async_channel::bounded(64);
@@ -112,6 +120,7 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                     cx.update(|cx| {
                         let _ = weak_root.update(cx, |root, cx| match command {
                             Command::Invalidate => root.invalidate_view(cx),
+                            Command::OpenPopup { items } => root.open_popup(items, cx),
                             Command::OpenDialog { title, body } => {
                                 root.open_dialog(title, body, cx)
                             }
