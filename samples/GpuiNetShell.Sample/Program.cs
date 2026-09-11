@@ -23,61 +23,164 @@ application.Run();
 return 0;
 
 /// <summary>
-/// A small gallery: labels and a badge, a progress bar, and buttons that
-/// increment, reset, open a dialog, or post a notification. The increment
-/// button carries a tooltip.
+/// A tabbed component gallery: one page per component, each showing how to use
+/// it. The tab bar itself is the <c>Tabs</c> component.
 /// </summary>
 internal sealed class GalleryView : View
 {
     private readonly GpuiApplication _application;
+    private readonly string[] _pages =
+    [
+        "Button",
+        "Label & Badge",
+        "Progress",
+        "Combobox",
+        "Radio",
+        "Overlays",
+    ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
-    private int _count;
+    private readonly string[] _options = ["Light", "Dark", "System"];
+
+    private int _page;
     private int _themeIndex;
+    private int _radioIndex;
 
     public GalleryView(GpuiApplication application)
     {
         _application = application;
     }
 
-    protected override Element Render(ref RenderContext ui) =>
+    protected override Element Render(ref RenderContext ui)
+    {
+        var page = _page switch
+        {
+            0 => ButtonPage(ref ui),
+            1 => LabelPage(ref ui),
+            2 => ProgressPage(ref ui),
+            3 => ComboboxPage(ref ui),
+            4 => RadioPage(ref ui),
+            _ => OverlayPage(ref ui),
+        };
+
+        return ui.VStack(
+                ui.Tabs("pages").Options(_pages).Selected(_page).OnChange(index => _page = index),
+                page
+            )
+            .Gap(20)
+            .P(24)
+            .Full()
+            .ItemsStart();
+    }
+
+    private Element ButtonPage(ref RenderContext ui) =>
         ui.VStack(
+                Section(ref ui, "Button", "Variants, sizes, and the loading/disabled states."),
                 ui.HStack(
-                        ui.Label("Counter").TextSize(18).FontSemibold(),
-                        ui.Badge(_count)
+                        ui.Button("b-primary")
+                            .Label("Primary")
+                            .Primary()
+                            .Tooltip("Primary action")
+                            .OnClick(() => { }),
+                        ui.Button("b-secondary").Label("Secondary").Secondary(),
+                        ui.Button("b-danger").Label("Danger").Danger(),
+                        ui.Button("b-success").Label("Success").Success(),
+                        ui.Button("b-ghost").Label("Ghost").Ghost(),
+                        ui.Button("b-link").Label("Link").Link()
+                    )
+                    .Gap(8)
+                    .ItemsCenter(),
+                ui.HStack(
+                        ui.Button("b-small").Label("Small").Size(ButtonSize.Small),
+                        ui.Button("b-medium").Label("Medium").Size(ButtonSize.Medium).Primary(),
+                        ui.Button("b-large").Label("Large").Size(ButtonSize.Large),
+                        ui.Button("b-loading").Label("Loading").Loading(),
+                        ui.Button("b-disabled").Label("Disabled").Disabled()
                     )
                     .Gap(8)
                     .ItemsCenter()
-                   ,
-                ui.Text($"Count: {_count}").TextSize(28),
-                ui.Progress("progress").Value(_count).P(20),
+            )
+            .Gap(16);
+
+    private Element LabelPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Label & Badge", "Labels at different sizes, badges for counts and dots."),
+                ui.HStack(
+                        ui.Label("Default"),
+                        ui.Label("Small").TextSize(12),
+                        ui.Label("Bold").FontBold(),
+                        ui.Label("Semibold").FontSemibold()
+                    )
+                    .Gap(16)
+                    .ItemsCenter(),
+                ui.HStack(
+                        ui.Label("Inbox"),
+                        ui.Badge(12),
+                        ui.Label("Errors"),
+                        ui.Badge(3),
+                        ui.Label("Online"),
+                        ui.Badge(1).Dot()
+                    )
+                    .Gap(12)
+                    .ItemsCenter()
+            )
+            .Gap(16);
+
+    private Element ProgressPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Progress", "Determinate values and the indeterminate animation."),
+                ui.Progress("p-25").Value(25).Full(),
+                ui.Progress("p-60").Value(60).Full(),
+                ui.Progress("p-90").Value(90).Full(),
+                ui.Progress("p-loading").Loading().Full()
+            )
+            .Gap(12);
+
+    private Element ComboboxPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Combobox", "Opens its options as a Bottom sheet; the choice is controlled."),
                 ui.HStack(
                         ui.Label("Theme"),
                         ui.Combobox("theme")
-                            .Options(_themes)
+                            .Options(_options)
                             .Selected(_themeIndex)
-                            .OnChange(index =>
-                            {
-                                _themeIndex = index;
-                                _application.PushNotification($"Theme: {_themes[index]}");
-                            })
+                            .OnChange(index => _themeIndex = index)
                     )
                     .Gap(8)
-                    .ItemsCenter()
-                    .P(8),
-                ui.HStack(
-                        ui.Button("increment")
-                            .Label("Increment")
-                            .Primary()
-                            .Tooltip("Increments the counter")
-                            .OnClick(() =>
-                            {
-                                _count++;
-                                this.Invalidate();
-                            }),
+                    .ItemsCenter(),
+                ui.Label($"Selected theme: {_options[_themeIndex]}")
+            )
+            .Gap(12);
 
-                        ui.Button("reset").Label("Reset").Secondary().OnClick(() => _count = 0),
+    private Element RadioPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Radio", "Controlled options; selecting one is reported through its token."),
+                ui.HStack(
+                        ui.Radio("r-light")
+                            .Label("Light")
+                            .Checked(_radioIndex == 0)
+                            .OnClick(() => _radioIndex = 0),
+                        ui.Radio("r-dark")
+                            .Label("Dark")
+                            .Checked(_radioIndex == 1)
+                            .OnClick(() => _radioIndex = 1),
+                        ui.Radio("r-system")
+                            .Label("System")
+                            .Checked(_radioIndex == 2)
+                            .OnClick(() => _radioIndex = 2)
+                    )
+                    .Gap(16)
+                    .ItemsCenter(),
+                ui.Label($"Selected option: {_options[_radioIndex]}")
+            )
+            .Gap(12);
+
+    private Element OverlayPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Overlays", "Dialogs, sheets and notifications are native layers over the content."),
+                ui.HStack(
                         ui.Button("dialog")
                             .Label("Open dialog")
+                            .Primary()
                             .OnClick(() =>
                                 _application.OpenDialog(
                                     "About GpuiNetShell",
@@ -98,19 +201,16 @@ internal sealed class GalleryView : View
                             .Success()
                             .OnClick(() =>
                                 _application.PushNotification(
-                                    $"Count is {_count}",
+                                    "Saved",
                                     NotificationLevel.Success
                                 )
                             )
                     )
                     .Gap(8)
                     .ItemsCenter()
-            .MinH(0)
-            .Full()
             )
-            .Gap(16)
-            .P(32)
-            .Full()
-            .ItemsCenter()
-          ;
+            .Gap(12);
+
+    private Element Section(ref RenderContext ui, string title, string description) =>
+        ui.VStack(ui.Label(title).TextSize(20).FontSemibold(), ui.Text(description)).Gap(4);
 }

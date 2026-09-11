@@ -10,6 +10,8 @@ pub mod combobox;
 pub mod div;
 pub mod label;
 pub mod progress;
+pub mod radio;
+pub mod tabs;
 pub mod text;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
@@ -23,6 +25,8 @@ pub fn register(registry: &mut ComponentRegistry) {
     badge::register(registry);
     progress::register(registry);
     combobox::register(registry);
+    radio::register(registry);
+    tabs::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -44,7 +48,7 @@ mod tests {
                 .descriptors()
                 .map(|descriptor| descriptor.name())
                 .collect::<Vec<_>>(),
-            ["Div", "Text", "Button", "Label", "Badge", "Progress", "Combobox"]
+            ["Div", "Text", "Button", "Label", "Badge", "Progress", "Combobox", "Radio", "Tabs",]
         );
     }
 }

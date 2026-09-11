@@ -144,6 +144,23 @@ public sealed unsafe class RenderContextTests
         ui.Notify();
     }
 
+    [Fact]
+    public void RadioAndTabsRecordTheirState()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Radio("r").Label("Light").Checked().OnClick(() => { });
+        ui.Tabs("t").Options("A", "B").Selected(1).OnChange(_ => { });
+
+        var descriptor = arena.Publish();
+        Assert.Equal(2u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentRadio, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTabs, descriptor.Nodes[1].Component);
+        // radio: label + checked + on_click; tabs: options + selected + tokens
+        Assert.Equal(6u, descriptor.OpsLen);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

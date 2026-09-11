@@ -105,6 +105,22 @@ public sealed class RenderContext
         return new ComboboxElement(this, index);
     }
 
+    /// <summary>Declares a radio option. <paramref name="id"/> is its stable identity.</summary>
+    public RadioElement Radio(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentRadio);
+        _arena.SetNodeData(index, id);
+        return new RadioElement(this, index);
+    }
+
+    /// <summary>Declares a tab bar. <paramref name="id"/> is its stable identity.</summary>
+    public TabsElement Tabs(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTabs);
+        _arena.SetNodeData(index, id);
+        return new TabsElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 
