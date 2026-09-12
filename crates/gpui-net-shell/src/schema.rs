@@ -11,11 +11,11 @@
 //! behavior is a generic `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C3E;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C41;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -120,6 +120,16 @@ pub const COMPONENT_DESCRIPTION_LIST: u32 = 43;
 pub const COMPONENT_FIELD: u32 = 44;
 #[allow(dead_code)]
 pub const COMPONENT_FORM: u32 = 45;
+#[allow(dead_code)]
+pub const COMPONENT_INPUT: u32 = 46;
+#[allow(dead_code)]
+pub const COMPONENT_NUMBER_INPUT: u32 = 47;
+#[allow(dead_code)]
+pub const COMPONENT_TEXTAREA: u32 = 48;
+#[allow(dead_code)]
+pub const COMPONENT_OTP_INPUT: u32 = 49;
+#[allow(dead_code)]
+pub const COMPONENT_SLIDER: u32 = 50;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -167,6 +177,19 @@ pub const CALLBACK_VALUE_NUMBER: u32 = 2;
 pub const CALLBACK_VALUE_STRING: u32 = 3;
 
 // ---------------------------------------------------------------------------
+// Input events
+// ---------------------------------------------------------------------------
+//
+// The `kind` word of the `input_event` callback.
+
+pub const INPUT_KEY_DOWN: u32 = 0;
+pub const INPUT_KEY_UP: u32 = 1;
+pub const INPUT_MOUSE_DOWN: u32 = 2;
+pub const INPUT_MOUSE_UP: u32 = 3;
+pub const INPUT_MOUSE_MOVE: u32 = 4;
+pub const INPUT_SCROLL: u32 = 5;
+
+// ---------------------------------------------------------------------------
 // Status codes
 // ---------------------------------------------------------------------------
 
@@ -186,7 +209,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C3E);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C41);
     }
 
     #[test]

@@ -151,6 +151,21 @@ pub struct GpuiNetCallbacks {
             out_root: *mut u32,
         ) -> i32,
     >,
+    /// Delivers a window input event (mouse, wheel, keyboard) to the managed
+    /// host. `kind` is one of the `INPUT_*` constants; `a`/`b`/`c` carry
+    /// position or delta; `text` carries a key name.
+    pub input_event: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            kind: u32,
+            flags: u32,
+            a: f32,
+            b: f32,
+            c: f32,
+            text: *const u8,
+            text_len: u32,
+        ) -> i32,
+    >,
 }
 
 impl std::fmt::Debug for GpuiNetCallbacks {

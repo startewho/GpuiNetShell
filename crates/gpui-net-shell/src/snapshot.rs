@@ -613,6 +613,7 @@ mod tests {
             invoke: None,
             resolve_rows: None,
             render_element: None,
+            input_event: None,
         };
         let snapshot = Snapshot {
             root: 0,

@@ -42,7 +42,8 @@
 | 8 | Tabs | 19 | Avatar | 30 | HoverCard | 41 | Stepper |
 | 9 | Scroll | 20 | Icon | 31 | DropdownMenu | 42 | DescriptionItem |
 | 10 | Scrollbar | 21 | Collapsible | 32 | DropdownButton | 43 | DescriptionList |
-| 44 | Field | 45 | Form | | | | |
+| 44 | Field | 45 | Form | 46 | Input | 47 | NumberInput |
+| 48 | Textarea | 49 | OtpInput | 50 | Slider | | |
 
 ## 批次记录
 
@@ -61,20 +62,24 @@
 | P7 | 元素回调：`render_element`（managed 渲染子树）；List/Select/DataTable 支持 `render_row`/`render_cell` | — | 5 | `…6C3C` | Collections（DataTable 自定义单元格） | ✅ |
 | Batch 6 | AccordionItem, Accordion, StepperItem, Stepper（typed children；省略 `Accordion.on_toggle`，因需 `Send + Sync`） | 38–41 | 5 | `…6C3D` | Disclosure | ✅ |
 | Batch 8 | DescriptionItem, DescriptionList, Field, Form（typed children） | 42–45 | 5 | `…6C3E` | Structure | ✅ |
+| 输入监控 | ABI `input_event`：鼠标按下/抬起/移动、滚轮、键盘转发到托管层（`InputEvent` + `View.OnInput`） | — | 6 | `…6C3F` | Input Monitor | ✅ |
+| 文字输入 | Input（保留 `InputState` + `on_change(string)`，订阅 `InputEvent::Change`） | 46 | 6 | `…6C40` | Input Monitor | ✅ |
+| 文字输入 2 | NumberInput, Textarea, OtpInput, Slider（保留 state + `on_change`） | 47–50 | 6 | `…6C41` | Text Input | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 当前统计
 
-- 已注册组件：**46**（id 0–45）。
+- 已注册组件：**51**（id 0–50）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。
   `TabBar`/`Accordion`/`Stepper`/`DescriptionList`/`Form` 用 `Carrier<T>` 承载 typed children。
+- **文字输入**：`Input`、`NumberInput`、`Textarea`、`OtpInput`、`Slider` 已支持（`on_change`）。
+  其余保留型：ColorPicker、Calendar、DatePicker、Editor。
+- **输入监控**：鼠标（按下/抬起/移动）、滚轮、键盘（按下/抬起）通过 `View.OnInput` 回调到托管层。
 - 剩余待移植：Menu 家族、Sidebar 家族、Settings 家族、Command 家族、Tree、Table、
-  Chat 家族（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、Retained
-  forms（Input/NumberInput/OtpInput/Slider/ColorPicker/Calendar/DatePicker）、Textarea、
-  Editor、RadioGroup、Window effects（Dialog/AlertDialog/Sheet/Notification）、
-  NativeMenu 家族。
+  Chat 家族（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、其余保留型
+  输入、RadioGroup、Window effects（Dialog/AlertDialog/Sheet/Notification）、NativeMenu 家族。
 - **当前 gpui-component 缺失、无法移植**：Empty 家族、Carousel 家族、Chat 顶层、Image。
 
 ## 待补的框架能力

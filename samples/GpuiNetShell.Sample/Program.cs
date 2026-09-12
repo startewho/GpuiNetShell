@@ -1,5 +1,6 @@
 using GpuiNetShell;
 using GpuiNetShell.Elements;
+using GpuiNetShell.Events;
 using GpuiNetShell.Rendering;
 
 // --check loads the native host and negotiates the ABI/schema without opening a
@@ -60,6 +61,8 @@ internal sealed class GalleryView : View
         "Collections",
         "Disclosure",
         "Structure",
+        "Input Monitor",
+        "Text Input",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -71,11 +74,30 @@ internal sealed class GalleryView : View
     private int _tabIndex;
     private string _selected = "";
     private int _step = 1;
+    private string _lastInput = "(none)";
+    private long _inputCount;
+    private long _moveCount;
+    private string _typed = "";
+    private string _number = "";
+    private string _textarea = "";
+    private string _otp = "";
+    private double _slider = 25;
 
     public GalleryView(GpuiApplication application, int initialPage = 0)
     {
         _application = application;
         _page = initialPage;
+        OnInput(input =>
+        {
+            _lastInput = input.ToString();
+            _inputCount++;
+            if (input.Kind == InputEventKind.MouseMove)
+            {
+                _moveCount++;
+                return;
+            }
+            Invalidate();
+        });
     }
 
     protected override Element Render(ref RenderContext ui)
@@ -99,6 +121,8 @@ internal sealed class GalleryView : View
             14 => CollectionsPage(ref ui),
             15 => DisclosurePage(ref ui),
             16 => StructurePage(ref ui),
+            17 => InputMonitorPage(ref ui),
+            18 => TextInputPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -563,6 +587,61 @@ internal sealed class GalleryView : View
                     )
             )
             .Gap(16);
+
+    private Element InputMonitorPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Input Monitor",
+                    "Mouse, wheel, and keyboard events forwarded to managed code."
+                ),
+                ui.Label("Click, scroll, or type anywhere; the last event is shown below."),
+                ui.Label($"Last: {_lastInput}").TextSize(16).FontMedium(),
+                ui.Label($"Events: {_inputCount}   Moves: {_moveCount}"),
+                ui.Input("monitor-input")
+                    .Placeholder("Type here…")
+                    .OnChange(text =>
+                    {
+                        _typed = text;
+                        Invalidate();
+                    }),
+                ui.Label($"Typed: {_typed}")
+            )
+            .Gap(12);
+
+    private Element TextInputPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Text Input",
+                    "Number input, textarea, one-time password, and slider."
+                ),
+                ui.NumberInput("num").Placeholder("Amount").OnChange(value =>
+                {
+                    _number = value;
+                    Invalidate();
+                }),
+                ui.Label($"Number: {_number}"),
+                ui.Textarea("notes").Placeholder("Notes…").OnChange(value =>
+                {
+                    _textarea = value;
+                    Invalidate();
+                }),
+                ui.Label($"Textarea: {_textarea.Length} chars"),
+                ui.OtpInput("otp").Length(6).Groups(2).OnChange(value =>
+                {
+                    _otp = value;
+                    Invalidate();
+                }),
+                ui.Label($"OTP: {_otp}"),
+                ui.Slider("vol").Min(0).Max(100).Value(_slider).OnChange(value =>
+                {
+                    _slider = value;
+                    Invalidate();
+                }),
+                ui.Label($"Slider: {_slider:0.#}")
+            )
+            .Gap(12);
 
     private Element Section(ref RenderContext ui, string title, string description) =>
         ui.VStack(ui.Label(title).TextSize(20).FontSemibold(), ui.Text(description)).Gap(4);

@@ -23,6 +23,7 @@ internal static unsafe class ManagedCallbacks
         Invoke = &InvokeCallback,
         ResolveRows = &ResolveRowsCallback,
         RenderElement = &RenderElementCallback,
+        InputEvent = &InputEventCallback,
     };
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -178,6 +179,30 @@ internal static unsafe class ManagedCallbacks
             return GpuiApplication.Find(sessionId) is { } application
                 ? application.OnRenderElement(token, arguments, argumentsLength, outArena, outRoot)
                 : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int InputEventCallback(
+        ulong sessionId,
+        uint kind,
+        uint flags,
+        float a,
+        float b,
+        float c,
+        byte* text,
+        uint textLength
+    )
+    {
+        try
+        {
+            return GpuiApplication.Find(sessionId) is { } application
+                ? application.OnInputEvent(kind, flags, a, b, c, text, textLength)
+                : NativeProtocol.StatusOk;
         }
         catch
         {

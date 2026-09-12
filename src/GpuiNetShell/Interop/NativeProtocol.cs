@@ -14,10 +14,10 @@ namespace GpuiNetShell.Interop;
 /// </remarks>
 public static class NativeProtocol
 {
-    public const uint AbiVersion = 5;
+    public const uint AbiVersion = 6;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C3E;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C41;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one
@@ -73,6 +73,11 @@ public static class NativeProtocol
     public const uint ComponentDescriptionList = 43;
     public const uint ComponentField = 44;
     public const uint ComponentForm = 45;
+    public const uint ComponentInput = 46;
+    public const uint ComponentNumberInput = 47;
+    public const uint ComponentTextarea = 48;
+    public const uint ComponentOtpInput = 49;
+    public const uint ComponentSlider = 50;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.
@@ -92,6 +97,20 @@ public static class NativeProtocol
     public const ushort ArgElement = 4;
     /// <summary>A two-argument method: <c>b</c> is a packed string, <c>c</c> a callback token.</summary>
     public const ushort ArgStringCallback = 5;
+
+    // Input event kinds delivered through the `input_event` callback.
+    public const uint InputKeyDown = 0;
+    public const uint InputKeyUp = 1;
+    public const uint InputMouseDown = 2;
+    public const uint InputMouseUp = 3;
+    public const uint InputMouseMove = 4;
+    public const uint InputScroll = 5;
+
+    // Modifier flags carried in `input_event`'s `flags`.
+    public const uint ModifierShift = 1;
+    public const uint ModifierControl = 2;
+    public const uint ModifierAlt = 4;
+    public const uint ModifierPlatform = 8;
 
     // Callback value kinds delivered through the `invoke` callback.
     public const uint CallbackValueNone = 0;

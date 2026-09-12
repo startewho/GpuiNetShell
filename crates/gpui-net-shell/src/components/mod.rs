@@ -23,10 +23,13 @@ pub mod form;
 pub mod group_box;
 pub mod hover_card;
 pub mod icon;
+pub mod input;
 pub mod kbd;
 pub mod label;
 pub mod link;
 pub mod list;
+pub mod number_input;
+pub mod otp_input;
 pub mod pagination;
 pub mod popover;
 pub mod progress;
@@ -37,6 +40,7 @@ pub mod scroll;
 pub mod select;
 pub mod separator;
 pub mod skeleton;
+pub mod slider;
 pub mod spinner;
 pub mod status_bar;
 pub mod stepper;
@@ -44,6 +48,7 @@ pub mod tab_bar;
 pub mod tabs;
 pub mod tag;
 pub mod text;
+pub mod textarea;
 pub mod tooltip;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
@@ -90,6 +95,11 @@ pub fn register(registry: &mut ComponentRegistry) {
     stepper::register(registry);
     description_list::register(registry);
     form::register(registry);
+    input::register(registry);
+    number_input::register(registry);
+    textarea::register(registry);
+    otp_input::register(registry);
+    slider::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -158,6 +168,11 @@ mod tests {
                 "DescriptionList",
                 "Field",
                 "Form",
+                "Input",
+                "NumberInput",
+                "Textarea",
+                "OtpInput",
+                "Slider",
             ]
         );
     }

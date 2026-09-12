@@ -169,6 +169,23 @@ public sealed class GpuiApplication
         return NativeProtocol.StatusOk;
     }
 
+    /// <summary>Delivers one window input event to the managed view.</summary>
+    internal unsafe int OnInputEvent(
+        uint kind,
+        uint flags,
+        float a,
+        float b,
+        float c,
+        byte* text,
+        uint textLength
+    )
+    {
+        var name = ReadUtf8(text, textLength);
+        var input = new InputEvent((InputEventKind)kind, (InputModifiers)flags, a, b, c, name);
+        _root?.DispatchInput(input);
+        return NativeProtocol.StatusOk;
+    }
+
     /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
     internal int OnRetireCallbacks(ulong generation)
     {

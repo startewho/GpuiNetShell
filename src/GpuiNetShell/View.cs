@@ -1,4 +1,5 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Events;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell;
@@ -11,6 +12,7 @@ namespace GpuiNetShell;
 public abstract class View
 {
     private Action? _invalidate;
+    private readonly List<Action<InputEvent>> _inputHandlers = [];
 
     internal void AttachInvalidator(Action invalidate) => _invalidate = invalidate;
 
@@ -20,6 +22,25 @@ public abstract class View
     /// repaints, replaying this view's <see cref="Render"/>.
     /// </summary>
     public void Invalidate() => _invalidate?.Invoke();
+
+    /// <summary>
+    /// Registers a handler for window input events (mouse, wheel, and keyboard).
+    /// Handlers run on the native application thread; call <see cref="Invalidate"/>
+    /// after changing state.
+    /// </summary>
+    public void OnInput(Action<InputEvent> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        _inputHandlers.Add(handler);
+    }
+
+    internal void DispatchInput(InputEvent input)
+    {
+        foreach (var handler in _inputHandlers)
+        {
+            handler(input);
+        }
+    }
 
     /// <summary>Describes this view's element tree for the current state.</summary>
     protected abstract Element Render(ref RenderContext ui);

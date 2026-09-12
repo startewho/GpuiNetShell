@@ -407,6 +407,27 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentField, descriptor.Nodes[4].Component);
     }
 
+    [Fact]
+    public void RetainedFormComponentsRecordTheirIdentities()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Input("a").Placeholder("...");
+        ui.NumberInput("b").Value("1");
+        ui.Textarea("c").Value("hi");
+        ui.OtpInput("d").Length(6).Groups(2);
+        ui.Slider("e").Min(0).Max(10).Value(3);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(5u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentInput, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentNumberInput, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTextarea, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentOtpInput, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentSlider, descriptor.Nodes[4].Component);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

@@ -17,7 +17,9 @@
 use std::rc::Rc;
 
 use gpui::prelude::*;
-use gpui::{div, px, rgba, AnyElement, App, Context, IntoElement, Render, Window};
+use gpui::{
+    div, px, rgba, AnyElement, App, Context, IntoElement, MouseButton, Render, ScrollDelta, Window,
+};
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
 use crate::context::{HostContext, Invalidate};
@@ -210,12 +212,185 @@ impl Render for ShellView {
         };
 
         let content = self.content(&host, window, cx);
+        let callbacks = self.callbacks;
+        let session = self.session_id;
         div()
+            .id("gpui-net-shell-root")
             .size_full()
             .bg(rgba(0xFFFFFFFF))
+            .on_mouse_down(MouseButton::Left, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_DOWN,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    0.0,
+                    "",
+                );
+            })
+            .on_mouse_down(MouseButton::Right, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_DOWN,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    1.0,
+                    "",
+                );
+            })
+            .on_mouse_down(MouseButton::Middle, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_DOWN,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    2.0,
+                    "",
+                );
+            })
+            .on_mouse_up(MouseButton::Left, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_UP,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    0.0,
+                    "",
+                );
+            })
+            .on_mouse_up(MouseButton::Right, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_UP,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    1.0,
+                    "",
+                );
+            })
+            .on_mouse_up(MouseButton::Middle, move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_UP,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    2.0,
+                    "",
+                );
+            })
+            .on_mouse_move(move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_MOUSE_MOVE,
+                    modifiers_flags(event.modifiers),
+                    f32::from(event.position.x),
+                    f32::from(event.position.y),
+                    0.0,
+                    "",
+                );
+            })
+            .on_scroll_wheel(move |event, _, _| {
+                let (dx, dy) = match event.delta {
+                    ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
+                    ScrollDelta::Lines(point) => (point.x, point.y),
+                };
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_SCROLL,
+                    modifiers_flags(event.modifiers),
+                    dx,
+                    dy,
+                    0.0,
+                    "",
+                );
+            })
+            .on_key_down(move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_KEY_DOWN,
+                    modifiers_flags(event.keystroke.modifiers),
+                    0.0,
+                    0.0,
+                    0.0,
+                    &event.keystroke.key,
+                );
+            })
+            .on_key_up(move |event, _, _| {
+                emit_input(
+                    callbacks,
+                    session,
+                    crate::schema::INPUT_KEY_UP,
+                    modifiers_flags(event.keystroke.modifiers),
+                    0.0,
+                    0.0,
+                    0.0,
+                    &event.keystroke.key,
+                );
+            })
             .child(content)
             .into_any_element()
     }
+}
+
+/// Forwards one window input event to the managed host, if it subscribed.
+#[allow(clippy::too_many_arguments)]
+fn emit_input(
+    callbacks: GpuiNetCallbacks,
+    session_id: u64,
+    kind: u32,
+    flags: u32,
+    a: f32,
+    b: f32,
+    c: f32,
+    text: &str,
+) {
+    if let Some(input) = callbacks.input_event {
+        // SAFETY: managed callback; it copies anything it keeps.
+        unsafe {
+            let _ = input(
+                session_id,
+                kind,
+                flags,
+                a,
+                b,
+                c,
+                text.as_ptr(),
+                text.len() as u32,
+            );
+        }
+    }
+}
+
+fn modifiers_flags(modifiers: gpui::Modifiers) -> u32 {
+    let mut flags = 0u32;
+    if modifiers.shift {
+        flags |= 1;
+    }
+    if modifiers.control {
+        flags |= 2;
+    }
+    if modifiers.alt {
+        flags |= 4;
+    }
+    if modifiers.platform {
+        flags |= 8;
+    }
+    flags
 }
 
 impl Drop for ShellView {

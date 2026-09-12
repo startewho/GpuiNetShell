@@ -443,6 +443,46 @@ public sealed class RenderContext
         return new FormElement(this, index);
     }
 
+    /// <summary>Declares a retained single-line text field.</summary>
+    public InputElement Input(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentInput);
+        _arena.SetNodeData(index, id);
+        return new InputElement(this, index);
+    }
+
+    /// <summary>Declares a retained numeric text field.</summary>
+    public NumberInputElement NumberInput(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentNumberInput);
+        _arena.SetNodeData(index, id);
+        return new NumberInputElement(this, index);
+    }
+
+    /// <summary>Declares a retained multi-line text field.</summary>
+    public TextareaElement Textarea(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTextarea);
+        _arena.SetNodeData(index, id);
+        return new TextareaElement(this, index);
+    }
+
+    /// <summary>Declares a retained one-time-password field.</summary>
+    public OtpInputElement OtpInput(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentOtpInput);
+        _arena.SetNodeData(index, id);
+        return new OtpInputElement(this, index);
+    }
+
+    /// <summary>Declares a retained numeric slider.</summary>
+    public SliderElement Slider(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSlider);
+        _arena.SetNodeData(index, id);
+        return new SliderElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 
