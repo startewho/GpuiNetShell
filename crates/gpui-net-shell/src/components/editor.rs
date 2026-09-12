@@ -7,9 +7,7 @@
 
 use std::sync::Arc;
 
-use gpui::{
-    AnyElement, Entity, IntoElement as _, Refineable as _, SharedString, Styled as _,
-};
+use gpui::{AnyElement, Entity, IntoElement as _, Refineable as _, SharedString, Styled as _};
 use gpui_component::input::{Editor, EditorState};
 
 use super::common::nonempty_id;

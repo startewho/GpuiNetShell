@@ -16,6 +16,7 @@ mod context;
 mod ffi;
 mod host;
 mod materialize;
+mod menu_action;
 // The registry exposes a descriptor API that the built-in catalog uses a subset
 // of today; the rest is the seam components are added through.
 #[allow(dead_code)]

@@ -636,6 +636,35 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentEditor, descriptor.Nodes[0].Component);
     }
 
+    [Fact]
+    public void NativeMenuRecordsTypedEntries()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.NativeMenuTrigger("menu", "Open")
+            .Add(
+                ui.NativeMenuItem("New").OnSelect(() => { }),
+                ui.NativeMenuSeparator(),
+                ui.NativeMenuItem("Quit").Checked()
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal(
+            (uint)NativeProtocol.ComponentNativeMenuTrigger,
+            descriptor.Nodes[0].Component
+        );
+        Assert.Equal(
+            (uint)NativeProtocol.ComponentNativeMenuItem,
+            descriptor.Nodes[1].Component
+        );
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

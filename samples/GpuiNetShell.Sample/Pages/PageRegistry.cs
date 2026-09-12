@@ -62,5 +62,6 @@ internal static class PageRegistry
             new OverlaysPage(),
             new WindowEffectsPage(),
             new EditorPage(),
+            new NativeMenuPage(),
         ];
 }

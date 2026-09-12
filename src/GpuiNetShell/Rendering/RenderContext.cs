@@ -780,6 +780,29 @@ public sealed class RenderContext
         return new EditorElement(this, index);
     }
 
+    /// <summary>Declares a typed native-menu item.</summary>
+    public NativeMenuItemElement NativeMenuItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentNativeMenuItem);
+        _arena.SetNodeData(index, label);
+        return new NativeMenuItemElement(this, index);
+    }
+
+    /// <summary>Declares a typed native-menu separator.</summary>
+    public NativeMenuSeparatorElement NativeMenuSeparator() =>
+        new NativeMenuSeparatorElement(
+            this,
+            _arena.AddNode(NativeProtocol.ComponentNativeMenuSeparator)
+        );
+
+    /// <summary>Declares a button that shows an OS native menu.</summary>
+    public NativeMenuTriggerElement NativeMenuTrigger(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentNativeMenuTrigger);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new NativeMenuTriggerElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

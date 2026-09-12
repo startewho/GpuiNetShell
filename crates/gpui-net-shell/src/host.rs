@@ -134,6 +134,21 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
             let root = cx.new(|cx| Root::new(view, application_id, callbacks, cx));
             let weak_root = root.downgrade();
 
+            // Native menu selection dispatches a `ManagedMenuAction`; route it to
+            // the managed callback token it carries, then request a re-render.
+            cx.on_action({
+                let weak_root = weak_root.clone();
+                move |action: &crate::menu_action::ManagedMenuAction, cx| {
+                    if let Some(click) = callbacks.click {
+                        // SAFETY: the managed callback copies anything it keeps.
+                        unsafe {
+                            let _ = click(application_id, action.token());
+                        }
+                    }
+                    let _ = weak_root.update(cx, |root, cx| root.invalidate_view(cx));
+                }
+            });
+
             // Any-thread commands are delivered here, on the GPUI thread, with
             // the window's current handle so overlay operations are
             // window-scoped.

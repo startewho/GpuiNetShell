@@ -35,6 +35,7 @@ pub mod label;
 pub mod link;
 pub mod list;
 pub mod menu;
+pub mod native_menu;
 pub mod number_input;
 pub mod otp_input;
 pub mod pagination;
@@ -126,6 +127,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     radio_group::register(registry);
     window_effects::register(registry);
     editor::register(registry);
+    native_menu::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -242,6 +244,9 @@ mod tests {
                 "Sheet",
                 "Notification",
                 "Editor",
+                "NativeMenuItem",
+                "NativeMenuSeparator",
+                "NativeMenuTrigger",
             ]
         );
     }
