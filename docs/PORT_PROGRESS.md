@@ -90,7 +90,7 @@
 | 修复 | Window effects 点击无反应：`gpui_component::Root` 只画子视图，sheet/dialog/notification 层需由应用根渲染；`Root::render` 补上 `render_sheet_layer`/`render_dialog_layer`/`render_notification_layer` | — | 6 | `…6C4B` | Window Effects | ✅ |
 | Batch 20 | Editor（keyed `EditorState`；`value`/`language` 首次渲染生效，`appearance`/`bordered`/`readonly`/`aria_label`） | 93 | 6 | `…6C4C` | Editor | ✅ |
 | Batch 21 | NativeMenuItem, NativeMenuSeparator, NativeMenuTrigger（OS 弹窗菜单；`ManagedMenuAction` 全局 action 监听把选择派发到托管回调） | 94–96 | 6 | `…6C4D` | Native Menu | ✅ |
-| 样式 | 长度值完整移植：新增 `Length`（px/%/rem/auto/relative），所有长度样式方法都有 `double`（px）与 `Length` 双重载 | — | 6 | `…6C4D` | 各页 | ✅ |
+| 样式 | 长度值完整移植：`int`=px、`double`(0–1)=百分比、`Length`=显式单位（auto/rem/relative）；所有长度样式方法三重载。 | — | 6 | `…6C4D` | 各页 | ✅ |
 | 修复 | 声明为布尔的方法被静默丢弃（托管发 Number，Rust 匹配 Boolean）：在 `materialize::record_methods` 按方法参数 schema 做强制转换。修复 Collapsible 内容不显示等 | — | 6 | `…6C4D` | Collapsible | ✅ |
 | 修复 | 宿主 `with_assets(())` 导致所有 SVG 图标缺失：改用 `gpui-kit-assets::Assets`。修复 Rating 不显示、侧栏无图标、Clipboard 无按钮 | — | 6 | `…6C4D` | Rating / Clipboard | ✅ |
 | 修复 | Chat 页滚动记录未受限：`MessageScroller` 加 `.H(320)` 使其真正虚拟化，不再展开整段日志 | — | 6 | `…6C4D` | Chat | ✅ |

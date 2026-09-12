@@ -709,6 +709,25 @@ public sealed unsafe class RenderContextTests
         );
     }
 
+    [Fact]
+    public void IntIsPixelsAndFractionIsPercent()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Div().W(200).H(0.5).MinH(Length.Auto);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(3u, descriptor.OpsLen);
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("w", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal(200.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[0].B));
+        Assert.Equal("h", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal("50%", DecodePacked(descriptor.Ops[1].B, utf8));
+        Assert.Equal("min_h", DecodePacked(descriptor.Ops[2].A, utf8));
+        Assert.Equal("auto", DecodePacked(descriptor.Ops[2].B, utf8));
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);
