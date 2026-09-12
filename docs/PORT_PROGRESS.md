@@ -47,6 +47,7 @@
 | 52 | Calendar | 53 | DatePicker | 54 | MenuItem | 55 | MenuSeparator |
 | 56 | Menu | 57 | MenuBar | 58 | SidebarMenuItem | 59 | SidebarMenu |
 | 60 | SidebarHeader | 61 | SidebarFooter | 62 | Sidebar | 63 | SidebarToggleButton |
+| 64 | SettingItem | 65 | SettingGroup | 66 | SettingPage | 67 | Settings |
 
 ## 批次记录
 
@@ -71,11 +72,12 @@
 | 文字输入 3 | ColorPicker, Calendar, DatePicker（保留 state + `on_change`） | 51–53 | 6 | `…6C42` | Date & Color | ✅ |
 | Batch 11 | MenuItem, MenuSeparator, Menu, MenuBar（适配为窗口内菜单栏，用 managed 回调替代 action） | 54–57 | 6 | `…6C43` | Menu Bar | ✅ |
 | Batch 12 | SidebarMenuItem, SidebarMenu, SidebarHeader, SidebarFooter, Sidebar, SidebarToggleButton | 58–63 | 6 | `…6C44` | Sidebar | ✅ |
+| Batch 13 | SettingItem, SettingGroup, SettingPage, Settings（typed children + 懒槽） | 64–67 | 6 | `…6C45` | Settings | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 当前统计
 
-- 已注册组件：**64**（id 0–63）。
+- 已注册组件：**68**（id 0–67）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。

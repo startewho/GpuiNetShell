@@ -570,6 +570,34 @@ public sealed class RenderContext
             _arena.AddNode(NativeProtocol.ComponentSidebarToggleButton)
         );
 
+    /// <summary>Declares a setting item.</summary>
+    public SettingItemElement SettingItem(string title)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSettingItem);
+        _arena.SetNodeData(index, title);
+        return new SettingItemElement(this, index);
+    }
+
+    /// <summary>Declares a setting group.</summary>
+    public SettingGroupElement SettingGroup() =>
+        new SettingGroupElement(this, _arena.AddNode(NativeProtocol.ComponentSettingGroup));
+
+    /// <summary>Declares a setting page.</summary>
+    public SettingPageElement SettingPage(string title)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSettingPage);
+        _arena.SetNodeData(index, title);
+        return new SettingPageElement(this, index);
+    }
+
+    /// <summary>Declares a settings surface.</summary>
+    public SettingsElement Settings(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSettings);
+        _arena.SetNodeData(index, id);
+        return new SettingsElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

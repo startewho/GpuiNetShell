@@ -43,6 +43,7 @@ pub mod resizable;
 pub mod scroll;
 pub mod select;
 pub mod separator;
+pub mod settings;
 pub mod sidebar;
 pub mod skeleton;
 pub mod slider;
@@ -110,6 +111,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     date_picker::register(registry);
     menu::register(registry);
     sidebar::register(registry);
+    settings::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -196,6 +198,10 @@ mod tests {
                 "SidebarFooter",
                 "Sidebar",
                 "SidebarToggleButton",
+                "SettingItem",
+                "SettingGroup",
+                "SettingPage",
+                "Settings",
             ]
         );
     }
