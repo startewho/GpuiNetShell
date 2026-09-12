@@ -12,7 +12,12 @@ internal sealed class ClipboardPage : GalleryPage
             ref ui,
             "Clipboard",
             "A button that copies a configured string to the system clipboard.",
-            ui.Clipboard("copy").Value("gpui-net-shell").Tooltip("Copy the project name"),
-            ui.Label("Press the button to copy the text.")
+            ui.HStack(
+                    ui.Clipboard("copy").Value("gpui-net-shell").Tooltip("Copy the project name"),
+                    ui.Label("gpui-net-shell")
+                )
+                .ItemsCenter()
+                .Gap(8),
+            ui.Label("Press the copy button to put the text on the clipboard.")
         );
 }

@@ -803,6 +803,29 @@ public sealed class RenderContext
         return new NativeMenuTriggerElement(this, index);
     }
 
+    /// <summary>Declares a typed context-menu item.</summary>
+    public ContextMenuItemElement ContextMenuItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentContextMenuItem);
+        _arena.SetNodeData(index, label);
+        return new ContextMenuItemElement(this, index);
+    }
+
+    /// <summary>Declares a typed context-menu separator.</summary>
+    public ContextMenuSeparatorElement ContextMenuSeparator() =>
+        new ContextMenuSeparatorElement(
+            this,
+            _arena.AddNode(NativeProtocol.ComponentContextMenuSeparator)
+        );
+
+    /// <summary>Attaches a right-click menu to its target children.</summary>
+    public ContextMenuElement ContextMenu(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentContextMenu);
+        _arena.SetNodeData(index, id);
+        return new ContextMenuElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

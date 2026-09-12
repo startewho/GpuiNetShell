@@ -17,6 +17,7 @@ gpui = { package = "gpui-pre", version = "0.3.1" }
 gpui_platform = { package = "gpui-pre-platform", version = "0.3.1" }
 gpui-base = { path = "external/gpui-kit/crates/base", version = "0.6.1" }
 gpui-component = { path = "external/gpui-kit/crates/component", version = "0.6.1" }
+gpui-kit-assets = { path = "external/gpui-kit/crates/assets", version = "0.6.1" }
 
 # Frame-sensitive GPUI, layout, text and component code stays optimized in Debug
 # builds so a debug host does not stall on an unoptimized full-frame draw.

@@ -10,7 +10,7 @@ use gpui::{AnyElement, App, StyleRefinement, Window};
 
 use crate::context::HostContext;
 use crate::registry::{
-    ChildElement, ComponentArgument, ComponentDescriptor, ComponentPayload,
+    ArgumentSchema, ChildElement, ComponentArgument, ComponentDescriptor, ComponentPayload,
     FrozenComponentRegistry, MaterializeRequest, NodeFactory, RecordedComponentMethod,
 };
 use crate::snapshot::{Node, Op, RenderSnapshot};
@@ -180,24 +180,49 @@ fn record_methods(
         let Some(method) = descriptor.method(name) else {
             continue;
         };
-        if let Ok(payload) = method.record(&argument_list(arguments)) {
+        // Coerce each argument to the kind the method declared. The managed
+        // surface has no boolean channel, so a boolean arrives as a number (or
+        // a string); without this a `ComponentArgument::Boolean` matcher would
+        // reject it and the method would be dropped silently.
+        let schemas = method.arguments();
+        let list = arguments
+            .iter()
+            .enumerate()
+            .map(|(index, argument)| {
+                coerce_argument(
+                    argument,
+                    schemas.get(index).map(|descriptor| descriptor.schema()),
+                )
+            })
+            .collect::<Vec<_>>();
+        if let Ok(payload) = method.record(&list) {
             recorded.push(RecordedComponentMethod::new(method.name(), payload));
         }
     }
     recorded
 }
 
-fn argument_list(arguments: &[StyleArg]) -> Vec<ComponentArgument> {
-    arguments
-        .iter()
-        .map(|argument| match argument {
-            StyleArg::Number(value) => ComponentArgument::Number(f64::from(*value)),
-            StyleArg::String(value) => ComponentArgument::String(value.clone()),
-            StyleArg::Enum(value) => ComponentArgument::Enum(value.clone()),
-            StyleArg::Callback(token) => ComponentArgument::Callback(*token),
-            StyleArg::Element(node) => ComponentArgument::Element(*node),
-        })
-        .collect()
+/// Applies a method's declared schema to a recorded argument.
+fn coerce_argument(argument: &StyleArg, schema: Option<ArgumentSchema>) -> ComponentArgument {
+    match (argument, schema) {
+        (StyleArg::Number(value), Some(ArgumentSchema::Boolean)) => {
+            ComponentArgument::Boolean(*value != 0.0 && !value.is_nan())
+        }
+        (StyleArg::String(value), Some(ArgumentSchema::Boolean)) => {
+            ComponentArgument::Boolean(!value.is_empty())
+        }
+        (StyleArg::Enum(value), Some(ArgumentSchema::Enum(_))) => {
+            ComponentArgument::Enum(value.clone())
+        }
+        (StyleArg::String(value), Some(ArgumentSchema::Enum(_))) => {
+            ComponentArgument::Enum(value.clone())
+        }
+        (StyleArg::Number(value), _) => ComponentArgument::Number(f64::from(*value)),
+        (StyleArg::String(value), _) => ComponentArgument::String(value.clone()),
+        (StyleArg::Enum(value), _) => ComponentArgument::Enum(value.clone()),
+        (StyleArg::Callback(token), _) => ComponentArgument::Callback(*token),
+        (StyleArg::Element(node), _) => ComponentArgument::Element(*node),
+    }
 }
 
 /// Folds a node's ops into a style refinement and a behavior.

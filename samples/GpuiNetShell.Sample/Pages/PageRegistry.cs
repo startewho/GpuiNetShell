@@ -59,9 +59,9 @@ internal static class PageRegistry
             new CommandPage(),
             new ChatPage(),
             new PopoverPage(),
-            new OverlaysPage(),
             new WindowEffectsPage(),
             new EditorPage(),
             new NativeMenuPage(),
+            new ContextMenuPage(),
         ];
 }

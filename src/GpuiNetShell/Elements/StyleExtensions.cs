@@ -38,6 +38,14 @@ public static class StyleExtensions
         return element;
     }
 
+    /// <summary>Records an arbitrary style method taking a length argument.</summary>
+    public static T Style<T>(this T element, string method, Length length)
+        where T : Element
+    {
+        element.Arena.AddParamStyleString(element.Index, method, length.Wire);
+        return element;
+    }
+
     /// <summary>Records an arbitrary style method taking a color argument.</summary>
     public static T StyleColor<T>(this T element, string method, string color)
         where T : Element
@@ -101,66 +109,300 @@ public static class StyleExtensions
     public static T Absolute<T>(this T element)
         where T : Element => element.Style("absolute");
 
-    // Length styles.
+    // Length styles. Each keeps a pixel overload and adds a `Length` overload.
     public static T W<T>(this T element, double pixels)
         where T : Element => element.Style("w", pixels);
+
+    public static T W<T>(this T element, Length length)
+        where T : Element => element.Style("w", length);
 
     public static T H<T>(this T element, double pixels)
         where T : Element => element.Style("h", pixels);
 
+    public static T H<T>(this T element, Length length)
+        where T : Element => element.Style("h", length);
+
     public static T Size<T>(this T element, double pixels)
         where T : Element => element.Style("size", pixels);
+
+    public static T Size<T>(this T element, Length length)
+        where T : Element => element.Style("size", length);
 
     public static T MinW<T>(this T element, double pixels)
         where T : Element => element.Style("min_w", pixels);
 
+    public static T MinW<T>(this T element, Length length)
+        where T : Element => element.Style("min_w", length);
+
     public static T MinH<T>(this T element, double pixels)
         where T : Element => element.Style("min_h", pixels);
+
+    public static T MinH<T>(this T element, Length length)
+        where T : Element => element.Style("min_h", length);
+
+    public static T MinSize<T>(this T element, double pixels)
+        where T : Element => element.Style("min_size", pixels);
+
+    public static T MinSize<T>(this T element, Length length)
+        where T : Element => element.Style("min_size", length);
 
     public static T MaxW<T>(this T element, double pixels)
         where T : Element => element.Style("max_w", pixels);
 
+    public static T MaxW<T>(this T element, Length length)
+        where T : Element => element.Style("max_w", length);
+
     public static T MaxH<T>(this T element, double pixels)
         where T : Element => element.Style("max_h", pixels);
+
+    public static T MaxH<T>(this T element, Length length)
+        where T : Element => element.Style("max_h", length);
+
+    public static T MaxSize<T>(this T element, double pixels)
+        where T : Element => element.Style("max_size", pixels);
+
+    public static T MaxSize<T>(this T element, Length length)
+        where T : Element => element.Style("max_size", length);
 
     public static T P<T>(this T element, double pixels)
         where T : Element => element.Style("p", pixels);
 
+    public static T P<T>(this T element, Length length)
+        where T : Element => element.Style("p", length);
+
     public static T Px<T>(this T element, double pixels)
         where T : Element => element.Style("px", pixels);
+
+    public static T Px<T>(this T element, Length length)
+        where T : Element => element.Style("px", length);
 
     public static T Py<T>(this T element, double pixels)
         where T : Element => element.Style("py", pixels);
 
+    public static T Py<T>(this T element, Length length)
+        where T : Element => element.Style("py", length);
+
+    public static T Pt<T>(this T element, double pixels)
+        where T : Element => element.Style("pt", pixels);
+
+    public static T Pt<T>(this T element, Length length)
+        where T : Element => element.Style("pt", length);
+
+    public static T Pb<T>(this T element, double pixels)
+        where T : Element => element.Style("pb", pixels);
+
+    public static T Pb<T>(this T element, Length length)
+        where T : Element => element.Style("pb", length);
+
+    public static T Pl<T>(this T element, double pixels)
+        where T : Element => element.Style("pl", pixels);
+
+    public static T Pl<T>(this T element, Length length)
+        where T : Element => element.Style("pl", length);
+
+    public static T Pr<T>(this T element, double pixels)
+        where T : Element => element.Style("pr", pixels);
+
+    public static T Pr<T>(this T element, Length length)
+        where T : Element => element.Style("pr", length);
+
     public static T M<T>(this T element, double pixels)
         where T : Element => element.Style("m", pixels);
+
+    public static T M<T>(this T element, Length length)
+        where T : Element => element.Style("m", length);
 
     public static T Mx<T>(this T element, double pixels)
         where T : Element => element.Style("mx", pixels);
 
+    public static T Mx<T>(this T element, Length length)
+        where T : Element => element.Style("mx", length);
+
     public static T My<T>(this T element, double pixels)
         where T : Element => element.Style("my", pixels);
+
+    public static T My<T>(this T element, Length length)
+        where T : Element => element.Style("my", length);
+
+    public static T Mt<T>(this T element, double pixels)
+        where T : Element => element.Style("mt", pixels);
+
+    public static T Mt<T>(this T element, Length length)
+        where T : Element => element.Style("mt", length);
+
+    public static T Mb<T>(this T element, double pixels)
+        where T : Element => element.Style("mb", pixels);
+
+    public static T Mb<T>(this T element, Length length)
+        where T : Element => element.Style("mb", length);
+
+    public static T Ml<T>(this T element, double pixels)
+        where T : Element => element.Style("ml", pixels);
+
+    public static T Ml<T>(this T element, Length length)
+        where T : Element => element.Style("ml", length);
+
+    public static T Mr<T>(this T element, double pixels)
+        where T : Element => element.Style("mr", pixels);
+
+    public static T Mr<T>(this T element, Length length)
+        where T : Element => element.Style("mr", length);
+
+    public static T Inset<T>(this T element, double pixels)
+        where T : Element => element.Style("inset", pixels);
+
+    public static T Inset<T>(this T element, Length length)
+        where T : Element => element.Style("inset", length);
+
+    public static T Top<T>(this T element, double pixels)
+        where T : Element => element.Style("top", pixels);
+
+    public static T Top<T>(this T element, Length length)
+        where T : Element => element.Style("top", length);
+
+    public static T Bottom<T>(this T element, double pixels)
+        where T : Element => element.Style("bottom", pixels);
+
+    public static T Bottom<T>(this T element, Length length)
+        where T : Element => element.Style("bottom", length);
+
+    public static T Left<T>(this T element, double pixels)
+        where T : Element => element.Style("left", pixels);
+
+    public static T Left<T>(this T element, Length length)
+        where T : Element => element.Style("left", length);
+
+    public static T Right<T>(this T element, double pixels)
+        where T : Element => element.Style("right", pixels);
+
+    public static T Right<T>(this T element, Length length)
+        where T : Element => element.Style("right", length);
 
     public static T Gap<T>(this T element, double pixels)
         where T : Element => element.Style("gap", pixels);
 
+    public static T Gap<T>(this T element, Length length)
+        where T : Element => element.Style("gap", length);
+
     public static T GapX<T>(this T element, double pixels)
         where T : Element => element.Style("gap_x", pixels);
+
+    public static T GapX<T>(this T element, Length length)
+        where T : Element => element.Style("gap_x", length);
 
     public static T GapY<T>(this T element, double pixels)
         where T : Element => element.Style("gap_y", pixels);
 
+    public static T GapY<T>(this T element, Length length)
+        where T : Element => element.Style("gap_y", length);
+
     public static T Rounded<T>(this T element, double pixels)
         where T : Element => element.Style("rounded", pixels);
+
+    public static T Rounded<T>(this T element, Length length)
+        where T : Element => element.Style("rounded", length);
+
+    public static T RoundedT<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_t", pixels);
+
+    public static T RoundedT<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_t", length);
+
+    public static T RoundedB<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_b", pixels);
+
+    public static T RoundedB<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_b", length);
+
+    public static T RoundedL<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_l", pixels);
+
+    public static T RoundedL<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_l", length);
+
+    public static T RoundedR<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_r", pixels);
+
+    public static T RoundedR<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_r", length);
+
+    public static T RoundedTl<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_tl", pixels);
+
+    public static T RoundedTl<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_tl", length);
+
+    public static T RoundedTr<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_tr", pixels);
+
+    public static T RoundedTr<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_tr", length);
+
+    public static T RoundedBl<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_bl", pixels);
+
+    public static T RoundedBl<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_bl", length);
+
+    public static T RoundedBr<T>(this T element, double pixels)
+        where T : Element => element.Style("rounded_br", pixels);
+
+    public static T RoundedBr<T>(this T element, Length length)
+        where T : Element => element.Style("rounded_br", length);
 
     public static T Border<T>(this T element, double pixels)
         where T : Element => element.Style("border", pixels);
 
+    public static T Border<T>(this T element, Length length)
+        where T : Element => element.Style("border", length);
+
+    public static T BorderT<T>(this T element, double pixels)
+        where T : Element => element.Style("border_t", pixels);
+
+    public static T BorderT<T>(this T element, Length length)
+        where T : Element => element.Style("border_t", length);
+
+    public static T BorderB<T>(this T element, double pixels)
+        where T : Element => element.Style("border_b", pixels);
+
+    public static T BorderB<T>(this T element, Length length)
+        where T : Element => element.Style("border_b", length);
+
+    public static T BorderL<T>(this T element, double pixels)
+        where T : Element => element.Style("border_l", pixels);
+
+    public static T BorderL<T>(this T element, Length length)
+        where T : Element => element.Style("border_l", length);
+
+    public static T BorderR<T>(this T element, double pixels)
+        where T : Element => element.Style("border_r", pixels);
+
+    public static T BorderR<T>(this T element, Length length)
+        where T : Element => element.Style("border_r", length);
+
+    public static T BorderX<T>(this T element, double pixels)
+        where T : Element => element.Style("border_x", pixels);
+
+    public static T BorderX<T>(this T element, Length length)
+        where T : Element => element.Style("border_x", length);
+
+    public static T BorderY<T>(this T element, double pixels)
+        where T : Element => element.Style("border_y", pixels);
+
+    public static T BorderY<T>(this T element, Length length)
+        where T : Element => element.Style("border_y", length);
+
     public static T TextSize<T>(this T element, double pixels)
         where T : Element => element.Style("text_size", pixels);
 
+    public static T TextSize<T>(this T element, Length length)
+        where T : Element => element.Style("text_size", length);
+
     public static T LineHeight<T>(this T element, double multiplier)
         where T : Element => element.Style("line_height", multiplier);
+
+    public static T LineHeight<T>(this T element, Length length)
+        where T : Element => element.Style("line_height", length);
 
     // Number styles.
     public static T Opacity<T>(this T element, double value)
@@ -174,6 +416,9 @@ public static class StyleExtensions
 
     public static T FlexBasis<T>(this T element, double pixels)
         where T : Element => element.Style("flex_basis", pixels);
+
+    public static T FlexBasis<T>(this T element, Length length)
+        where T : Element => element.Style("flex_basis", length);
 
     public static T AspectRatio<T>(this T element, double ratio)
         where T : Element => element.Style("aspect_ratio", ratio);
@@ -239,6 +484,9 @@ public static class StyleExtensions
 
     public static T ScrollbarWidth<T>(this T element, double pixels)
         where T : Element => element.Style("scrollbar_width", pixels);
+
+    public static T ScrollbarWidth<T>(this T element, Length length)
+        where T : Element => element.Style("scrollbar_width", length);
 
     // Color styles.
     public static T Bg<T>(this T element, string color)

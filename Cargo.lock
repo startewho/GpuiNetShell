@@ -2256,6 +2256,7 @@ dependencies = [
  "async-channel",
  "gpui-base",
  "gpui-component",
+ "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
 ]

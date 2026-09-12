@@ -10,10 +10,9 @@ use std::sync::{Mutex, OnceLock};
 
 use gpui::prelude::*;
 use gpui::{px, size, App, Bounds, TitlebarOptions, WindowBounds, WindowOptions};
-use gpui_base::Placement;
 
 use crate::abi::GpuiNetCallbacks;
-use crate::root::{NotificationLevel, PopupItem, Root};
+use crate::root::{PopupItem, Root};
 use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK};
 use crate::view::ShellView;
 
@@ -24,24 +23,7 @@ const STATUS_INGRESS_POISONED: i32 = -22;
 /// A managed request delivered on the GPUI thread.
 enum Command {
     Invalidate,
-    OpenPopup {
-        items: Vec<PopupItem>,
-    },
-    OpenDialog {
-        title: String,
-        body: String,
-    },
-    CloseDialog,
-    OpenSheet {
-        placement: Placement,
-        title: String,
-        body: String,
-    },
-    CloseSheet,
-    Notify {
-        message: String,
-        level: NotificationLevel,
-    },
+    OpenPopup { items: Vec<PopupItem> },
 }
 
 type Ingress = Mutex<HashMap<u64, async_channel::Sender<Command>>>;
@@ -79,38 +61,6 @@ pub fn open_popup(session_id: u64, items: Vec<PopupItem>) -> i32 {
     send(session_id, Command::OpenPopup { items })
 }
 
-/// Opens a dialog with the given title and body from any thread.
-pub fn open_dialog(session_id: u64, title: String, body: String) -> i32 {
-    send(session_id, Command::OpenDialog { title, body })
-}
-
-/// Closes the topmost dialog from any thread.
-pub fn close_dialog(session_id: u64) -> i32 {
-    send(session_id, Command::CloseDialog)
-}
-
-/// Opens a sheet on the given edge from any thread.
-pub fn open_sheet(session_id: u64, placement: Placement, title: String, body: String) -> i32 {
-    send(
-        session_id,
-        Command::OpenSheet {
-            placement,
-            title,
-            body,
-        },
-    )
-}
-
-/// Closes the sheet from any thread.
-pub fn close_sheet(session_id: u64) -> i32 {
-    send(session_id, Command::CloseSheet)
-}
-
-/// Posts a notification from any thread.
-pub fn push_notification(session_id: u64, message: String, level: NotificationLevel) -> i32 {
-    send(session_id, Command::Notify { message, level })
-}
-
 /// Runs one native application until its window closes. Blocking.
 pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
     if callbacks.render.is_none() || callbacks.render_completed.is_none() {
@@ -125,7 +75,7 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
     }
 
     gpui_platform::application()
-        .with_assets(())
+        .with_assets(gpui_kit_assets::Assets)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
 
@@ -185,23 +135,6 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                             let _ = weak_root.update(cx, |root, cx| match command {
                                 Command::Invalidate => root.invalidate_view(cx),
                                 Command::OpenPopup { items } => root.open_popup(items, window, cx),
-                                Command::OpenDialog { title, body } => {
-                                    root.open_message_dialog(title, body, window, cx)
-                                }
-                                Command::CloseDialog => {
-                                    root.close_dialog(window, cx);
-                                }
-                                Command::OpenSheet {
-                                    placement,
-                                    title,
-                                    body,
-                                } => root.open_message_sheet(placement, title, body, window, cx),
-                                Command::CloseSheet => {
-                                    root.close_sheet(window, cx);
-                                }
-                                Command::Notify { message, level } => {
-                                    root.push_notification(message, level, window, cx)
-                                }
                             });
                         });
                     });

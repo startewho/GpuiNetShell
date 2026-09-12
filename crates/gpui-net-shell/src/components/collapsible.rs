@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use gpui::AnyElement;
+use gpui::{AnyElement, IntoElement as _, ParentElement as _, Refineable as _, Styled as _};
 use gpui_component::collapsible::Collapsible;
 
 use crate::registry::{
@@ -41,13 +41,16 @@ impl ComponentMaterializer for CollapsibleMaterializer {
                 CollapsibleOp::MotionId(id) => component.motion_id(id.clone()),
             };
         }
-        if let Some(content) = request.take_slot("content")? {
+        let content = request.take_slot("content")?;
+        component.style().refine(&request.take_style());
+        // The trigger (ordinary children) renders first; the reveal follows it.
+        component.extend(request.take_children());
+        if let Some(content) = content {
             component = component.content(content);
         }
-        request.finish(component)
+        Ok(component.into_any_element())
     }
 }
-
 pub(super) fn register(registry: &mut ComponentRegistry) {
     registry
         .register(

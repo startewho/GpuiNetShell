@@ -665,6 +665,50 @@ public sealed unsafe class RenderContextTests
         );
     }
 
+    [Fact]
+    public void LengthStylesRecordPercentagesRemsAndAuto()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Div().W(Length.Percent(100)).H(Length.Px(20)).MinH(Length.Auto);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(3u, descriptor.OpsLen);
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("w", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("100%", DecodePacked(descriptor.Ops[0].B, utf8));
+        Assert.Equal("20px", DecodePacked(descriptor.Ops[1].B, utf8));
+        Assert.Equal("auto", DecodePacked(descriptor.Ops[2].B, utf8));
+    }
+
+    [Fact]
+    public void ContextMenuRecordsTargetAndEntries()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.ContextMenu("menu")
+            .Target(ui.Label("Right-click me"))
+            .Items(
+                ui.ContextMenuItem("Copy").OnSelect(() => { }),
+                ui.ContextMenuSeparator()
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentContextMenu, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentLabel, descriptor.Nodes[1].Component);
+        Assert.Equal(
+            (uint)NativeProtocol.ComponentContextMenuItem,
+            descriptor.Nodes[2].Component
+        );
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

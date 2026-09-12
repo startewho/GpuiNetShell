@@ -55,7 +55,7 @@
 | 84 | Marker | 85 | Message | 86 | ShimmerText | 87 | MessageScroller |
 | 88 | RadioGroup | 89 | Dialog | 90 | AlertDialog | 91 | Sheet |
 | 92 | Notification | 93 | Editor | 94 | NativeMenuItem | 95 | NativeMenuSeparator |
-| 96 | NativeMenuTrigger | | | | | | |
+| 96 | NativeMenuTrigger | 97 | ContextMenuItem | 98 | ContextMenuSeparator | 99 | ContextMenu |
 
 ## 批次记录
 
@@ -90,6 +90,12 @@
 | 修复 | Window effects 点击无反应：`gpui_component::Root` 只画子视图，sheet/dialog/notification 层需由应用根渲染；`Root::render` 补上 `render_sheet_layer`/`render_dialog_layer`/`render_notification_layer` | — | 6 | `…6C4B` | Window Effects | ✅ |
 | Batch 20 | Editor（keyed `EditorState`；`value`/`language` 首次渲染生效，`appearance`/`bordered`/`readonly`/`aria_label`） | 93 | 6 | `…6C4C` | Editor | ✅ |
 | Batch 21 | NativeMenuItem, NativeMenuSeparator, NativeMenuTrigger（OS 弹窗菜单；`ManagedMenuAction` 全局 action 监听把选择派发到托管回调） | 94–96 | 6 | `…6C4D` | Native Menu | ✅ |
+| 样式 | 长度值完整移植：新增 `Length`（px/%/rem/auto/relative），所有长度样式方法都有 `double`（px）与 `Length` 双重载 | — | 6 | `…6C4D` | 各页 | ✅ |
+| 修复 | 声明为布尔的方法被静默丢弃（托管发 Number，Rust 匹配 Boolean）：在 `materialize::record_methods` 按方法参数 schema 做强制转换。修复 Collapsible 内容不显示等 | — | 6 | `…6C4D` | Collapsible | ✅ |
+| 修复 | 宿主 `with_assets(())` 导致所有 SVG 图标缺失：改用 `gpui-kit-assets::Assets`。修复 Rating 不显示、侧栏无图标、Clipboard 无按钮 | — | 6 | `…6C4D` | Rating / Clipboard | ✅ |
+| 修复 | Chat 页滚动记录未受限：`MessageScroller` 加 `.H(320)` 使其真正虚拟化，不再展开整段日志 | — | 6 | `…6C4D` | Chat | ✅ |
+| 删除 | 移除旧的管理式 dialog/sheet/notification：ABI `open_dialog`/`close_dialog`/`open_sheet`/`close_sheet`/`push_notification`、`GpuiApplication` 方法、`Root` 自有层、`OverlaysPage`；改由 Window Effects 控件承担 | — | 6 | `…6C4D` | Window Effects | ✅ |
+| Batch 22 | ContextMenuItem, ContextMenuSeparator, ContextMenu（右键菜单，包裹目标元素；条目走托管回调） | 97–99 | 6 | `…6C4E` | Context Menu | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖
@@ -118,7 +124,7 @@
   现先 `.Flex()`（display:flex）再设方向；并新增类型化样式方法 `Flex`/`WFull`/`HFull`/`Flex1`，
   Sample 中已无 `.Style(...)` 调用。
 
-- 已注册组件：**97**（id 0–96）。
+- 已注册组件：**100**（id 0–99）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。

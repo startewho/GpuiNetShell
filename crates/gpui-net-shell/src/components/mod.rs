@@ -18,6 +18,7 @@ pub mod color_picker;
 pub mod combobox;
 pub mod command;
 mod common;
+pub mod context_menu;
 pub mod data_table;
 pub mod date_picker;
 pub mod description_list;
@@ -128,6 +129,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     window_effects::register(registry);
     editor::register(registry);
     native_menu::register(registry);
+    context_menu::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -247,6 +249,9 @@ mod tests {
                 "NativeMenuItem",
                 "NativeMenuSeparator",
                 "NativeMenuTrigger",
+                "ContextMenuItem",
+                "ContextMenuSeparator",
+                "ContextMenu",
             ]
         );
     }

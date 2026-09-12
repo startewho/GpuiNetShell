@@ -48,10 +48,11 @@ internal sealed class ChatPage : GalleryPage
             Group(
                 ref ui,
                 "Message Scroller",
-                ui.MessageScroller("transcript", 200)
+                ui.MessageScroller("transcript", 2000)
                     .Scrollbar()
                     .JumpButton()
                     .JumpButtonLabel("Jump to latest")
+                    .H(320)
                     .RenderItem((context, index) => context.Label($"Message {index + 1}"))
             )
         );
