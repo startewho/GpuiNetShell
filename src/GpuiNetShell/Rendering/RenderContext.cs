@@ -599,8 +599,8 @@ public sealed class RenderContext
     }
 
     /// <summary>A column container.</summary>
-    public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
+    public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 
     /// <summary>A row container.</summary>
-    public DivElement HStack(params Element[] children) => Div(children).FlexRow();
+    public DivElement HStack(params Element[] children) => Div(children).Flex().FlexRow();
 }

@@ -482,6 +482,13 @@ mod tests {
     }
 
     #[test]
+    fn layout_nullary_names_are_reflected() {
+        for name in ["flex_row", "flex_col", "w_full", "h_full", "size_full"] {
+            assert!(nullary_index(name).is_some(), "`{name}` is not reflected");
+        }
+    }
+
+    #[test]
     fn a_bare_number_is_pixels_and_a_percent_string_is_relative() {
         let padded = apply_param("p", &StyleArg::Number(12.), StyleRefinement::default()).unwrap();
         assert_eq!(padded.padding.top, Some(px(12.).into()));

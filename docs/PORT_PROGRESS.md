@@ -77,6 +77,13 @@
 
 ## 当前统计
 
+- **Sample 已重构**：主界面为「左侧 Sidebar 导航 + 右侧内容区（Scroll）」；**一个控件一个页面**，
+  每个页面单独一个文件，位于 `samples/GpuiNetShell.Sample/Pages/`（`GalleryPage` 基类 +
+  `PageRegistry`）。DataTable 页面展示 **2000 行**自定义数据并逐格 `RenderCell`；List 页面
+  展示 **500 行**并用 `RenderRow` 自定义行渲染。
+- 修复：主界面右栏内容区不显示——外层行原先 `ItemsStart` 且内容未 `FlexGrow`，导致滚动区高度塌陷。
+  现改为：内容区 `Scroll().FlexGrow(1).H(420)`（页面 `Div` 用 `w_full`），侧栏 `H(420).FlexShrink(0)`。
+
 - 已注册组件：**68**（id 0–67）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、

@@ -92,16 +92,19 @@ internal sealed class GalleryView : View
                     .Gap(8)
                     .ItemsCenter()
             )
-            .Add(ui.SidebarMenu().Add(items.ToArray()));
+            .Add(ui.SidebarMenu().Add(items.ToArray()))
+            .W(200)
+            .HFull();
 
-        var content = ui.Scroll("gallery-content").Add(
-            ui.Div(_pages[_index].Render(ref ui)).P(24).Full()
-        );
+        var content = ui
+            .Scroll("gallery-content")
+            .FlexGrow(1.0)
+            .MinH(0)
+            .Add(ui.Div(_pages[_index].Render(ref ui)).P(24).WFull());
 
-        return ui.HStack(ui.Div(sidebar).H(420).FlexShrink(0), content)
+        return ui.HStack(ui.Div(sidebar).FlexShrink(0), content)
             .Gap(16)
             .P(16)
-            .Full()
-            .ItemsStart();
+            .Full();
     }
 }

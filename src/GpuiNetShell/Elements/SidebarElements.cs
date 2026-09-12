@@ -82,7 +82,7 @@ public sealed class SidebarMenuElement : Element
     internal SidebarMenuElement(RenderContext ui, int index)
         : base(ui, index) { }
 
-    public SidebarMenuElement Add(params SidebarMenuItemElement[] items)
+    public SidebarMenuElement Add(params Element[] items)
     {
         ArgumentNullException.ThrowIfNull(items);
         foreach (var item in items)

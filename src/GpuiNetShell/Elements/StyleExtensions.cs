@@ -47,6 +47,15 @@ public static class StyleExtensions
     }
 
     // No-argument styles.
+    public static T Flex<T>(this T element)
+        where T : Element => element.Style("flex");
+
+    public static T WFull<T>(this T element)
+        where T : Element => element.Style("w_full");
+
+    public static T HFull<T>(this T element)
+        where T : Element => element.Style("h_full");
+
     public static T Full<T>(this T element)
         where T : Element => element.Style("size_full");
 
@@ -55,6 +64,9 @@ public static class StyleExtensions
 
     public static T FlexRow<T>(this T element)
         where T : Element => element.Style("flex_row");
+
+    public static T Flex1<T>(this T element)
+        where T : Element => element.Style("flex_1");
 
     public static T ItemsCenter<T>(this T element)
         where T : Element => element.Style("items_center");
