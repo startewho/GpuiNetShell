@@ -30,4 +30,16 @@ public sealed class SelectElement : Element
         Arena.AddMethodNumber(Index, "disabled", disabled ? 1 : 0);
         return this;
     }
+
+    /// <summary>
+    /// Renders each option with managed code. The renderer receives the row's
+    /// fields and returns the option's element subtree.
+    /// </summary>
+    public SelectElement RenderRow(Func<RenderContext, IReadOnlyList<string>, Element> renderer)
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+        var token = Events.RegisterElement(renderer);
+        Arena.AddCallback(Index, "render_row", token);
+        return this;
+    }
 }

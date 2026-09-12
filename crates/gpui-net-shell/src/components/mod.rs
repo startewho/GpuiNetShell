@@ -4,6 +4,7 @@
 //! its `ComponentMaterializer`. The runtime knows none of them by name: adding
 //! a component is `register` here plus one id in the wire schema.
 
+pub mod accordion;
 pub mod alert;
 pub mod avatar;
 pub mod badge;
@@ -14,9 +15,11 @@ pub mod collapsible;
 pub mod combobox;
 mod common;
 pub mod data_table;
+pub mod description_list;
 pub mod div;
 pub mod dropdown_button;
 pub mod dropdown_menu;
+pub mod form;
 pub mod group_box;
 pub mod hover_card;
 pub mod icon;
@@ -36,6 +39,7 @@ pub mod separator;
 pub mod skeleton;
 pub mod spinner;
 pub mod status_bar;
+pub mod stepper;
 pub mod tab_bar;
 pub mod tabs;
 pub mod tag;
@@ -82,6 +86,10 @@ pub fn register(registry: &mut ComponentRegistry) {
     list::register(registry);
     select::register(registry);
     data_table::register(registry);
+    accordion::register(registry);
+    stepper::register(registry);
+    description_list::register(registry);
+    form::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -142,6 +150,14 @@ mod tests {
                 "List",
                 "Select",
                 "DataTable",
+                "AccordionItem",
+                "Accordion",
+                "StepperItem",
+                "Stepper",
+                "DescriptionItem",
+                "DescriptionList",
+                "Field",
+                "Form",
             ]
         );
     }

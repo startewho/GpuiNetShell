@@ -137,6 +137,20 @@ pub struct GpuiNetCallbacks {
             out_len: *mut u32,
         ) -> i32,
     >,
+    /// Renders a subtree for an element callback (P7). `arguments` is a UTF-8
+    /// buffer of newline-separated callback arguments. The managed side fills
+    /// `out_arena`/`out_root`, which the host decodes and materializes
+    /// synchronously before returning.
+    pub render_element: Option<
+        unsafe extern "C" fn(
+            session_id: u64,
+            token: u64,
+            arguments: *const u8,
+            arguments_len: u32,
+            out_arena: *mut GpuiNetArena,
+            out_root: *mut u32,
+        ) -> i32,
+    >,
 }
 
 impl std::fmt::Debug for GpuiNetCallbacks {

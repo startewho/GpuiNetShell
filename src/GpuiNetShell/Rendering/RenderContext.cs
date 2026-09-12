@@ -384,6 +384,65 @@ public sealed class RenderContext
         return new DataTableElement(this, index);
     }
 
+    /// <summary>Declares a typed accordion. <paramref name="id"/> is its identity.</summary>
+    public AccordionElement Accordion(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentAccordion);
+        _arena.SetNodeData(index, id);
+        return new AccordionElement(this, index);
+    }
+
+    /// <summary>Declares an accordion item for an <see cref="AccordionElement"/>.</summary>
+    public AccordionItemElement AccordionItem() =>
+        new AccordionItemElement(this, _arena.AddNode(NativeProtocol.ComponentAccordionItem));
+
+    /// <summary>Declares a typed stepper. <paramref name="id"/> is its identity.</summary>
+    public StepperElement Stepper(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentStepper);
+        _arena.SetNodeData(index, id);
+        return new StepperElement(this, index);
+    }
+
+    /// <summary>Declares a step for a <see cref="StepperElement"/>.</summary>
+    public StepperItemElement StepperItem() =>
+        new StepperItemElement(this, _arena.AddNode(NativeProtocol.ComponentStepperItem));
+
+    /// <summary>Declares a description item with the given label.</summary>
+    public DescriptionItemElement DescriptionItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDescriptionItem);
+        _arena.SetNodeData(index, label);
+        return new DescriptionItemElement(this, index);
+    }
+
+    /// <summary>Declares a structured label/value list.</summary>
+    public DescriptionListElement DescriptionList() =>
+        new DescriptionListElement(
+            this,
+            _arena.AddNode(NativeProtocol.ComponentDescriptionList)
+        );
+
+    /// <summary>Declares a form field.</summary>
+    public FieldElement Field() =>
+        new FieldElement(this, _arena.AddNode(NativeProtocol.ComponentField));
+
+    /// <summary>Declares a vertical form.</summary>
+    public FormElement Form() => Form("Form");
+
+    /// <summary>Declares a vertical form.</summary>
+    public FormElement VForm() => Form("VForm");
+
+    /// <summary>Declares a horizontal form.</summary>
+    public FormElement HForm() => Form("HForm");
+
+    private FormElement Form(string export)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentForm);
+        _arena.SetNodeData(index, export);
+        return new FormElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

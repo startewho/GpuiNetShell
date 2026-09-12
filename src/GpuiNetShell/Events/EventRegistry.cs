@@ -1,3 +1,6 @@
+using GpuiNetShell.Elements;
+using GpuiNetShell.Rendering;
+
 namespace GpuiNetShell.Events;
 
 /// <summary>
@@ -15,6 +18,10 @@ public sealed class EventRegistry
 {
     private readonly Dictionary<ulong, Action<EventValue>> _handlers = [];
     private readonly Dictionary<ulong, Func<string>> _rowProviders = [];
+    private readonly Dictionary<
+        ulong,
+        Func<RenderContext, IReadOnlyList<string>, Element>
+    > _elementRenderers = [];
     private readonly Dictionary<ulong, List<ulong>> _generations = [];
     private ulong _next = 1;
     private ulong _generation;
@@ -66,6 +73,30 @@ public sealed class EventRegistry
     public bool TryGetRows(ulong token, out Func<string> provider) =>
         _rowProviders.TryGetValue(token, out provider!);
 
+    /// <summary>
+    /// Registers an element renderer — a callback the native host invokes to
+    /// build one subtree per row or cell (P7) — and returns its token.
+    /// </summary>
+    public ulong RegisterElement(
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+        var token = _next++;
+        _elementRenderers[token] = renderer;
+        if (_generations.TryGetValue(_generation, out var tokens))
+        {
+            tokens.Add(token);
+        }
+        return token;
+    }
+
+    /// <summary>Resolves an element renderer; false when retired.</summary>
+    public bool TryGetElement(
+        ulong token,
+        out Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    ) => _elementRenderers.TryGetValue(token, out renderer!);
+
     /// <summary>Runs the handler for <paramref name="token"/>; false when retired.</summary>
     public bool Dispatch(ulong token) => DispatchValue(token, EventValue.None);
 
@@ -92,6 +123,7 @@ public sealed class EventRegistry
             {
                 _handlers.Remove(token);
                 _rowProviders.Remove(token);
+                _elementRenderers.Remove(token);
             }
         }
     }
@@ -100,6 +132,7 @@ public sealed class EventRegistry
     {
         _handlers.Clear();
         _rowProviders.Clear();
+        _elementRenderers.Clear();
         _generations.Clear();
         _next = 1;
         _generation = 0;

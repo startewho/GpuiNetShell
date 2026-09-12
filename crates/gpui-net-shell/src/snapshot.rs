@@ -119,7 +119,7 @@ pub struct RenderSnapshot {
 struct RenderSnapshotInner {
     session_id: u64,
     revision: u64,
-    snapshot: Snapshot,
+    snapshot: Rc<Snapshot>,
     callbacks: GpuiNetCallbacks,
 }
 
@@ -134,10 +134,15 @@ impl RenderSnapshot {
             inner: Rc::new(RenderSnapshotInner {
                 session_id,
                 revision,
-                snapshot,
+                snapshot: Rc::new(snapshot),
                 callbacks,
             }),
         }
+    }
+
+    /// The decoded node description, shared cheaply with any slot factory.
+    pub fn snapshot(&self) -> Rc<Snapshot> {
+        self.inner.snapshot.clone()
     }
 
     /// The generation this description was built for.
@@ -607,6 +612,7 @@ mod tests {
             retire_callbacks: Some(retire),
             invoke: None,
             resolve_rows: None,
+            render_element: None,
         };
         let snapshot = Snapshot {
             root: 0,

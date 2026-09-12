@@ -32,4 +32,19 @@ public sealed class DataTableElement : Element
         Arena.AddMethodNumber(Index, "bordered", bordered ? 1 : 0);
         return this;
     }
+
+    /// <summary>
+    /// Renders each cell with managed code. The renderer receives
+    /// <c>[row, column]</c>, where <c>row</c> is the tab-separated row, and
+    /// returns the cell's element subtree.
+    /// </summary>
+    public DataTableElement RenderCell(
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+        var token = Events.RegisterElement(renderer);
+        Arena.AddCallback(Index, "render_cell", token);
+        return this;
+    }
 }

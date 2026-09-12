@@ -14,6 +14,7 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
@@ -22,7 +23,7 @@ use gpui::{
 };
 
 use crate::context::HostContext;
-use crate::snapshot::RenderSnapshot;
+use crate::snapshot::Snapshot;
 
 /// A registered component's position in the registry.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -332,6 +333,55 @@ impl ComponentCallback {
     }
 }
 
+/// A callback that renders an element subtree (P7).
+///
+/// The managed side builds a small arena for one element per invocation; the
+/// host decodes it and materializes the result. This is what lets a list row or
+/// table cell be rendered by managed code rather than a built-in text row.
+#[derive(Clone)]
+pub struct ElementCallback {
+    registry: FrozenComponentRegistry,
+    host: HostContext,
+    token: u64,
+}
+
+impl ElementCallback {
+    /// Renders the subtree for `arguments`, one callback argument per entry.
+    pub fn build(
+        &self,
+        arguments: &[String],
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<AnyElement, String> {
+        let Some(render) = self.host.callbacks.render_element else {
+            return Err("the host has no render_element callback".into());
+        };
+        let payload = arguments.join("\n");
+        let bytes = payload.as_bytes();
+        let mut arena = crate::abi::GpuiNetArena::empty();
+        let mut root = 0u32;
+        // SAFETY: the managed callback fills a caller-owned arena and copies
+        // anything it keeps; the buffers it names are only read by `decode`.
+        let status = unsafe {
+            render(
+                self.host.session_id,
+                self.token,
+                bytes.as_ptr(),
+                bytes.len() as u32,
+                &mut arena,
+                &mut root,
+            )
+        };
+        if status != crate::schema::STATUS_OK {
+            return Err(format!("element callback failed with status {status}"));
+        }
+        let snapshot = Snapshot::decode(&arena, root)
+            .map_err(|code| format!("element snapshot decode failed with status {code}"))?;
+        let factory = NodeFactory::new(&self.registry, Rc::new(snapshot), &self.host);
+        factory.build(root, window, cx)
+    }
+}
+
 /// A materialized ordinary child, carrying the name of the component it came
 /// from so a typed parent can validate or route it.
 pub struct ChildElement {
@@ -363,19 +413,19 @@ pub type Row = Vec<String>;
 #[derive(Clone)]
 pub struct NodeFactory {
     registry: FrozenComponentRegistry,
-    snapshot: RenderSnapshot,
+    snapshot: Rc<Snapshot>,
     host: HostContext,
 }
 
 impl NodeFactory {
     pub fn new(
         registry: &FrozenComponentRegistry,
-        snapshot: &RenderSnapshot,
+        snapshot: Rc<Snapshot>,
         host: &HostContext,
     ) -> Self {
         Self {
             registry: registry.clone(),
-            snapshot: snapshot.clone(),
+            snapshot,
             host: host.clone(),
         }
     }
@@ -384,7 +434,7 @@ impl NodeFactory {
         &self.registry
     }
 
-    pub fn snapshot(&self) -> &RenderSnapshot {
+    pub fn snapshot(&self) -> &Snapshot {
         &self.snapshot
     }
 
@@ -517,6 +567,21 @@ impl<'a> MaterializeRequest<'a> {
         match argument {
             ComponentArgument::Element(node) => self.factory.build(*node, self.window, self.cx),
             other => Err(format!("expected an element argument, got {other:?}")),
+        }
+    }
+
+    /// Resolves an element callback (P7) recorded by a component method.
+    pub fn resolve_element_callback(
+        &self,
+        argument: &ComponentArgument,
+    ) -> Result<ElementCallback, String> {
+        match argument {
+            ComponentArgument::Callback(token) => Ok(ElementCallback {
+                registry: self.factory.registry().clone(),
+                host: self.factory.host().clone(),
+                token: *token,
+            }),
+            other => Err(format!("expected an element callback, got {other:?}")),
         }
     }
 

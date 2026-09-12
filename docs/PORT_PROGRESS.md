@@ -23,21 +23,26 @@
 | 多参数构造/方法 | `CONSTRUCTOR_ARG_SEPARATOR`、`ARG_STRING_CALLBACK`、`GpuiNetOp.c` | 构造参数打包；方法第 2 参数（如 `item(label, callback)`） |
 | **P3 元素参数 + 懒槽** | `ARG_ELEMENT`、`MaterializeRequest::resolve_element`、`take_slot_factory`、`NodeFactory`/`SlotFactory` | 方法可接收子元素（`trigger_element`、`left_content`），命名槽可重建（Popover/HoverCard 的 `content`） |
 | **P4 行快照回调** | ABI `resolve_rows`、`MaterializeRequest::resolve_rows`、`EventRegistry.RegisterRows` | native 反向调用 managed 取 tab 分隔行，供 List/Select/DataTable |
-| **P5 typed children** | `ChildElement` + `MaterializeRequest::take_children_of` / `child_component_names` | 父组件按注册名校验子组件；`DropdownMenu` 拒绝普通子节点 |
+| **P5 typed children** | `ChildElement` + `MaterializeRequest::take_children_of` / `take_typed_children` + `typed_child::Carrier<T>` | 父组件按注册名校验子组件，并可取出子组件携带的原生值（`Tab` → `TabBar`） |
+| **P7 元素回调** | ABI `render_element`、`MaterializeRequest::resolve_element_callback`、`ElementCallback`、`EventRegistry.RegisterElement` | native 反向调用 managed，managed 在独立 arena 里渲染一个子树并回传，供 List/Select/DataTable 自定义渲染 |
+| 双参数方法 | `ARG_STRING_CALLBACK`、`GpuiNetOp.c` | 方法第 2 参数（`item(label, callback)`） |
 
 ## 组件 id 表
 
 | id | 名称 | id | 名称 | id | 名称 | id | 名称 |
 |---|---|---|---|---|---|---|---|
-| 0 | Div | 9 | Scroll | 18 | Kbd | 27 | StatusBar |
-| 1 | Text | 10 | Scrollbar | 19 | Avatar | 28 | Alert |
-| 2 | Button | 11 | Resizable | 20 | Icon | 29 | Tooltip |
-| 3 | Label | 12 | Popover | 21 | Collapsible | 30 | HoverCard |
-| 4 | Badge | 13 | Spinner | 22 | Pagination | 31 | DropdownMenu |
-| 5 | Progress | 14 | Separator | 23 | Rating | 32 | DropdownButton |
-| 6 | Combobox | 15 | Skeleton | 24 | Clipboard | | |
-| 7 | Radio | 16 | Tag | 25 | Breadcrumb | | |
-| 8 | Tabs | 17 | Link | 26 | GroupBox | | |
+| 0 | Div | 11 | Resizable | 22 | Pagination | 33 | Tab |
+| 1 | Text | 12 | Popover | 23 | Rating | 34 | TabBar |
+| 2 | Button | 13 | Spinner | 24 | Clipboard | 35 | List |
+| 3 | Label | 14 | Separator | 25 | Breadcrumb | 36 | Select |
+| 4 | Badge | 15 | Skeleton | 26 | GroupBox | 37 | DataTable |
+| 5 | Progress | 16 | Tag | 27 | StatusBar | 38 | AccordionItem |
+| 6 | Combobox | 17 | Link | 28 | Alert | 39 | Accordion |
+| 7 | Radio | 18 | Kbd | 29 | Tooltip | 40 | StepperItem |
+| 8 | Tabs | 19 | Avatar | 30 | HoverCard | 41 | Stepper |
+| 9 | Scroll | 20 | Icon | 31 | DropdownMenu | 42 | DescriptionItem |
+| 10 | Scrollbar | 21 | Collapsible | 32 | DropdownButton | 43 | DescriptionList |
+| 44 | Field | 45 | Form | | | | |
 
 ## 批次记录
 
@@ -52,19 +57,28 @@
 | Batch 4 | Breadcrumb, GroupBox, StatusBar, Alert | 25–28 | 2 | `…6C36` | Display | ✅ |
 | P3/P4/P5 | 元素参数+懒槽、行快照回调、typed children（并扩展 op 记录 `c` 字） | — | 4 | `…6C37`→`…6C38` | — | ✅ |
 | Batch 5 | Tooltip, HoverCard, DropdownMenu, DropdownButton | 29–32 | 4 | `…6C39` | Menus | ✅ |
+| Batch 10 | Tab, TabBar, List, Select, DataTable | 33–37 | 4 | `…6C3B` | Collections | ✅ |
+| P7 | 元素回调：`render_element`（managed 渲染子树）；List/Select/DataTable 支持 `render_row`/`render_cell` | — | 5 | `…6C3C` | Collections（DataTable 自定义单元格） | ✅ |
+| Batch 6 | AccordionItem, Accordion, StepperItem, Stepper（typed children；省略 `Accordion.on_toggle`，因需 `Send + Sync`） | 38–41 | 5 | `…6C3D` | Disclosure | ✅ |
+| Batch 8 | DescriptionItem, DescriptionList, Field, Form（typed children） | 42–45 | 5 | `…6C3E` | Structure | ✅ |
+| 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 当前统计
 
-- 已注册组件：**33**（id 0–32）。
+- 已注册组件：**46**（id 0–45）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
-- 剩余待移植：Accordion 家族、Empty 家族、Stepper、DescriptionList、Form/Field、
-  Menu 家族、Sidebar 家族、Settings 家族、Command 家族、Tree、Table、DataTable、
-  List、Select、Carousel 家族、Chat 家族、Retained forms（Input/NumberInput/
-  OtpInput/Slider/ColorPicker/Calendar/DatePicker）、Textarea、Editor、Image、
-  RadioGroup、TabBar/Tab、Window effects（Dialog/AlertDialog/Sheet/Notification）、
+- `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
+  `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。
+  `TabBar`/`Accordion`/`Stepper`/`DescriptionList`/`Form` 用 `Carrier<T>` 承载 typed children。
+- 剩余待移植：Menu 家族、Sidebar 家族、Settings 家族、Command 家族、Tree、Table、
+  Chat 家族（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、Retained
+  forms（Input/NumberInput/OtpInput/Slider/ColorPicker/Calendar/DatePicker）、Textarea、
+  Editor、RadioGroup、Window effects（Dialog/AlertDialog/Sheet/Notification）、
   NativeMenu 家族。
+- **当前 gpui-component 缺失、无法移植**：Empty 家族、Carousel 家族、Chat 顶层、Image。
 
 ## 待补的框架能力
 
-- **Array 参数**：`ArgumentSchema::Array`（Settings.keywords；Breadcrumb 现用换行串代替）。
+- **Array 参数**：`ArgumentSchema::Array`（Settings.keywords；Breadcrumb/columns 现用换行串代替）。
 - **P6 原生菜单**：NativeMenu 家族依赖 OS 菜单。
+- **Send + Sync 回调**：`Accordion.on_toggle` 需要 `Send + Sync` 处理器，当前未暴露。

@@ -333,7 +333,9 @@ public sealed unsafe class RenderContextTests
             .Add(ui.Tab().Label("One"), ui.Tab().Label("Two"));
         ui.List("list", () => "a\tAlpha").Full();
         ui.Select("select", () => "light\tLight", _ => { }).Placeholder("Pick");
-        ui.DataTable("table", () => "Ada\tEngineer").Columns("Name", "Role");
+        ui.DataTable("table", () => "Ada\tEngineer")
+            .Columns("Name", "Role")
+            .RenderCell((ctx, args) => ctx.Label(args[0]));
 
         var descriptor = arena.Publish();
         // tabbar(0), tab(1), tab(2), list(3), select(4), datatable(5)
@@ -343,6 +345,66 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentList, descriptor.Nodes[3].Component);
         Assert.Equal((uint)NativeProtocol.ComponentSelect, descriptor.Nodes[4].Component);
         Assert.Equal((uint)NativeProtocol.ComponentDataTable, descriptor.Nodes[5].Component);
+        Assert.Contains(NativeProtocol.OpCallback, Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Select(index => descriptor.Ops[index].Code));
+    }
+
+    [Fact]
+    public void TypedCompoundComponentsRecordTheirChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Accordion("acc")
+            .Multiple()
+            .Add(
+                ui.AccordionItem().Title(ui.Label("One")).Add(ui.Text("Body")),
+                ui.AccordionItem().Title(ui.Label("Two")).Open()
+            );
+        ui.Stepper("steps")
+            .SelectedIndex(1)
+            .OnChange(_ => { })
+            .Add(ui.StepperItem().Add(ui.Text("Choose")), ui.StepperItem().Disabled());
+
+        var descriptor = arena.Publish();
+        // accordion(0), item(1), label(2), text(3), item(4), label(5), stepper(6), item(7), text(8), item(9)
+        Assert.Equal(10u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentAccordion, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentAccordionItem, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentStepper, descriptor.Nodes[6].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentStepperItem, descriptor.Nodes[7].Component);
+        Assert.Contains(NativeProtocol.ArgElement, Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Select(index => descriptor.Ops[index].Flags));
+    }
+
+    [Fact]
+    public void StructuredComponentsRecordTheirChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.DescriptionList()
+            .Columns(2)
+            .Add(
+                ui.DescriptionItem("Name").Value("Ada"),
+                ui.DescriptionItem("Role").Value("Engineer").Span(2)
+            );
+        ui.HForm()
+            .Columns(2)
+            .Add(
+                ui.Field().Label("Name").Add(ui.Text("...")),
+                ui.Field().Label("Role").Required()
+            );
+
+        var descriptor = arena.Publish();
+        // dlist(0), item(1), item(2), form(3), field(4), text(5), field(6)
+        Assert.Equal(7u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentDescriptionList, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentDescriptionItem, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentForm, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentField, descriptor.Nodes[4].Component);
     }
 
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)

@@ -14,10 +14,10 @@ namespace GpuiNetShell.Interop;
 /// </remarks>
 public static class NativeProtocol
 {
-    public const uint AbiVersion = 4;
+    public const uint AbiVersion = 5;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C3B;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C3E;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one
@@ -65,6 +65,14 @@ public static class NativeProtocol
     public const uint ComponentList = 35;
     public const uint ComponentSelect = 36;
     public const uint ComponentDataTable = 37;
+    public const uint ComponentAccordionItem = 38;
+    public const uint ComponentAccordion = 39;
+    public const uint ComponentStepperItem = 40;
+    public const uint ComponentStepper = 41;
+    public const uint ComponentDescriptionItem = 42;
+    public const uint ComponentDescriptionList = 43;
+    public const uint ComponentField = 44;
+    public const uint ComponentForm = 45;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.

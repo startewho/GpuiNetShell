@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using GpuiNetShell.Elements;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
@@ -21,6 +22,7 @@ public sealed class GpuiApplication
     private readonly Func<View> _rootFactory;
     private readonly EventRegistry _events = new();
     private readonly RenderArena _arena = new();
+    private readonly RenderArena _elementArena = new();
 
     private RenderContext _renderContext = null!;
     private View? _root;
@@ -127,6 +129,43 @@ public sealed class GpuiApplication
         {
             Marshal.Copy(bytes, 0, (IntPtr)buffer, bytes.Length);
         }
+        return NativeProtocol.StatusOk;
+    }
+
+    /// <summary>
+    /// Renders one managed subtree for an element callback (P7) into a scratch
+    /// arena. The native host decodes the arena and materializes it before this
+    /// call returns.
+    /// </summary>
+    internal unsafe int OnRenderElement(
+        ulong token,
+        byte* arguments,
+        uint argumentsLength,
+        NativeArena* outArena,
+        uint* outRoot
+    )
+    {
+        if (!_events.TryGetElement(token, out var renderer))
+        {
+            return -1;
+        }
+        var text = ReadUtf8(arguments, argumentsLength);
+        var args = text.Length == 0 ? Array.Empty<string>() : text.Split('\n');
+
+        _elementArena.Reset();
+        var context = new RenderContext(_elementArena, _events, Invalidate);
+        context.BeginRender();
+        Element root;
+        try
+        {
+            root = renderer(context, args);
+        }
+        finally
+        {
+            context.EndRender();
+        }
+        *outArena = _elementArena.Publish();
+        *outRoot = (uint)root.Index;
         return NativeProtocol.StatusOk;
     }
 

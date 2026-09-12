@@ -64,6 +64,7 @@ internal unsafe struct NativeCallbacks
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> RetireCallbacks;
     public delegate* unmanaged[Cdecl]<ulong, ulong, uint, double, byte*, uint, int> Invoke;
     public delegate* unmanaged[Cdecl]<ulong, ulong, byte*, uint, uint*, int> ResolveRows;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, byte*, uint, NativeArena*, uint*, int> RenderElement;
 }
 
 /// <summary>Mirrors <c>GpuiNetShellApi</c>. 80 bytes.</summary>

@@ -58,6 +58,8 @@ internal sealed class GalleryView : View
         "Display",
         "Menus",
         "Collections",
+        "Disclosure",
+        "Structure",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -68,6 +70,7 @@ internal sealed class GalleryView : View
     private int _rating = 3;
     private int _tabIndex;
     private string _selected = "";
+    private int _step = 1;
 
     public GalleryView(GpuiApplication application, int initialPage = 0)
     {
@@ -94,6 +97,8 @@ internal sealed class GalleryView : View
             12 => DisplayPage(ref ui),
             13 => MenusPage(ref ui),
             14 => CollectionsPage(ref ui),
+            15 => DisclosurePage(ref ui),
+            16 => StructurePage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -463,7 +468,34 @@ internal sealed class GalleryView : View
                 ui.List("people", ListRows).Full().H(120),
                 ui.Select("theme", SelectRows, value => _selected = value).Placeholder("Pick one"),
                 ui.Label($"Selected: {_selected}"),
-                ui.DataTable("roles", TableRows).Columns("Name", "Role", "Status")
+                ui.DataTable("roles", TableRows)
+                    .Columns("Name", "Role", "Status")
+                    .Stripe()
+                    .H(220)
+                    .RenderCell(
+                        (ctx, args) =>
+                        {
+                            var cells = args[0].Split('\t');
+                            var value = args[1] switch
+                            {
+                                "Name" => cells.ElementAtOrDefault(0) ?? "",
+                                "Role" => cells.ElementAtOrDefault(1) ?? "",
+                                "Status" => cells.ElementAtOrDefault(2) ?? "",
+                                _ => "",
+                            };
+                            Element cell =
+                                args[1] == "Status"
+                                    ? ctx.Tag()
+                                        .Variant(
+                                            value == "Active"
+                                                ? TagVariant.Success
+                                                : TagVariant.Warning
+                                        )
+                                        .Add(ctx.Text(value))
+                                    : ctx.Label(value);
+                            return cell;
+                        }
+                    )
             )
             .Gap(16);
 
@@ -474,6 +506,63 @@ internal sealed class GalleryView : View
 
     private static string TableRows() =>
         "Ada\tEngineer\tActive\nGrace\tAdmiral\tActive\nLinus\tMaintainer\tAway";
+
+    private Element DisclosurePage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Disclosure",
+                    "Accordion and stepper built from typed children."
+                ),
+                ui.Accordion("faq")
+                    .Multiple()
+                    .Add(
+                        ui.AccordionItem()
+                            .Title(ui.Label("What is gpui-net-shell?"))
+                            .Open()
+                            .Add(ui.Text("A C#-hosted shell over a Rust GPUI runtime.")),
+                        ui.AccordionItem()
+                            .Title(ui.Label("How do the samples work?"))
+                            .Add(ui.Text("Each tab is a managed page rendered through the ABI."))
+                    ),
+                ui.Stepper("steps")
+                    .SelectedIndex(_step)
+                    .OnChange(index => _step = index)
+                    .Add(
+                        ui.StepperItem().Add(ui.Label("Account")),
+                        ui.StepperItem().Add(ui.Label("Profile")),
+                        ui.StepperItem().Add(ui.Label("Review"))
+                    )
+            )
+            .Gap(16);
+
+    private Element StructurePage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(
+                    ref ui,
+                    "Structure",
+                    "Description lists and forms built from typed children."
+                ),
+                ui.DescriptionList()
+                    .Columns(2)
+                    .Add(
+                        ui.DescriptionItem("Name").Value("Ada Lovelace"),
+                        ui.DescriptionItem("Role").Value("Engineer"),
+                        ui.DescriptionItem("Bio").Value("Mathematician").Span(2)
+                    ),
+                ui.HForm()
+                    .Columns(2)
+                    .LabelWidth(90)
+                    .Add(
+                        ui.Field().Label("Name").Add(ui.Text("Ada Lovelace")),
+                        ui.Field().Label("Role").Required().Add(ui.Text("Engineer")),
+                        ui.Field()
+                            .Description("Optional contact email.")
+                            .ColSpan(2)
+                            .Add(ui.Text("ada@example.com"))
+                    )
+            )
+            .Gap(16);
 
     private Element Section(ref RenderContext ui, string title, string description) =>
         ui.VStack(ui.Label(title).TextSize(20).FontSemibold(), ui.Text(description)).Gap(4);

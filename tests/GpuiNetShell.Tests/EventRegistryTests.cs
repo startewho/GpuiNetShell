@@ -68,4 +68,23 @@ public sealed class EventRegistryTests
 
         Assert.False(registry.TryGetRows(token, out _));
     }
+
+    [Fact]
+    public void ElementRenderersResolveAndRetireWithTheirGeneration()
+    {
+        var registry = new EventRegistry();
+
+        registry.BeginGeneration(1);
+        var token = registry.RegisterElement(
+            (context, arguments) => context.Label(arguments[0])
+        );
+
+        Assert.True(registry.TryGetElement(token, out var renderer));
+        Assert.NotNull(renderer);
+
+        registry.BeginGeneration(2);
+        registry.Retire(1);
+
+        Assert.False(registry.TryGetElement(token, out _));
+    }
 }

@@ -10,8 +10,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, AppContext as _, Entity, IntoElement as _, Refineable as _, SharedString,
-    Styled as _, Subscription,
+    AnyElement, App, AppContext as _, Entity, IntoElement, ParentElement as _, Refineable as _,
+    SharedString, Styled as _, Subscription, Window,
 };
 use gpui_component::{
     searchable_list::{SearchableListDelegate, SearchableListItem},
@@ -22,7 +22,8 @@ use gpui_component::{
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
     ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
-    ComponentRegistry, ConstructorDescriptor, MaterializeRequest, MethodDescriptor, Row,
+    ComponentRegistry, ConstructorDescriptor, ElementCallback, MaterializeRequest,
+    MethodDescriptor, Row,
 };
 
 #[derive(Clone)]
@@ -37,6 +38,7 @@ enum SelectOp {
     Placeholder(String),
     MenuWidth(f32),
     Disabled(bool),
+    RenderRow(ComponentArgument),
 }
 
 #[derive(Clone)]
@@ -44,6 +46,8 @@ struct Item {
     id: String,
     title: SharedString,
     disabled: bool,
+    fields: Vec<String>,
+    renderer: Option<ElementCallback>,
 }
 
 impl SearchableListItem for Item {
@@ -51,6 +55,19 @@ impl SearchableListItem for Item {
 
     fn title(&self) -> SharedString {
         self.title.clone()
+    }
+
+    fn render(&self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        match &self.renderer {
+            Some(callback) => callback
+                .build(&self.fields, window, cx)
+                .unwrap_or_else(|error| {
+                    gpui::div()
+                        .child(format!("Failed to render Select row: {error}"))
+                        .into_any_element()
+                }),
+            None => gpui::div().child(self.title.clone()).into_any_element(),
+        }
     }
 
     fn value(&self) -> &Self::Value {
@@ -62,21 +79,23 @@ impl SearchableListItem for Item {
     }
 }
 
-fn parse_items(rows: Vec<Row>) -> Vec<Item> {
+fn parse_items(rows: Vec<Row>, renderer: Option<ElementCallback>) -> Vec<Item> {
     rows.into_iter()
         .enumerate()
         .map(|(index, fields)| {
-            let mut fields = fields.into_iter();
-            let id = fields
+            let mut parts = fields.iter().cloned();
+            let id = parts
                 .next()
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| format!("row-{index}"));
-            let title = fields.next().unwrap_or_else(|| id.clone());
-            let disabled = matches!(fields.next().as_deref(), Some("true" | "1"));
+            let title = parts.next().unwrap_or_else(|| id.clone());
+            let disabled = matches!(parts.next().as_deref(), Some("true" | "1"));
             Item {
                 id,
                 title: title.into(),
                 disabled,
+                fields,
+                renderer: renderer.clone(),
             }
         })
         .collect()
@@ -128,7 +147,17 @@ impl ComponentMaterializer for SelectMaterializer {
         if request.children_len() != 0 {
             return Err("Select does not accept children".to_string());
         }
-        let items = parse_items(request.resolve_rows(&payload.rows)?);
+        let items = parse_items(
+            request.resolve_rows(&payload.rows)?,
+            request
+                .methods()
+                .find_map(|method| match method.payload().downcast_ref::<SelectOp>() {
+                    Some(SelectOp::RenderRow(argument)) => Some(argument.clone()),
+                    Some(_) | None => None,
+                })
+                .map(|argument| request.resolve_element_callback(&argument))
+                .transpose()?,
+        );
         let on_select = request.resolve_callback(&payload.on_select)?;
         let operations = request
             .methods()
@@ -184,6 +213,7 @@ impl ComponentMaterializer for SelectMaterializer {
                 SelectOp::Placeholder(value) => select.placeholder(value),
                 SelectOp::MenuWidth(value) => select.menu_width(gpui::px(value)),
                 SelectOp::Disabled(value) => select.disabled(value),
+                SelectOp::RenderRow(_) => select,
             };
         }
         select.style().refine(&style);
@@ -277,6 +307,19 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                             ComponentArgument::Boolean(value) => Some(SelectOp::Disabled(*value)),
                             _ => None,
                         },
+                    ),
+                    MethodDescriptor::new(
+                        "render_row",
+                        vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+                        |arguments| match arguments {
+                            [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
+                                SelectOp::RenderRow(ComponentArgument::Callback(*token)),
+                            )),
+                            _ => Err("Select.render_row(callback) expects a callback".into()),
+                        },
+                    )
+                    .with_documentation(
+                        "Renders each option with managed code, receiving the row's fields.",
                     ),
                 ])
                 .with_documentation(

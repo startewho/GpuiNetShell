@@ -11,11 +11,11 @@
 //! behavior is a generic `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C3B;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C3E;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -104,6 +104,22 @@ pub const COMPONENT_LIST: u32 = 35;
 pub const COMPONENT_SELECT: u32 = 36;
 #[allow(dead_code)]
 pub const COMPONENT_DATA_TABLE: u32 = 37;
+#[allow(dead_code)]
+pub const COMPONENT_ACCORDION_ITEM: u32 = 38;
+#[allow(dead_code)]
+pub const COMPONENT_ACCORDION: u32 = 39;
+#[allow(dead_code)]
+pub const COMPONENT_STEPPER_ITEM: u32 = 40;
+#[allow(dead_code)]
+pub const COMPONENT_STEPPER: u32 = 41;
+#[allow(dead_code)]
+pub const COMPONENT_DESCRIPTION_ITEM: u32 = 42;
+#[allow(dead_code)]
+pub const COMPONENT_DESCRIPTION_LIST: u32 = 43;
+#[allow(dead_code)]
+pub const COMPONENT_FIELD: u32 = 44;
+#[allow(dead_code)]
+pub const COMPONENT_FORM: u32 = 45;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -170,7 +186,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C3B);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C3E);
     }
 
     #[test]

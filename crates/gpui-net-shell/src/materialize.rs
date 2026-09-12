@@ -34,7 +34,7 @@ pub fn materialize(
     window: &mut Window,
     cx: &mut App,
 ) -> Result<AnyElement, String> {
-    let factory = NodeFactory::new(registry, snapshot, host);
+    let factory = NodeFactory::new(registry, snapshot.snapshot(), host);
     materialize_node(&factory, snapshot.root(), window, cx)
 }
 
@@ -48,7 +48,7 @@ pub(crate) fn materialize_node(
     window: &mut Window,
     cx: &mut App,
 ) -> Result<AnyElement, String> {
-    let nodes = factory.snapshot().nodes();
+    let nodes = &factory.snapshot().nodes;
     let node = nodes
         .get(id as usize)
         .ok_or_else(|| format!("node {id} is outside the snapshot"))?;

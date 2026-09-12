@@ -107,6 +107,14 @@ public enum TabVariantKind : uint
     Underline = 4,
 }
 
+/// <summary>Label/control alignment of a <see cref="FieldElement"/>.</summary>
+public enum FieldAlign : uint
+{
+    Start = 0,
+    Center = 1,
+    End = 2,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {

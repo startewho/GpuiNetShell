@@ -39,3 +39,21 @@ pub(crate) fn nonnegative_usize(value: f64, label: &str) -> Result<usize, String
     }
     Ok(value as usize)
 }
+
+/// An exactly representable positive `u16`.
+pub(crate) fn positive_u16(value: f64, label: &str) -> Result<u16, String> {
+    if !value.is_finite() || value < 1.0 || value.fract() != 0.0 || value > u16::MAX as f64 {
+        return Err(format!(
+            "{label} expects an exactly representable positive integer"
+        ));
+    }
+    Ok(value as u16)
+}
+
+/// A finite non-negative `f32`.
+pub(crate) fn nonnegative_f32(value: f64, label: &str) -> Result<f32, String> {
+    if !value.is_finite() || value < 0.0 || value > f32::MAX as f64 {
+        return Err(format!("{label} expects a nonnegative finite number"));
+    }
+    Ok(value as f32)
+}

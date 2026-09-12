@@ -22,6 +22,7 @@ internal static unsafe class ManagedCallbacks
         RetireCallbacks = &RetireCallbacksCallback,
         Invoke = &InvokeCallback,
         ResolveRows = &ResolveRowsCallback,
+        RenderElement = &RenderElementCallback,
     };
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -154,6 +155,28 @@ internal static unsafe class ManagedCallbacks
         {
             return GpuiApplication.Find(sessionId) is { } application
                 ? application.OnResolveRows(token, buffer, capacity, outLen)
+                : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int RenderElementCallback(
+        ulong sessionId,
+        ulong token,
+        byte* arguments,
+        uint argumentsLength,
+        NativeArena* outArena,
+        uint* outRoot
+    )
+    {
+        try
+        {
+            return GpuiApplication.Find(sessionId) is { } application
+                ? application.OnRenderElement(token, arguments, argumentsLength, outArena, outRoot)
                 : -1;
         }
         catch

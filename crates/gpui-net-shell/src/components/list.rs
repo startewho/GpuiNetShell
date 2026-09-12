@@ -19,7 +19,7 @@ use gpui_component::{
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
     ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
-    MaterializeRequest, Row,
+    ElementCallback, MaterializeRequest, MethodDescriptor, Row,
 };
 
 #[derive(Clone)]
@@ -29,14 +29,21 @@ struct ListPayload {
 }
 
 #[derive(Clone)]
+enum ListOp {
+    RenderRow(ComponentArgument),
+}
+
+#[derive(Clone)]
 struct ListRow {
     id: SharedString,
     label: SharedString,
     disabled: bool,
+    fields: Vec<String>,
 }
 
 struct ListDelegateImpl {
     rows: Vec<ListRow>,
+    render_row: Option<ElementCallback>,
     selected: Option<IndexPath>,
 }
 
@@ -44,17 +51,18 @@ fn parse_list_rows(rows: Vec<Row>) -> Vec<ListRow> {
     rows.into_iter()
         .enumerate()
         .map(|(index, fields)| {
-            let mut fields = fields.into_iter();
-            let id = fields
+            let mut parts = fields.iter().cloned();
+            let id = parts
                 .next()
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| format!("row-{index}"));
-            let label = fields.next().unwrap_or_else(|| id.clone());
-            let disabled = matches!(fields.next().as_deref(), Some("true" | "1"));
+            let label = parts.next().unwrap_or_else(|| id.clone());
+            let disabled = matches!(parts.next().as_deref(), Some("true" | "1"));
             ListRow {
                 id: id.into(),
                 label: label.into(),
                 disabled,
+                fields,
             }
         })
         .collect()
@@ -70,15 +78,25 @@ impl ListDelegate for ListDelegateImpl {
     fn render_item(
         &mut self,
         path: IndexPath,
-        _: &mut gpui::Window,
-        _: &mut gpui::Context<ListState<Self>>,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<ListState<Self>>,
     ) -> Option<Self::Item> {
         let row = self.rows.get(path.row)?;
+        let content = match &self.render_row {
+            Some(callback) => callback
+                .build(&row.fields, window, cx)
+                .unwrap_or_else(|error| {
+                    gpui::div()
+                        .child(format!("Failed to render List row: {error}"))
+                        .into_any_element()
+                }),
+            None => gpui::div().child(row.label.clone()).into_any_element(),
+        };
         Some(
             ListItem::new(row.id.clone())
                 .selected(self.selected == Some(path))
                 .disabled(row.disabled)
-                .child(row.label.clone()),
+                .child(content),
         )
     }
 
@@ -105,15 +123,27 @@ impl ComponentMaterializer for ListMaterializer {
             return Err("List does not accept children".to_string());
         }
         let rows = parse_list_rows(request.resolve_rows(&payload.rows)?);
+        let render_row = request.methods().find_map(|method| {
+            method
+                .payload()
+                .downcast_ref::<ListOp>()
+                .map(|ListOp::RenderRow(argument)| argument.clone())
+        });
+        let render_row = match render_row {
+            Some(argument) => Some(request.resolve_element_callback(&argument)?),
+            None => None,
+        };
         let style = request.take_style();
 
         let key = gpui::ElementId::Name(SharedString::from(format!("shell-list:{}", payload.id)));
         let entity = request.use_keyed_state(key, {
             let rows = rows.clone();
+            let render_row = render_row.clone();
             move |window, cx| {
                 ListState::new(
                     ListDelegateImpl {
                         rows,
+                        render_row,
                         selected: None,
                     },
                     window,
@@ -124,6 +154,7 @@ impl ComponentMaterializer for ListMaterializer {
         request.with_window_app(|_, app| {
             entity.update(app, |state, _| {
                 state.delegate_mut().rows = rows;
+                state.delegate_mut().render_row = render_row;
             });
         });
 
@@ -157,8 +188,20 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         }
                         _ => Err("List expects a non-empty id and a rows callback".into()),
                     },
+                )]                )
+                .with_methods(vec![MethodDescriptor::new(
+                    "render_row",
+                    vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+                    |arguments| match arguments {
+                        [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
+                            ListOp::RenderRow(ComponentArgument::Callback(*token)),
+                        )),
+                        _ => Err("List.render_row(callback) expects a callback".into()),
+                    },
+                )
+                .with_documentation(
+                    "Renders each row with managed code, receiving the row's fields.",
                 )])
-                .with_methods(Vec::new())
                 .with_documentation(
                     "Native retained List backed by an immutable `id\\tlabel[\\tdisabled]` row snapshot.",
                 ),
