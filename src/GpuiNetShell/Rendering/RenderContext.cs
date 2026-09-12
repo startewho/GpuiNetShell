@@ -772,6 +772,14 @@ public sealed class RenderContext
         return new NotificationElement(this, index);
     }
 
+    /// <summary>Declares a retained native source editor.</summary>
+    public EditorElement Editor(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentEditor);
+        _arena.SetNodeData(index, id);
+        return new EditorElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

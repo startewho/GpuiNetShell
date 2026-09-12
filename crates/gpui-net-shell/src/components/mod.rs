@@ -24,6 +24,7 @@ pub mod description_list;
 pub mod div;
 pub mod dropdown_button;
 pub mod dropdown_menu;
+pub mod editor;
 pub mod form;
 pub mod group_box;
 pub mod hover_card;
@@ -124,6 +125,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     chat::register(registry);
     radio_group::register(registry);
     window_effects::register(registry);
+    editor::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -239,6 +241,7 @@ mod tests {
                 "AlertDialog",
                 "Sheet",
                 "Notification",
+                "Editor",
             ]
         );
     }

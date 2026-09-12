@@ -624,6 +624,18 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentNotification, descriptor.Nodes[3].Component);
     }
 
+    [Fact]
+    public void EditorRecordsRetainedIdentity()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Editor("code").Value("fn main() {}").Language("rust").Bordered().H(200);
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentEditor, descriptor.Nodes[0].Component);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

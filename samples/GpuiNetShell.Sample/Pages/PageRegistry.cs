@@ -61,5 +61,6 @@ internal static class PageRegistry
             new PopoverPage(),
             new OverlaysPage(),
             new WindowEffectsPage(),
+            new EditorPage(),
         ];
 }
