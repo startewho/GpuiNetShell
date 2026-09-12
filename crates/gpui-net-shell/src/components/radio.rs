@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use gpui::{div, AnyElement, ParentElement as _, SharedString};
+use gpui::{AnyElement, IntoElement as _, Refineable as _, SharedString, Styled as _};
 use gpui_component::{radio::Radio, Sizable as _, Size};
 
 use super::common::nonempty_id;
@@ -15,6 +15,7 @@ use crate::registry::{
     ComponentDescriptor, ComponentMaterializer, ComponentPayload, ComponentRegistry,
     ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
 };
+use crate::typed_child::Part;
 
 #[derive(Clone)]
 struct RadioPayload(String);
@@ -32,7 +33,7 @@ enum RadioOp {
 struct RadioMaterializer;
 
 impl ComponentMaterializer for RadioMaterializer {
-    fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
+    fn materialize(&self, mut request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let id = request
             .payload()
             .downcast_ref::<RadioPayload>()
@@ -79,7 +80,11 @@ impl ComponentMaterializer for RadioMaterializer {
                 );
             });
         }
-        request.finish(div().child(radio))
+        radio.style().refine(&request.take_style());
+        if request.children_len() != 0 {
+            return Err("Radio does not accept children".to_string());
+        }
+        Ok(Part::new(radio).into_any_element())
     }
 }
 

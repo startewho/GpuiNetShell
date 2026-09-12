@@ -48,6 +48,7 @@ internal static class PageRegistry
             new CalendarPage(),
             new DatePickerPage(),
             new RadioPage(),
+            new RadioGroupPage(),
             new ListPage(),
             new SelectPage(),
             new DataTablePage(),
@@ -56,6 +57,7 @@ internal static class PageRegistry
             new TreePage(),
             new TablePage(),
             new CommandPage(),
+            new ChatPage(),
             new PopoverPage(),
             new OverlaysPage(),
         ];

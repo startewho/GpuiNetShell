@@ -11,6 +11,7 @@ pub mod badge;
 pub mod breadcrumb;
 pub mod button;
 pub mod calendar;
+pub mod chat;
 pub mod clipboard;
 pub mod collapsible;
 pub mod color_picker;
@@ -39,6 +40,7 @@ pub mod pagination;
 pub mod popover;
 pub mod progress;
 pub mod radio;
+pub mod radio_group;
 pub mod rating;
 pub mod resizable;
 pub mod scroll;
@@ -118,6 +120,8 @@ pub fn register(registry: &mut ComponentRegistry) {
     tree::register(registry);
     table::register(registry);
     command::register(registry);
+    chat::register(registry);
+    radio_group::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -222,6 +226,13 @@ mod tests {
                 "CommandGroup",
                 "CommandSeparator",
                 "Command",
+                "Attachment",
+                "Bubble",
+                "Marker",
+                "Message",
+                "ShimmerText",
+                "MessageScroller",
+                "RadioGroup",
             ]
         );
     }

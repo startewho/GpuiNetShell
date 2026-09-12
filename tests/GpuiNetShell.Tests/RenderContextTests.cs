@@ -548,6 +548,55 @@ public sealed unsafe class RenderContextTests
         );
     }
 
+    [Fact]
+    public void ChatFamilyRecordsTypedParts()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Message()
+            .Alignment("start")
+            .Add(ui.Bubble().Variant("filled").Add(ui.Label("Hi")));
+        ui.Marker("marker").Variant("separator").Add(ui.Label("Today"));
+        ui.ShimmerText("Loading…").DurationMs(1200).Spread(0.5).Once();
+        ui.Attachment("file").Status("complete").Size(ControlSize.Medium);
+        ui.MessageScroller("transcript", 8).RenderItem((context, index) => context.Label($"{index}"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentMessage, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentBubble, descriptor.Nodes[1].Component);
+        Assert.Equal(8u, descriptor.NodesLen);
+        Assert.Equal(
+            (uint)NativeProtocol.ComponentMessageScroller,
+            descriptor.Nodes[7].Component
+        );
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
+    [Fact]
+    public void RadioGroupComposesRadioChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.RadioGroup("group")
+            .SelectedIndex(1)
+            .OnChange(_ => { })
+            .Add(ui.Radio("a").Label("A"), ui.Radio("b").Label("B"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal(3u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentRadioGroup, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentRadio, descriptor.Nodes[1].Component);
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

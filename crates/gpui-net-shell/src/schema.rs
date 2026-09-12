@@ -15,7 +15,7 @@ pub const ABI_VERSION: u32 = 6;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C48;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C4A;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -192,6 +192,20 @@ pub const COMPONENT_COMMAND_GROUP: u32 = 79;
 pub const COMPONENT_COMMAND_SEPARATOR: u32 = 80;
 #[allow(dead_code)]
 pub const COMPONENT_COMMAND: u32 = 81;
+#[allow(dead_code)]
+pub const COMPONENT_ATTACHMENT: u32 = 82;
+#[allow(dead_code)]
+pub const COMPONENT_BUBBLE: u32 = 83;
+#[allow(dead_code)]
+pub const COMPONENT_MARKER: u32 = 84;
+#[allow(dead_code)]
+pub const COMPONENT_MESSAGE: u32 = 85;
+#[allow(dead_code)]
+pub const COMPONENT_SHIMMER_TEXT: u32 = 86;
+#[allow(dead_code)]
+pub const COMPONENT_MESSAGE_SCROLLER: u32 = 87;
+#[allow(dead_code)]
+pub const COMPONENT_RADIO_GROUP: u32 = 88;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -271,7 +285,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C48);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C4A);
     }
 
     #[test]

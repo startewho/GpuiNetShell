@@ -673,6 +673,73 @@ public sealed class RenderContext
         return new CommandElement(this, index);
     }
 
+    /// <summary>Declares a file or image attachment.</summary>
+    public AttachmentElement Attachment(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentAttachment);
+        _arena.SetNodeData(index, id);
+        return new AttachmentElement(this, index);
+    }
+
+    /// <summary>Declares a message bubble.</summary>
+    public BubbleElement Bubble() =>
+        new BubbleElement(this, _arena.AddNode(NativeProtocol.ComponentBubble));
+
+    /// <summary>Declares a conversation status marker.</summary>
+    public MarkerElement Marker(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentMarker);
+        _arena.SetNodeData(index, id);
+        return new MarkerElement(this, index);
+    }
+
+    /// <summary>Declares a message row.</summary>
+    public MessageElement Message() =>
+        new MessageElement(this, _arena.AddNode(NativeProtocol.ComponentMessage));
+
+    /// <summary>Declares animated loading text.</summary>
+    public ShimmerTextElement ShimmerText(string text)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentShimmerText);
+        _arena.SetNodeData(index, text);
+        return new ShimmerTextElement(this, index);
+    }
+
+    /// <summary>Declares a virtualized message transcript.</summary>
+    public MessageScrollerElement MessageScroller(string id, int itemCount)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentMessageScroller);
+        _arena.SetNodeData(
+            index,
+            id
+                + NativeProtocol.ConstructorArgSeparator
+                + itemCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
+        return new MessageScrollerElement(this, index);
+    }
+
+    /// <summary>Declares a vertical controlled radio set.</summary>
+    public RadioGroupElement RadioGroup(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentRadioGroup);
+        _arena.SetNodeData(
+            index,
+            "RadioGroup" + NativeProtocol.ConstructorArgSeparator + id
+        );
+        return new RadioGroupElement(this, index);
+    }
+
+    /// <summary>Declares a horizontal controlled radio set.</summary>
+    public RadioGroupElement HorizontalRadioGroup(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentRadioGroup);
+        _arena.SetNodeData(
+            index,
+            "HorizontalRadioGroup" + NativeProtocol.ConstructorArgSeparator + id
+        );
+        return new RadioGroupElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

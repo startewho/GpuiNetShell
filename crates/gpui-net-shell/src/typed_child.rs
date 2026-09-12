@@ -92,3 +92,94 @@ pub(crate) fn take_typed<T: 'static>(element: &mut AnyElement, name: &str) -> Re
         .take()
         .ok_or_else(|| format!("{name} child was already consumed"))
 }
+
+/// An element that renders `T` when it stands alone and yields `T` to a typed
+/// parent when one takes it.
+///
+/// [`Carrier`] renders nothing, which is right for a part that only ever exists
+/// inside its parent (a `CommandItem`, a `TableRow`). A `Radio` is also usable
+/// on its own, so it must render itself unless a `RadioGroup` consumes it.
+pub(crate) struct Part<T: IntoElement + 'static>(Option<T>);
+
+impl<T: IntoElement + 'static> Part<T> {
+    pub(crate) fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+
+    fn take(&mut self) -> Option<T> {
+        self.0.take()
+    }
+}
+
+impl<T: IntoElement + 'static> IntoElement for Part<T> {
+    type Element = Self;
+
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
+impl<T: IntoElement + 'static> Element for Part<T> {
+    type RequestLayoutState = AnyElement;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, AnyElement) {
+        let mut element = match self.take() {
+            Some(value) => value.into_any_element(),
+            None => gpui::div().into_any_element(),
+        };
+        let id = element.request_layout(window, cx);
+        (id, element)
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        element: &mut AnyElement,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        element.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        element: &mut AnyElement,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        element.paint(window, cx);
+    }
+}
+
+/// Takes the typed value a rendering part carried, exactly once.
+pub(crate) fn take_part<T: IntoElement + 'static>(
+    element: &mut AnyElement,
+    name: &str,
+) -> Result<T, String> {
+    element
+        .downcast_mut::<Part<T>>()
+        .ok_or_else(|| format!("{name} materialized an incompatible child"))?
+        .take()
+        .ok_or_else(|| format!("{name} child was already consumed"))
+}
