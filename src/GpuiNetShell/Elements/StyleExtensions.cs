@@ -172,8 +172,73 @@ public static class StyleExtensions
     public static T FlexShrink<T>(this T element, double value)
         where T : Element => element.Style("flex_shrink", value);
 
+    public static T FlexBasis<T>(this T element, double pixels)
+        where T : Element => element.Style("flex_basis", pixels);
+
+    public static T AspectRatio<T>(this T element, double ratio)
+        where T : Element => element.Style("aspect_ratio", ratio);
+
     public static T FontWeight<T>(this T element, double value)
         where T : Element => element.Style("font_weight", value);
+
+    // Grid placement and definition.
+    public static T ColStart<T>(this T element, int start)
+        where T : Element => element.Style("col_start", start);
+
+    public static T ColEnd<T>(this T element, int end)
+        where T : Element => element.Style("col_end", end);
+
+    public static T ColSpan<T>(this T element, int span)
+        where T : Element => element.Style("col_span", span);
+
+    public static T RowStart<T>(this T element, int start)
+        where T : Element => element.Style("row_start", start);
+
+    public static T RowEnd<T>(this T element, int end)
+        where T : Element => element.Style("row_end", end);
+
+    public static T RowSpan<T>(this T element, int span)
+        where T : Element => element.Style("row_span", span);
+
+    public static T GridCols<T>(this T element, int cols)
+        where T : Element => element.Style("grid_cols", cols);
+
+    public static T GridColsMinContent<T>(this T element, int cols)
+        where T : Element => element.Style("grid_cols_min_content", cols);
+
+    public static T GridColsMaxContent<T>(this T element, int cols)
+        where T : Element => element.Style("grid_cols_max_content", cols);
+
+    public static T GridRows<T>(this T element, int rows)
+        where T : Element => element.Style("grid_rows", rows);
+
+    public static T GridRowsMinContent<T>(this T element, int rows)
+        where T : Element => element.Style("grid_rows_min_content", rows);
+
+    public static T GridRowsMaxContent<T>(this T element, int rows)
+        where T : Element => element.Style("grid_rows_max_content", rows);
+
+    // Text detail.
+    public static T LineClamp<T>(this T element, int lines)
+        where T : Element => element.Style("line_clamp", lines);
+
+    public static T TextAlign<T>(this T element, TextAlignKind align)
+        where T : Element =>
+        element.StyleString("text_align", align switch
+        {
+            TextAlignKind.Center => "center",
+            TextAlignKind.Right => "right",
+            _ => "left",
+        });
+
+    public static T TextOverflow<T>(this T element, string ellipsis)
+        where T : Element => element.StyleString("text_overflow", ellipsis);
+
+    public static T TextDecorationColor<T>(this T element, string color)
+        where T : Element => element.StyleColor("text_decoration_color", color);
+
+    public static T ScrollbarWidth<T>(this T element, double pixels)
+        where T : Element => element.Style("scrollbar_width", pixels);
 
     // Color styles.
     public static T Bg<T>(this T element, string color)

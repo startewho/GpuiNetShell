@@ -140,6 +140,14 @@ public enum SidebarIcon : uint
     Account = 4,
 }
 
+/// <summary>Horizontal text alignment.</summary>
+public enum TextAlignKind : uint
+{
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {

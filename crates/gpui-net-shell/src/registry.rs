@@ -645,6 +645,15 @@ impl<'a> MaterializeRequest<'a> {
         self.children.drain(..).map(|child| child.element).collect()
     }
 
+    /// Takes ordinary children paired with the component name each came from, for
+    /// a parent that accepts several registered child types.
+    pub fn take_children_named(&mut self) -> Vec<(&'static str, AnyElement)> {
+        self.children
+            .drain(..)
+            .map(|child| (child.component, child.element))
+            .collect()
+    }
+
     /// Takes ordinary children, requiring each to be one of `expected`.
     ///
     /// This is the typed-parent contract (P5): a `Menu` accepts only `MenuItem`

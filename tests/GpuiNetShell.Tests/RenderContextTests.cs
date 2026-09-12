@@ -461,6 +461,93 @@ public sealed unsafe class RenderContextTests
         Assert.Equal((uint)NativeProtocol.ComponentMenuSeparator, descriptor.Nodes[3].Component);
     }
 
+    [Fact]
+    public void TreeRecordsNestedTypedChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Tree("files").Add(
+            ui.TreeItem("src", "src").Expanded().Add(
+                ui.TreeItem("main", "main.rs"),
+                ui.TreeItem("lib", "lib.rs")
+            ),
+            ui.TreeItem("readme", "README.md")
+        );
+
+        var descriptor = arena.Publish();
+        // tree(0), src(1), main(2), lib(3), readme(4)
+        Assert.Equal(5u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentTree, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTreeItem, descriptor.Nodes[1].Component);
+        Assert.Equal(4u, descriptor.ChildrenLen);
+    }
+
+    [Fact]
+    public void TableFamilyRecordsTypedParts()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Table()
+            .AccessibilityLabel("People")
+            .Add(
+                ui.TableHeader()
+                    .Add(
+                        ui.TableRow()
+                            .Add(
+                                ui.TableHead().Add(ui.Text("Name")),
+                                ui.TableHead().TextRight().Add(ui.Text("Age"))
+                            )
+                    ),
+                ui.TableBody()
+                    .Add(
+                        ui.TableRow()
+                            .Add(
+                                ui.TableCell().Add(ui.Text("Ada")),
+                                ui.TableCell().ColSpan(2).Add(ui.Text("36"))
+                            )
+                    ),
+                ui.TableCaption().Add(ui.Text("A caption"))
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentTable, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentTableHeader, descriptor.Nodes[1].Component);
+        Assert.Contains(
+            NativeProtocol.OpMethod,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
+    [Fact]
+    public void CommandFamilyRecordsTypedParts()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Command("palette")
+            .Searchable()
+            .Placeholder("Type a command")
+            .OnQuery(_ => { })
+            .Add(
+                ui.CommandGroup("General").Add(
+                    ui.CommandItem("New file").Keyword("create"),
+                    ui.CommandItem("Open").Checked()
+                ),
+                ui.CommandSeparator(),
+                ui.CommandItem("Quit")
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentCommand, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentCommandGroup, descriptor.Nodes[1].Component);
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

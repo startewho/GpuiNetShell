@@ -598,6 +598,81 @@ public sealed class RenderContext
         return new SettingsElement(this, index);
     }
 
+    /// <summary>Declares a tree item with a unique id and label.</summary>
+    public TreeItemElement TreeItem(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTreeItem);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new TreeItemElement(this, index);
+    }
+
+    /// <summary>Declares a retained tree.</summary>
+    public TreeElement Tree(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentTree);
+        _arena.SetNodeData(index, id);
+        return new TreeElement(this, index);
+    }
+
+    /// <summary>Declares a simple table.</summary>
+    public TableElement Table() => new TableElement(this, _arena.AddNode(NativeProtocol.ComponentTable));
+
+    /// <summary>Declares a table header.</summary>
+    public TableHeaderElement TableHeader() =>
+        new TableHeaderElement(this, _arena.AddNode(NativeProtocol.ComponentTableHeader));
+
+    /// <summary>Declares a table body.</summary>
+    public TableBodyElement TableBody() =>
+        new TableBodyElement(this, _arena.AddNode(NativeProtocol.ComponentTableBody));
+
+    /// <summary>Declares a table footer.</summary>
+    public TableFooterElement TableFooter() =>
+        new TableFooterElement(this, _arena.AddNode(NativeProtocol.ComponentTableFooter));
+
+    /// <summary>Declares a table row.</summary>
+    public TableRowElement TableRow() =>
+        new TableRowElement(this, _arena.AddNode(NativeProtocol.ComponentTableRow));
+
+    /// <summary>Declares a table header cell.</summary>
+    public TableHeadElement TableHead() =>
+        new TableHeadElement(this, _arena.AddNode(NativeProtocol.ComponentTableHead));
+
+    /// <summary>Declares a table data cell.</summary>
+    public TableCellElement TableCell() =>
+        new TableCellElement(this, _arena.AddNode(NativeProtocol.ComponentTableCell));
+
+    /// <summary>Declares a table caption.</summary>
+    public TableCaptionElement TableCaption() =>
+        new TableCaptionElement(this, _arena.AddNode(NativeProtocol.ComponentTableCaption));
+
+    /// <summary>Declares a Command palette item.</summary>
+    public CommandItemElement CommandItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCommandItem);
+        _arena.SetNodeData(index, label);
+        return new CommandItemElement(this, index);
+    }
+
+    /// <summary>Declares a Command palette group.</summary>
+    public CommandGroupElement CommandGroup(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCommandGroup);
+        _arena.SetNodeData(index, label);
+        return new CommandGroupElement(this, index);
+    }
+
+    /// <summary>Declares a Command palette separator.</summary>
+    public CommandSeparatorElement CommandSeparator() =>
+        new CommandSeparatorElement(this, _arena.AddNode(NativeProtocol.ComponentCommandSeparator));
+
+    /// <summary>Declares a retained native Command palette.</summary>
+    public CommandElement Command(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCommand);
+        _arena.SetNodeData(index, id);
+        return new CommandElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

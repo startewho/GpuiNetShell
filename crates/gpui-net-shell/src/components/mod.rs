@@ -15,6 +15,7 @@ pub mod clipboard;
 pub mod collapsible;
 pub mod color_picker;
 pub mod combobox;
+pub mod command;
 mod common;
 pub mod data_table;
 pub mod date_picker;
@@ -51,11 +52,13 @@ pub mod spinner;
 pub mod status_bar;
 pub mod stepper;
 pub mod tab_bar;
+pub mod table;
 pub mod tabs;
 pub mod tag;
 pub mod text;
 pub mod textarea;
 pub mod tooltip;
+pub mod tree;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
 
@@ -112,6 +115,9 @@ pub fn register(registry: &mut ComponentRegistry) {
     menu::register(registry);
     sidebar::register(registry);
     settings::register(registry);
+    tree::register(registry);
+    table::register(registry);
+    command::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -202,6 +208,20 @@ mod tests {
                 "SettingGroup",
                 "SettingPage",
                 "Settings",
+                "TreeItem",
+                "Tree",
+                "TableHeader",
+                "TableBody",
+                "TableFooter",
+                "TableRow",
+                "TableHead",
+                "TableCell",
+                "TableCaption",
+                "Table",
+                "CommandItem",
+                "CommandGroup",
+                "CommandSeparator",
+                "Command",
             ]
         );
     }

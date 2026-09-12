@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 use gpui::inspector_reflection::FunctionReflection;
 use gpui::{
     px, relative, rems, rgba, AbsoluteLength, DefiniteLength, FontWeight, Hsla, Length,
-    StyleRefinement, Styled,
+    StyleRefinement, Styled, TextAlign, TextOverflow,
 };
 use gpui_base::StyledExt as _;
 
@@ -149,6 +149,26 @@ const PARAM_STYLES: &[&str] = &[
     "rounded_tr",
     "rounded_bl",
     "rounded_br",
+    // Grid and self placement.
+    "aspect_ratio",
+    "col_start",
+    "col_end",
+    "col_span",
+    "row_start",
+    "row_end",
+    "row_span",
+    "grid_cols",
+    "grid_cols_min_content",
+    "grid_cols_max_content",
+    "grid_rows",
+    "grid_rows_min_content",
+    "grid_rows_max_content",
+    // Text detail.
+    "line_clamp",
+    "text_align",
+    "text_overflow",
+    "text_decoration_color",
+    "scrollbar_width",
 ];
 
 type NullaryFn = fn(StyleRefinement) -> StyleRefinement;
@@ -340,8 +360,72 @@ pub fn apply_param(
         "rounded_bl" => refinement.rounded_bl(absolute!()),
         "rounded_br" => refinement.rounded_br(absolute!()),
 
+        "aspect_ratio" => refinement.aspect_ratio(number!()),
+        "col_start" => refinement.col_start(to_i16(arg.as_f32()?, name)?),
+        "col_end" => refinement.col_end(to_i16(arg.as_f32()?, name)?),
+        "col_span" => refinement.col_span(to_u16(arg.as_f32()?, name)?),
+        "row_start" => refinement.row_start(to_i16(arg.as_f32()?, name)?),
+        "row_end" => refinement.row_end(to_i16(arg.as_f32()?, name)?),
+        "row_span" => refinement.row_span(to_u16(arg.as_f32()?, name)?),
+        "grid_cols" => refinement.grid_cols(to_u16(arg.as_f32()?, name)?),
+        "grid_cols_min_content" => refinement.grid_cols_min_content(to_u16(arg.as_f32()?, name)?),
+        "grid_cols_max_content" => refinement.grid_cols_max_content(to_u16(arg.as_f32()?, name)?),
+        "grid_rows" => refinement.grid_rows(to_u16(arg.as_f32()?, name)?),
+        "grid_rows_min_content" => refinement.grid_rows_min_content(to_u16(arg.as_f32()?, name)?),
+        "grid_rows_max_content" => refinement.grid_rows_max_content(to_u16(arg.as_f32()?, name)?),
+        "line_clamp" => refinement.line_clamp(to_usize(arg.as_f32()?, name)?),
+        "scrollbar_width" => refinement.scrollbar_width(absolute!()),
+        "text_align" => refinement.text_align(match arg.as_str()? {
+            "left" => TextAlign::Left,
+            "center" => TextAlign::Center,
+            "right" => TextAlign::Right,
+            other => return Err(format!("unsupported `text_align` value `{other}`")),
+        }),
+        "text_overflow" => {
+            refinement.text_overflow(TextOverflow::Truncate(arg.as_str()?.to_owned().into()))
+        }
+        "text_decoration_color" => refinement.text_decoration_color(color!()),
+
         other => return Err(format!("unknown style method `{other}`")),
     })
+}
+
+/// Narrows a style number to an exact `u16`, rejecting fractions and overflow.
+fn to_u16(value: f32, name: &str) -> Result<u16, String> {
+    if value.is_finite() && value >= 0.0 && value <= u16::MAX as f32 && value.fract() == 0.0 {
+        Ok(value as u16)
+    } else {
+        Err(format!(
+            "`{name}` expects an integer from 0 to {}",
+            u16::MAX
+        ))
+    }
+}
+
+/// Narrows a style number to an exact `i16`, rejecting fractions and overflow.
+fn to_i16(value: f32, name: &str) -> Result<i16, String> {
+    if value.is_finite()
+        && value >= i16::MIN as f32
+        && value <= i16::MAX as f32
+        && value.fract() == 0.0
+    {
+        Ok(value as i16)
+    } else {
+        Err(format!(
+            "`{name}` expects an integer from {} to {}",
+            i16::MIN,
+            i16::MAX
+        ))
+    }
+}
+
+/// Narrows a style number to an exact `usize`, rejecting fractions and overflow.
+fn to_usize(value: f32, name: &str) -> Result<usize, String> {
+    if value.is_finite() && value >= 0.0 && value <= usize::MAX as f32 && value.fract() == 0.0 {
+        Ok(value as usize)
+    } else {
+        Err(format!("`{name}` expects a non-negative integer"))
+    }
 }
 
 /// A length as written, before narrowing to what a method accepts.
@@ -486,6 +570,44 @@ mod tests {
         for name in ["flex_row", "flex_col", "w_full", "h_full", "size_full"] {
             assert!(nullary_index(name).is_some(), "`{name}` is not reflected");
         }
+    }
+
+    #[test]
+    fn grid_text_and_scroll_parametric_styles_apply() {
+        use StyleArg::{Number, String};
+        let default = StyleRefinement::default;
+        for name in [
+            "aspect_ratio",
+            "col_start",
+            "col_end",
+            "col_span",
+            "row_start",
+            "row_end",
+            "row_span",
+            "grid_cols",
+            "grid_cols_min_content",
+            "grid_cols_max_content",
+            "grid_rows",
+            "grid_rows_min_content",
+            "grid_rows_max_content",
+            "line_clamp",
+            "scrollbar_width",
+        ] {
+            assert!(
+                apply_param(name, &Number(2.0), default()).is_ok(),
+                "`{name}` did not apply"
+            );
+        }
+        assert!(apply_param("text_align", &String("center".into()), default()).is_ok());
+        assert!(apply_param("text_overflow", &String("…".into()), default()).is_ok());
+        assert!(apply_param(
+            "text_decoration_color",
+            &String("#ff0000".into()),
+            default()
+        )
+        .is_ok());
+        assert!(apply_param("text_align", &String("middle".into()), default()).is_err());
+        assert!(apply_param("col_span", &Number(1.5), default()).is_err());
     }
 
     #[test]

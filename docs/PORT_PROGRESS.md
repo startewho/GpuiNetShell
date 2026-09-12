@@ -48,6 +48,10 @@
 | 56 | Menu | 57 | MenuBar | 58 | SidebarMenuItem | 59 | SidebarMenu |
 | 60 | SidebarHeader | 61 | SidebarFooter | 62 | Sidebar | 63 | SidebarToggleButton |
 | 64 | SettingItem | 65 | SettingGroup | 66 | SettingPage | 67 | Settings |
+| 68 | TreeItem | 69 | Tree | 70 | TableHeader | 71 | TableBody |
+| 72 | TableFooter | 73 | TableRow | 74 | TableHead | 75 | TableCell |
+| 76 | TableCaption | 77 | Table | 78 | CommandItem | 79 | CommandGroup |
+| 80 | CommandSeparator | 81 | Command | | | | |
 
 ## 批次记录
 
@@ -73,7 +77,26 @@
 | Batch 11 | MenuItem, MenuSeparator, Menu, MenuBar（适配为窗口内菜单栏，用 managed 回调替代 action） | 54–57 | 6 | `…6C43` | Menu Bar | ✅ |
 | Batch 12 | SidebarMenuItem, SidebarMenu, SidebarHeader, SidebarFooter, Sidebar, SidebarToggleButton | 58–63 | 6 | `…6C44` | Sidebar | ✅ |
 | Batch 13 | SettingItem, SettingGroup, SettingPage, Settings（typed children + 懒槽） | 64–67 | 6 | `…6C45` | Settings | ✅ |
+| Batch 14 | TreeItem, Tree（保留 `TreeState`，按 id 同步并保留展开/选中） | 68–69 | 6 | `…6C46` | Tree | ✅ |
+| Batch 15 | TableHeader/Body/Footer/Row/Head/Cell/Caption/Table（typed parts） | 70–77 | 6 | `…6C47` | Table | ✅ |
+| Batch 16 | CommandItem, CommandGroup, CommandSeparator, Command（保留 `CommandState`；路径以 `"section,row"` 回传） | 78–81 | 6 | `…6C48` | Command | ✅ |
+| Batch 13 | SettingItem, SettingGroup, SettingPage, Settings（typed children + 懒槽） | 64–67 | 6 | `…6C45` | Settings | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
+
+## 样式（gpui style）覆盖
+
+- **无参样式**：由反射覆盖（`gpui_base::styled_ext_reflection_methods` + `gpui::styled_reflection::methods`
+  + 手写的字重补充），`flex_row`/`flex_col`/`w_full`/`h_full`/`size_full`/`items_center`/
+  `rounded_md`/`text_sm` 等数百个自动可用。
+- **带参样式**：手工绑定于 `style.rs::apply_param`。本次补齐缺失项：
+  `aspect_ratio`、`col_start`/`col_end`/`col_span`、`row_start`/`row_end`/`row_span`、
+  `grid_cols`/`grid_cols_min_content`/`grid_cols_max_content`、`grid_rows`/`grid_rows_min_content`/
+  `grid_rows_max_content`、`line_clamp`、`scrollbar_width`、`text_align`、`text_overflow`、
+  `text_decoration_color`；整数样式做精确范围校验（`to_u16`/`to_i16`/`to_usize`）。
+- C# 对应类型化方法：`Flex`/`WFull`/`HFull`/`Flex1`、`AspectRatio`、`ColStart`/`ColEnd`/`ColSpan`、
+  `RowStart`/`RowEnd`/`RowSpan`、`GridCols*`/`GridRows*`、`LineClamp`、`ScrollbarWidth`、
+  `TextAlign(TextAlignKind)`、`TextOverflow`、`TextDecorationColor`。
+- **不可移植**：`font(Font)`、`font_features(FontFeatures)` 需要跨 ABI 传完整 `Font`/特性集。
 
 ## 当前统计
 
@@ -86,17 +109,17 @@
   现先 `.Flex()`（display:flex）再设方向；并新增类型化样式方法 `Flex`/`WFull`/`HFull`/`Flex1`，
   Sample 中已无 `.Style(...)` 调用。
 
-- 已注册组件：**68**（id 0–67）。
+- 已注册组件：**82**（id 0–81）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。
-  `TabBar`/`Accordion`/`Stepper`/`DescriptionList`/`Form` 用 `Carrier<T>` 承载 typed children。
+  `TabBar`/`Accordion`/`Stepper`/`DescriptionList`/`Form`/`Sidebar`/`Settings`/`Tree`/`Table`/
+  `Command` 用 `Carrier<T>` 承载 typed children。
 - **文字输入**：`Input`、`NumberInput`、`Textarea`、`OtpInput`、`Slider`、`ColorPicker`、
   `Calendar`、`DatePicker` 已支持（`on_change`）。仅剩 `Editor`（LSP/语法高亮，重）。
 - **输入监控**：鼠标（按下/抬起/移动）、滚轮、键盘（按下/抬起）通过 `View.OnInput` 回调到托管层。
-- 剩余待移植：Menu 家族、Sidebar 家族、Settings 家族、Command 家族、Tree、Table、
-  Chat 家族（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、其余保留型
-  输入、RadioGroup、Window effects（Dialog/AlertDialog/Sheet/Notification）、NativeMenu 家族。
+- 剩余待移植：Chat 部件（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、
+  RadioGroup、Window effects（Dialog/AlertDialog/Sheet/Notification）、NativeMenu 家族、Editor。
 - **当前 gpui-component 缺失、无法移植**：Empty 家族、Carousel 家族、Chat 顶层、Image。
 
 ## 待补的框架能力

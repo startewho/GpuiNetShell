@@ -53,6 +53,9 @@ internal static class PageRegistry
             new DataTablePage(),
             new SidebarPage(),
             new SettingsPage(),
+            new TreePage(),
+            new TablePage(),
+            new CommandPage(),
             new PopoverPage(),
             new OverlaysPage(),
         ];
