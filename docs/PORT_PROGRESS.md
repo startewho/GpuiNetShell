@@ -81,8 +81,10 @@
   每个页面单独一个文件，位于 `samples/GpuiNetShell.Sample/Pages/`（`GalleryPage` 基类 +
   `PageRegistry`）。DataTable 页面展示 **2000 行**自定义数据并逐格 `RenderCell`；List 页面
   展示 **500 行**并用 `RenderRow` 自定义行渲染。
-- 修复：主界面右栏内容区不显示——外层行原先 `ItemsStart` 且内容未 `FlexGrow`，导致滚动区高度塌陷。
-  现改为：内容区 `Scroll().FlexGrow(1).H(420)`（页面 `Div` 用 `w_full`），侧栏 `H(420).FlexShrink(0)`。
+- 修复：主界面右栏内容区不显示 / 内容落到 Sidebar 下方——**根因是 gpui 的 `div()` 默认
+  `display: Block`，`flex_row`/`flex_col` 只在 `display:flex` 下生效**。`HStack`/`VStack`
+  现先 `.Flex()`（display:flex）再设方向；并新增类型化样式方法 `Flex`/`WFull`/`HFull`/`Flex1`，
+  Sample 中已无 `.Style(...)` 调用。
 
 - 已注册组件：**68**（id 0–67）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。

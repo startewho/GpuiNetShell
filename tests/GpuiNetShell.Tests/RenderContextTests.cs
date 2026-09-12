@@ -46,14 +46,17 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(3u, descriptor.NodesLen);
         Assert.Equal(2u, descriptor.ChildrenLen);
         Assert.Equal(NativeProtocol.ComponentText, descriptor.Nodes[1].Component);
-        Assert.Equal(2u, descriptor.OpsLen);
+        // VStack emits `flex` + `flex_col`, then `.Gap(8)`.
+        Assert.Equal(3u, descriptor.OpsLen);
         Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[0].Code);
-        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[1].Code);
+        Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[2].Code);
 
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("flex_col", DecodePacked(descriptor.Ops[0].A, utf8));
-        Assert.Equal("gap", DecodePacked(descriptor.Ops[1].A, utf8));
-        Assert.Equal(8.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[1].B));
+        Assert.Equal("flex", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("flex_col", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal("gap", DecodePacked(descriptor.Ops[2].A, utf8));
+        Assert.Equal(8.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[2].B));
     }
 
     [Fact]
