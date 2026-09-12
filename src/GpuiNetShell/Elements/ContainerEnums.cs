@@ -115,6 +115,31 @@ public enum FieldAlign : uint
     End = 2,
 }
 
+/// <summary>Physical side occupied by a sidebar control.</summary>
+public enum SideKind : uint
+{
+    Left = 0,
+    Right = 1,
+}
+
+/// <summary>Sidebar collapse behavior.</summary>
+public enum SidebarCollapsibleKind : uint
+{
+    Icon = 0,
+    Offcanvas = 1,
+    None = 2,
+}
+
+/// <summary>Navigation icon of a <see cref="SidebarMenuItemElement"/>.</summary>
+public enum SidebarIcon : uint
+{
+    Home = 0,
+    Components = 1,
+    Settings = 2,
+    Archive = 3,
+    Account = 4,
+}
+
 /// <summary>Maps a <see cref="ControlSize"/> to the wire's size literal.</summary>
 internal static class SemanticSize
 {

@@ -17,7 +17,7 @@ public static class NativeProtocol
     public const uint AbiVersion = 6;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C41;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C44;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one
@@ -78,6 +78,19 @@ public static class NativeProtocol
     public const uint ComponentTextarea = 48;
     public const uint ComponentOtpInput = 49;
     public const uint ComponentSlider = 50;
+    public const uint ComponentColorPicker = 51;
+    public const uint ComponentCalendar = 52;
+    public const uint ComponentDatePicker = 53;
+    public const uint ComponentMenuItem = 54;
+    public const uint ComponentMenuSeparator = 55;
+    public const uint ComponentMenu = 56;
+    public const uint ComponentMenuBar = 57;
+    public const uint ComponentSidebarMenuItem = 58;
+    public const uint ComponentSidebarMenu = 59;
+    public const uint ComponentSidebarHeader = 60;
+    public const uint ComponentSidebarFooter = 61;
+    public const uint ComponentSidebar = 62;
+    public const uint ComponentSidebarToggleButton = 63;
 
     // Operations. `a` is the packed UTF-8 range of a method name; `flags`
     // classifies the argument in `b`.

@@ -418,14 +418,44 @@ public sealed unsafe class RenderContextTests
         ui.Textarea("c").Value("hi");
         ui.OtpInput("d").Length(6).Groups(2);
         ui.Slider("e").Min(0).Max(10).Value(3);
+        ui.ColorPicker("f").Label("Accent");
+        ui.Calendar("g").NumberOfMonths(2);
+        ui.DatePicker("h").Placeholder("Pick a date");
 
         var descriptor = arena.Publish();
-        Assert.Equal(5u, descriptor.NodesLen);
+        Assert.Equal(8u, descriptor.NodesLen);
         Assert.Equal((uint)NativeProtocol.ComponentInput, descriptor.Nodes[0].Component);
         Assert.Equal((uint)NativeProtocol.ComponentNumberInput, descriptor.Nodes[1].Component);
         Assert.Equal((uint)NativeProtocol.ComponentTextarea, descriptor.Nodes[2].Component);
         Assert.Equal((uint)NativeProtocol.ComponentOtpInput, descriptor.Nodes[3].Component);
         Assert.Equal((uint)NativeProtocol.ComponentSlider, descriptor.Nodes[4].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentColorPicker, descriptor.Nodes[5].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentCalendar, descriptor.Nodes[6].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentDatePicker, descriptor.Nodes[7].Component);
+    }
+
+    [Fact]
+    public void MenuFamilyRecordsTypedChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.MenuBar("bar").Add(
+            ui.Menu("File").Add(
+                ui.MenuItem("New").OnSelect(() => { }),
+                ui.MenuSeparator(),
+                ui.MenuItem("Open").Disabled()
+            ),
+            ui.Menu("Edit").Add(ui.MenuItem("Undo").Checked())
+        );
+
+        var descriptor = arena.Publish();
+        // menubar(0), menu(1), item(2), sep(3), item(4), menu(5), item(6)
+        Assert.Equal(7u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentMenuBar, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentMenu, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentMenuItem, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentMenuSeparator, descriptor.Nodes[3].Component);
     }
 
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)

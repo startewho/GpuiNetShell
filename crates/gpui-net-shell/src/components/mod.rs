@@ -10,11 +10,14 @@ pub mod avatar;
 pub mod badge;
 pub mod breadcrumb;
 pub mod button;
+pub mod calendar;
 pub mod clipboard;
 pub mod collapsible;
+pub mod color_picker;
 pub mod combobox;
 mod common;
 pub mod data_table;
+pub mod date_picker;
 pub mod description_list;
 pub mod div;
 pub mod dropdown_button;
@@ -28,6 +31,7 @@ pub mod kbd;
 pub mod label;
 pub mod link;
 pub mod list;
+pub mod menu;
 pub mod number_input;
 pub mod otp_input;
 pub mod pagination;
@@ -39,6 +43,7 @@ pub mod resizable;
 pub mod scroll;
 pub mod select;
 pub mod separator;
+pub mod sidebar;
 pub mod skeleton;
 pub mod slider;
 pub mod spinner;
@@ -100,6 +105,11 @@ pub fn register(registry: &mut ComponentRegistry) {
     textarea::register(registry);
     otp_input::register(registry);
     slider::register(registry);
+    color_picker::register(registry);
+    calendar::register(registry);
+    date_picker::register(registry);
+    menu::register(registry);
+    sidebar::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -173,6 +183,19 @@ mod tests {
                 "Textarea",
                 "OtpInput",
                 "Slider",
+                "ColorPicker",
+                "Calendar",
+                "DatePicker",
+                "MenuItem",
+                "MenuSeparator",
+                "Menu",
+                "MenuBar",
+                "SidebarMenuItem",
+                "SidebarMenu",
+                "SidebarHeader",
+                "SidebarFooter",
+                "Sidebar",
+                "SidebarToggleButton",
             ]
         );
     }

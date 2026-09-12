@@ -483,6 +483,93 @@ public sealed class RenderContext
         return new SliderElement(this, index);
     }
 
+    /// <summary>Declares a retained color picker.</summary>
+    public ColorPickerElement ColorPicker(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentColorPicker);
+        _arena.SetNodeData(index, id);
+        return new ColorPickerElement(this, index);
+    }
+
+    /// <summary>Declares a retained calendar.</summary>
+    public CalendarElement Calendar(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCalendar);
+        _arena.SetNodeData(index, id);
+        return new CalendarElement(this, index);
+    }
+
+    /// <summary>Declares a retained single-date picker.</summary>
+    public DatePickerElement DatePicker(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDatePicker);
+        _arena.SetNodeData(index, id);
+        return new DatePickerElement(this, index);
+    }
+
+    /// <summary>Declares a menu item for a <see cref="MenuElement"/>.</summary>
+    public MenuItemElement MenuItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentMenuItem);
+        _arena.SetNodeData(index, label);
+        return new MenuItemElement(this, index);
+    }
+
+    /// <summary>Declares a menu separator for a <see cref="MenuElement"/>.</summary>
+    public MenuSeparatorElement MenuSeparator() =>
+        new MenuSeparatorElement(this, _arena.AddNode(NativeProtocol.ComponentMenuSeparator));
+
+    /// <summary>Declares a top-level menu for a <see cref="MenuBarElement"/>.</summary>
+    public MenuElement Menu(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentMenu);
+        _arena.SetNodeData(index, label);
+        return new MenuElement(this, index);
+    }
+
+    /// <summary>Declares an in-window menu bar.</summary>
+    public MenuBarElement MenuBar(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentMenuBar);
+        _arena.SetNodeData(index, id);
+        return new MenuBarElement(this, index);
+    }
+
+    /// <summary>Declares a sidebar navigation row.</summary>
+    public SidebarMenuItemElement SidebarMenuItem(string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSidebarMenuItem);
+        _arena.SetNodeData(index, label);
+        return new SidebarMenuItemElement(this, index);
+    }
+
+    /// <summary>Declares a typed sidebar menu.</summary>
+    public SidebarMenuElement SidebarMenu() =>
+        new SidebarMenuElement(this, _arena.AddNode(NativeProtocol.ComponentSidebarMenu));
+
+    /// <summary>Declares a sidebar header.</summary>
+    public SidebarHeaderElement SidebarHeader() =>
+        new SidebarHeaderElement(this, _arena.AddNode(NativeProtocol.ComponentSidebarHeader));
+
+    /// <summary>Declares a sidebar footer.</summary>
+    public SidebarFooterElement SidebarFooter() =>
+        new SidebarFooterElement(this, _arena.AddNode(NativeProtocol.ComponentSidebarFooter));
+
+    /// <summary>Declares an application sidebar.</summary>
+    public SidebarElement Sidebar(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSidebar);
+        _arena.SetNodeData(index, id);
+        return new SidebarElement(this, index);
+    }
+
+    /// <summary>Declares a sidebar toggle button.</summary>
+    public SidebarToggleButtonElement SidebarToggleButton() =>
+        new SidebarToggleButtonElement(
+            this,
+            _arena.AddNode(NativeProtocol.ComponentSidebarToggleButton)
+        );
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).FlexColumn();
 

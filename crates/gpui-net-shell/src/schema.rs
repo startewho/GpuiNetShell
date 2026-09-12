@@ -15,7 +15,7 @@ pub const ABI_VERSION: u32 = 6;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C41;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C44;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -130,6 +130,32 @@ pub const COMPONENT_TEXTAREA: u32 = 48;
 pub const COMPONENT_OTP_INPUT: u32 = 49;
 #[allow(dead_code)]
 pub const COMPONENT_SLIDER: u32 = 50;
+#[allow(dead_code)]
+pub const COMPONENT_COLOR_PICKER: u32 = 51;
+#[allow(dead_code)]
+pub const COMPONENT_CALENDAR: u32 = 52;
+#[allow(dead_code)]
+pub const COMPONENT_DATE_PICKER: u32 = 53;
+#[allow(dead_code)]
+pub const COMPONENT_MENU_ITEM: u32 = 54;
+#[allow(dead_code)]
+pub const COMPONENT_MENU_SEPARATOR: u32 = 55;
+#[allow(dead_code)]
+pub const COMPONENT_MENU: u32 = 56;
+#[allow(dead_code)]
+pub const COMPONENT_MENU_BAR: u32 = 57;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR_MENU_ITEM: u32 = 58;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR_MENU: u32 = 59;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR_HEADER: u32 = 60;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR_FOOTER: u32 = 61;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR: u32 = 62;
+#[allow(dead_code)]
+pub const COMPONENT_SIDEBAR_TOGGLE_BUTTON: u32 = 63;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -209,7 +235,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C41);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C44);
     }
 
     #[test]

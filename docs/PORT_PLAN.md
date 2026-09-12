@@ -70,8 +70,8 @@
 | Textarea | `TextareaState`（`InputEvent::Change`） | ✅ 已完成 |
 | OtpInput | `OtpState`（`OtpEvent::Change`） | ✅ 已完成 |
 | Slider | `SliderState`（`SliderEvent::Change`） | ✅ 已完成 |
-| ColorPicker | `ColorPickerState` | ⬜ |
-| Calendar / DatePicker | `CalendarState`/`DatePickerState` | ⬜ |
+| ColorPicker | `ColorPickerState`（`ColorPickerEvent::Change`） | ✅ 已完成 |
+| Calendar / DatePicker | `CalendarState`/`DatePickerState`（`Selected`/`Change`） | ✅ 已完成 |
 | Editor | `EditorState`（LSP/语法高亮，重） | ⬜ |
 
 ## 6. 输入监控（已完成）

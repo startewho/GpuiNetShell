@@ -43,7 +43,10 @@
 | 9 | Scroll | 20 | Icon | 31 | DropdownMenu | 42 | DescriptionItem |
 | 10 | Scrollbar | 21 | Collapsible | 32 | DropdownButton | 43 | DescriptionList |
 | 44 | Field | 45 | Form | 46 | Input | 47 | NumberInput |
-| 48 | Textarea | 49 | OtpInput | 50 | Slider | | |
+| 48 | Textarea | 49 | OtpInput | 50 | Slider | 51 | ColorPicker |
+| 52 | Calendar | 53 | DatePicker | 54 | MenuItem | 55 | MenuSeparator |
+| 56 | Menu | 57 | MenuBar | 58 | SidebarMenuItem | 59 | SidebarMenu |
+| 60 | SidebarHeader | 61 | SidebarFooter | 62 | Sidebar | 63 | SidebarToggleButton |
 
 ## 批次记录
 
@@ -65,17 +68,20 @@
 | 输入监控 | ABI `input_event`：鼠标按下/抬起/移动、滚轮、键盘转发到托管层（`InputEvent` + `View.OnInput`） | — | 6 | `…6C3F` | Input Monitor | ✅ |
 | 文字输入 | Input（保留 `InputState` + `on_change(string)`，订阅 `InputEvent::Change`） | 46 | 6 | `…6C40` | Input Monitor | ✅ |
 | 文字输入 2 | NumberInput, Textarea, OtpInput, Slider（保留 state + `on_change`） | 47–50 | 6 | `…6C41` | Text Input | ✅ |
+| 文字输入 3 | ColorPicker, Calendar, DatePicker（保留 state + `on_change`） | 51–53 | 6 | `…6C42` | Date & Color | ✅ |
+| Batch 11 | MenuItem, MenuSeparator, Menu, MenuBar（适配为窗口内菜单栏，用 managed 回调替代 action） | 54–57 | 6 | `…6C43` | Menu Bar | ✅ |
+| Batch 12 | SidebarMenuItem, SidebarMenu, SidebarHeader, SidebarFooter, Sidebar, SidebarToggleButton | 58–63 | 6 | `…6C44` | Sidebar | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 当前统计
 
-- 已注册组件：**51**（id 0–50）。
+- 已注册组件：**64**（id 0–63）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。
   `TabBar`/`Accordion`/`Stepper`/`DescriptionList`/`Form` 用 `Carrier<T>` 承载 typed children。
-- **文字输入**：`Input`、`NumberInput`、`Textarea`、`OtpInput`、`Slider` 已支持（`on_change`）。
-  其余保留型：ColorPicker、Calendar、DatePicker、Editor。
+- **文字输入**：`Input`、`NumberInput`、`Textarea`、`OtpInput`、`Slider`、`ColorPicker`、
+  `Calendar`、`DatePicker` 已支持（`on_change`）。仅剩 `Editor`（LSP/语法高亮，重）。
 - **输入监控**：鼠标（按下/抬起/移动）、滚轮、键盘（按下/抬起）通过 `View.OnInput` 回调到托管层。
 - 剩余待移植：Menu 家族、Sidebar 家族、Settings 家族、Command 家族、Tree、Table、
   Chat 家族（Attachment/Bubble/Marker/Message/ShimmerText/MessageScroller）、其余保留型

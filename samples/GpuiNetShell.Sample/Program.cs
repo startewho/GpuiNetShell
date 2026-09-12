@@ -63,6 +63,9 @@ internal sealed class GalleryView : View
         "Structure",
         "Input Monitor",
         "Text Input",
+        "Date & Color",
+        "Menu Bar",
+        "Sidebar",
     ];
     private readonly string[] _themes = ["Light", "Dark", "System"];
     private readonly string[] _options = ["Light", "Dark", "System"];
@@ -82,6 +85,10 @@ internal sealed class GalleryView : View
     private string _textarea = "";
     private string _otp = "";
     private double _slider = 25;
+    private string _color = "";
+    private string _calendar = "";
+    private string _picked = "";
+    private string _menuChoice = "(none)";
 
     public GalleryView(GpuiApplication application, int initialPage = 0)
     {
@@ -123,6 +130,9 @@ internal sealed class GalleryView : View
             16 => StructurePage(ref ui),
             17 => InputMonitorPage(ref ui),
             18 => TextInputPage(ref ui),
+            19 => DateColorPage(ref ui),
+            20 => MenuBarPage(ref ui),
+            21 => SidebarPage(ref ui),
             _ => OverlayPage(ref ui),
         };
 
@@ -640,6 +650,88 @@ internal sealed class GalleryView : View
                     Invalidate();
                 }),
                 ui.Label($"Slider: {_slider:0.#}")
+            )
+            .Gap(12);
+
+    private Element DateColorPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Date & Color", "Color picker, calendar, and date picker."),
+                ui.ColorPicker("accent").Label("Accent").OnChange(hex =>
+                {
+                    _color = hex;
+                    Invalidate();
+                }),
+                ui.Label($"Color: {_color}"),
+                ui.Calendar("cal").NumberOfMonths(2).OnChange(date =>
+                {
+                    _calendar = date;
+                    Invalidate();
+                }),
+                ui.DatePicker("due").Placeholder("Pick a date").OnChange(date =>
+                {
+                    _picked = date;
+                    Invalidate();
+                }),
+                ui.Label($"Calendar: {_calendar}   DatePicker: {_picked}")
+            )
+            .Gap(12);
+
+    private Element MenuBarPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Menu Bar", "In-window menu bar built from typed menu items."),
+                ui.MenuBar("main")
+                    .Add(
+                        ui.Menu("File")
+                            .Add(
+                                ui.MenuItem("New").OnSelect(Choose("New")),
+                                ui.MenuItem("Open").OnSelect(Choose("Open")),
+                                ui.MenuSeparator(),
+                                ui.MenuItem("Quit").Disabled()
+                            ),
+                        ui.Menu("Edit")
+                            .Add(
+                                ui.MenuItem("Undo").Checked().OnSelect(Choose("Undo")),
+                                ui.MenuItem("Redo").OnSelect(Choose("Redo"))
+                            )
+                    ),
+                ui.Label($"Last command: {_menuChoice}")
+            )
+            .Gap(12);
+
+    private Action Choose(string command) =>
+        () =>
+        {
+            _menuChoice = command;
+            Invalidate();
+        };
+
+    private Element SidebarPage(ref RenderContext ui) =>
+        ui.VStack(
+                Section(ref ui, "Sidebar", "Application sidebar with a typed navigation menu."),
+                ui.HStack(
+                        ui.Sidebar("side")
+                            .Collapsible(SidebarCollapsibleKind.Icon)
+                            .Header(ui.Label("gpui-net-shell"))
+                            .Footer(ui.Label("v0.1.0"))
+                            .Add(
+                                ui.SidebarMenu()
+                                    .Add(
+                                        ui.SidebarMenuItem("Home")
+                                            .Icon(SidebarIcon.Home)
+                                            .Selected()
+                                            .OnClick(Choose("Home")),
+                                        ui.SidebarMenuItem("Components")
+                                            .Icon(SidebarIcon.Components)
+                                            .OnClick(Choose("Components")),
+                                        ui.SidebarMenuItem("Settings")
+                                            .Icon(SidebarIcon.Settings)
+                                            .OnClick(Choose("Settings"))
+                                    )
+                            ),
+                        ui.Label($"Selected: {_menuChoice}")
+                    )
+                    .Gap(16)
+                    .ItemsStart()
             )
             .Gap(12);
 
