@@ -740,6 +740,38 @@ public sealed class RenderContext
         return new RadioGroupElement(this, index);
     }
 
+    /// <summary>Declares a button that opens a native dialog.</summary>
+    public DialogElement Dialog(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentDialog);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new DialogElement(this, index);
+    }
+
+    /// <summary>Declares a button that opens a native alert dialog.</summary>
+    public AlertDialogElement AlertDialog(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentAlertDialog);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new AlertDialogElement(this, index);
+    }
+
+    /// <summary>Declares a button that opens a native sheet.</summary>
+    public SheetElement Sheet(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentSheet);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new SheetElement(this, index);
+    }
+
+    /// <summary>Declares a button that posts a native notification.</summary>
+    public NotificationElement Notification(string id, string label)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentNotification);
+        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + label);
+        return new NotificationElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

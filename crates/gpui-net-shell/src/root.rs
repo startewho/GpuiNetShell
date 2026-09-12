@@ -684,6 +684,15 @@ impl Render for Root {
         let dialogs = self.dialog_layer(window, cx);
         let notifications = self.notification_layer(cx);
 
+        // The `gpui_component` root draws only its child, its tooltip overlay,
+        // and its native menu; its sheet/dialog/notification layers are the
+        // application root's to render. The window-effects controls open through
+        // `WindowExt`, so without these layers their effects open into a window
+        // that never draws them.
+        let component_sheets = gpui_component::Root::render_sheet_layer(window, cx);
+        let component_dialogs = gpui_component::Root::render_dialog_layer(window, cx);
+        let component_notifications = gpui_component::Root::render_notification_layer(window, cx);
+
         div()
             .id("gpui-net-shell-root")
             .key_context(CONTEXT)
@@ -696,6 +705,9 @@ impl Render for Root {
             .children(sheet)
             .children(dialogs)
             .child(notifications)
+            .children(component_sheets)
+            .children(component_dialogs)
+            .children(component_notifications)
     }
 }
 

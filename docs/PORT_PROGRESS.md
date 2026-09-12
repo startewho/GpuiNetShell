@@ -53,7 +53,8 @@
 | 76 | TableCaption | 77 | Table | 78 | CommandItem | 79 | CommandGroup |
 | 80 | CommandSeparator | 81 | Command | 82 | Attachment | 83 | Bubble |
 | 84 | Marker | 85 | Message | 86 | ShimmerText | 87 | MessageScroller |
-| 88 | RadioGroup | | | | | | |
+| 88 | RadioGroup | 89 | Dialog | 90 | AlertDialog | 91 | Sheet |
+| 92 | Notification | | | | | | |
 
 ## 批次记录
 
@@ -84,6 +85,8 @@
 | Batch 16 | CommandItem, CommandGroup, CommandSeparator, Command（保留 `CommandState`；路径以 `"section,row"` 回传） | 78–81 | 6 | `…6C48` | Command | ✅ |
 | Batch 17 | Attachment, Bubble, Marker, Message, ShimmerText, MessageScroller（保留 `MessageScrollerState`，行渲染走 managed 回调） | 82–87 | 6 | `…6C49` | Chat | ✅ |
 | Batch 18 | RadioGroup（`Radio` 改用可渲染 `Part`，组内消费原生 `Radio`；`on_change(index)`） | 88 | 6 | `…6C4A` | Radio Group | ✅ |
+| Batch 19 | Dialog, AlertDialog, Sheet, Notification（原生按钮触发 `WindowExt` 效果；`content` 懒槽 + `on_effect_error`） | 89–92 | 6 | `…6C4B` | Window Effects | ✅ |
+| 修复 | Window effects 点击无反应：`gpui_component::Root` 只画子视图，sheet/dialog/notification 层需由应用根渲染；`Root::render` 补上 `render_sheet_layer`/`render_dialog_layer`/`render_notification_layer` | — | 6 | `…6C4B` | Window Effects | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖
@@ -112,7 +115,7 @@
   现先 `.Flex()`（display:flex）再设方向；并新增类型化样式方法 `Flex`/`WFull`/`HFull`/`Flex1`，
   Sample 中已无 `.Style(...)` 调用。
 
-- 已注册组件：**89**（id 0–88）。
+- 已注册组件：**93**（id 0–92）。
 - Charts（BarChart/LineChart/AreaChart/PieChart/RadarChart）按需求**跳过**。
 - `List`/`Select`/`DataTable` 现支持自定义渲染：`render_row((ctx, fields) => Element)`、
   `DataTable.render_cell((ctx, [row, column]) => Element)`。未提供回调时回退到内置文本行。
@@ -122,7 +125,7 @@
 - **文字输入**：`Input`、`NumberInput`、`Textarea`、`OtpInput`、`Slider`、`ColorPicker`、
   `Calendar`、`DatePicker` 已支持（`on_change`）。仅剩 `Editor`（LSP/语法高亮，重）。
 - **输入监控**：鼠标（按下/抬起/移动）、滚轮、键盘（按下/抬起）通过 `View.OnInput` 回调到托管层。
-- 剩余待移植：Window effects（Dialog/AlertDialog/Sheet/Notification）、NativeMenu 家族、Editor。
+- 剩余待移植：NativeMenu 家族、Editor。
 - **当前 gpui-component 缺失、无法移植**：Empty 家族、Carousel 家族、Chat 顶层（`Chat`）、Image。
 
 ## 待补的框架能力

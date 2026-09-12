@@ -61,6 +61,7 @@ pub mod text;
 pub mod textarea;
 pub mod tooltip;
 pub mod tree;
+pub mod window_effects;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
 
@@ -122,6 +123,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     command::register(registry);
     chat::register(registry);
     radio_group::register(registry);
+    window_effects::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -233,6 +235,10 @@ mod tests {
                 "ShimmerText",
                 "MessageScroller",
                 "RadioGroup",
+                "Dialog",
+                "AlertDialog",
+                "Sheet",
+                "Notification",
             ]
         );
     }

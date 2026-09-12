@@ -597,6 +597,33 @@ public sealed unsafe class RenderContextTests
         );
     }
 
+    [Fact]
+    public void WindowEffectsRecordTriggersAndSlots()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Dialog("dialog", "Open")
+            .Title("Hi")
+            .Content(ui.Label("Body"))
+            .OnOk(() => { });
+        ui.AlertDialog("alert", "Alert")
+            .Title("Title")
+            .Description("Description")
+            .ShowCancel();
+        ui.Notification("note", "Notify")
+            .Title("Saved")
+            .Message("ok")
+            .Type("success");
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentDialog, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentLabel, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentAlertDialog, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentNotification, descriptor.Nodes[3].Component);
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

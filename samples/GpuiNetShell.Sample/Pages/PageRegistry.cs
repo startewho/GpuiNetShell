@@ -60,5 +60,6 @@ internal static class PageRegistry
             new ChatPage(),
             new PopoverPage(),
             new OverlaysPage(),
+            new WindowEffectsPage(),
         ];
 }
