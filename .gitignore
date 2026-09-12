@@ -11,3 +11,4 @@ target/
 # Generated
 *.d.ts
 *.pubxml
+*.txt

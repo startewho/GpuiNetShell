@@ -3,17 +3,26 @@
         <TargetFramework>net10.0</TargetFramework>
         <RootNamespace>GpuiNetShell</RootNamespace>
         <AssemblyName>GpuiNetShell</AssemblyName>
+        <!-- The runtime only uses P/Invoke, function pointers, and
+             UnmanagedCallersOnly; this turns on the trim/AOT analyzers so an
+             AOT-incompatible change fails the build instead of the publish. -->
+        <IsAotCompatible>true</IsAotCompatible>
     </PropertyGroup>
 
     <PropertyGroup>
         <RepositoryRoot>$(MSBuildThisFileDirectory)..\..</RepositoryRoot>
-        <NativeOutputDir>$(RepositoryRoot)\target\debug</NativeOutputDir>
+        <!-- Match the native host to the managed configuration: Release uses a
+             release cargo build, everything else the debug host. -->
+        <NativeProfile Condition="'$(Configuration)' == 'Release'">release</NativeProfile>
+        <NativeProfile Condition="'$(NativeProfile)' == ''">debug</NativeProfile>
+        <NativeCargoArgs Condition="'$(NativeProfile)' == 'release'">--release</NativeCargoArgs>
+        <NativeOutputDir>$(RepositoryRoot)\target\$(NativeProfile)</NativeOutputDir>
     </PropertyGroup>
 
     <!-- The native host is part of this build: an ABI or schema change rebuilds
          both sides together. Set SkipNativeBuild=true to use a prebuilt host. -->
     <Target Name="BuildNativeHost" BeforeTargets="BeforeBuild" Condition="'$(SkipNativeBuild)' != 'true'">
-        <Exec Command="cargo build -p gpui-net-shell" WorkingDirectory="$(RepositoryRoot)" />
+        <Exec Command="cargo build -p gpui-net-shell $(NativeCargoArgs)" WorkingDirectory="$(RepositoryRoot)" />
     </Target>
 
     <ItemGroup>

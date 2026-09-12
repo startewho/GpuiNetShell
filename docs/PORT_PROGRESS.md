@@ -96,6 +96,9 @@
 | 修复 | Chat 页滚动记录未受限：`MessageScroller` 加 `.H(320)` 使其真正虚拟化，不再展开整段日志 | — | 6 | `…6C4D` | Chat | ✅ |
 | 删除 | 移除旧的管理式 dialog/sheet/notification：ABI `open_dialog`/`close_dialog`/`open_sheet`/`close_sheet`/`push_notification`、`GpuiApplication` 方法、`Root` 自有层、`OverlaysPage`；改由 Window Effects 控件承担 | — | 6 | `…6C4D` | Window Effects | ✅ |
 | Batch 22 | ContextMenuItem, ContextMenuSeparator, ContextMenu（右键菜单，包裹目标元素；条目走托管回调） | 97–99 | 6 | `…6C4E` | Context Menu | ✅ |
+| 重设计 | DataTable：托管侧保留行对象，`DataTable(id, rowCount)` + `render_cell` 回调按 `[rowIndex, column]` 取行；`ContextMenuItem` 子项成为行右键菜单，回调收到行号 | — | 6 | `…6C4F` | DataTable | ✅ |
+| 热重载 | `MetadataUpdateHandler`：Hot Reload 后清缓存并重绘所有会话（`GpuiApplication.InvalidateAll`） | — | 6 | `…6C4F` | — | ✅ |
+| AOT | 确认 NativeAOT 可用（`dotnet publish -p:PublishAot=true`，AOT 二进制正常运行）；库加 `IsAotCompatible`，csproj 按配置选择 debug/release 原生宿主 | — | 6 | `…6C4F` | — | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖

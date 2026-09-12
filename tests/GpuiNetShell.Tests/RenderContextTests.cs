@@ -336,9 +336,9 @@ public sealed unsafe class RenderContextTests
             .Add(ui.Tab().Label("One"), ui.Tab().Label("Two"));
         ui.List("list", () => "a\tAlpha").Full();
         ui.Select("select", () => "light\tLight", _ => { }).Placeholder("Pick");
-        ui.DataTable("table", () => "Ada\tEngineer")
+        ui.DataTable("table", 1)
             .Columns("Name", "Role")
-            .RenderCell((ctx, args) => ctx.Label(args[0]));
+            .RenderCell((ctx, row, column) => ctx.Label($"{row}:{column}"));
 
         var descriptor = arena.Publish();
         // tabbar(0), tab(1), tab(2), list(3), select(4), datatable(5)

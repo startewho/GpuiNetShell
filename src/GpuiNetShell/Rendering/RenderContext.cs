@@ -373,14 +373,19 @@ public sealed class RenderContext
     }
 
     /// <summary>
-    /// Declares a retained table. <paramref name="rows"/> returns newline-
-    /// separated rows of tab-separated cell strings.
+    /// Declares a retained table whose managed host owns the rows. The native
+    /// table asks for one row index at a time; the managed side supplies the
+    /// row count here.
     /// </summary>
-    public DataTableElement DataTable(string id, Func<string> rows)
+    public DataTableElement DataTable(string id, int rowCount)
     {
         var index = _arena.AddNode(NativeProtocol.ComponentDataTable);
-        var token = Events.RegisterRows(rows);
-        _arena.SetNodeData(index, id + NativeProtocol.ConstructorArgSeparator + token);
+        _arena.SetNodeData(
+            index,
+            id
+                + NativeProtocol.ConstructorArgSeparator
+                + rowCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
         return new DataTableElement(this, index);
     }
 

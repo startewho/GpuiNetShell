@@ -28,6 +28,21 @@ public sealed class ContextMenuItemElement : Element
         Arena.AddCallback(Index, "on_select", Events.Register(handler));
         return this;
     }
+
+    /// <summary>
+    /// Runs when the item is selected, receiving the right-clicked row index
+    /// (used by <see cref="DataTableElement.RowMenu"/>).
+    /// </summary>
+    public ContextMenuItemElement OnSelect(Action<int> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(
+            Index,
+            "on_select",
+            Events.Register(value => handler((int)value.Number))
+        );
+        return this;
+    }
 }
 
 /// <summary>A typed context-menu separator.</summary>

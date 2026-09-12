@@ -1,4 +1,3 @@
-using System.Text;
 using GpuiNetShell.Elements;
 using GpuiNetShell.Rendering;
 
@@ -6,7 +5,13 @@ namespace GpuiNetShell.Sample.Pages;
 
 internal sealed class DataTablePage : GalleryPage
 {
-    private const int RowCount = 2000;
+    private static readonly string[] Roles = ["Engineer", "Designer", "Manager", "Analyst", "Support"];
+    private static readonly string[] Teams = ["Platform", "Growth", "Infra", "Design", "Data"];
+    private static readonly string[] Statuses = ["Active", "Away", "Offline"];
+
+    private readonly List<Person> _rows = CreateRows(2000);
+
+    private string _status = "(no row action yet)";
 
     public override string Title => "DataTable";
 
@@ -14,74 +19,74 @@ internal sealed class DataTablePage : GalleryPage
         Page(
             ref ui,
             "DataTable",
-            $"A retained table over a large custom dataset ({RowCount} rows) with managed cell rendering.",
-            ui.DataTable("people", Rows)
+            $"The {_rows.Count} row objects stay in C#; the native table asks for one row index at a time.",
+            ui.DataTable("people", _rows.Count)
                 .Columns("Name", "Role", "Team", "Status", "Score")
                 .Stripe()
                 .Bordered()
                 .H(440)
                 .RenderCell(
-                    (ctx, args) =>
+                    (ctx, row, column) =>
                     {
-                        var cells = args[0].Split('\t');
-                        var column = args[1];
-                        var value = column switch
-                        {
-                            "Name" => cells.ElementAtOrDefault(0) ?? "",
-                            "Role" => cells.ElementAtOrDefault(1) ?? "",
-                            "Team" => cells.ElementAtOrDefault(2) ?? "",
-                            "Status" => cells.ElementAtOrDefault(3) ?? "",
-                            "Score" => cells.ElementAtOrDefault(4) ?? "",
-                            _ => "",
-                        };
-
+                        var person = _rows[row];
                         return column switch
                         {
                             "Status" => ctx
                                 .Tag()
                                 .Variant(
-                                    value == "Active"
+                                    person.Status == "Active"
                                         ? TagVariant.Success
-                                        : value == "Away"
+                                        : person.Status == "Away"
                                             ? TagVariant.Warning
                                             : TagVariant.Secondary
                                 )
-                                .Add(ctx.Text(value)),
-                            "Score" => ctx.Label(value).FontSemibold().TextColor(ScoreColor(value)),
-                            "Name" => ctx.Label(value).FontMedium(),
-                            _ => ctx.Label(value),
+                                .Add(ctx.Text(person.Status)),
+                            "Score" => ctx
+                                .Label(person.Score.ToString())
+                                .FontSemibold()
+                                .TextColor(person.Score >= 80 ? "green-600" : "gray-600"),
+                            "Name" => ctx.Label(person.Name).FontMedium(),
+                            "Role" => ctx.Label(person.Role),
+                            "Team" => ctx.Label(person.Team),
+                            _ => ctx.Label(string.Empty),
                         };
                     }
                 )
+                .RowMenu(
+                    ui.ContextMenuItem("Copy name")
+                        .OnSelect(row =>
+                        {
+                            _status = $"copy {_rows[row].Name}";
+                            Invalidate();
+                        }),
+                    ui.ContextMenuSeparator(),
+                    ui.ContextMenuItem("Delete row")
+                        .OnSelect(row =>
+                        {
+                            _status = $"delete {_rows[row].Name}";
+                            Invalidate();
+                        })
+                ),
+            ui.Label($"Last row action: {_status}")
         );
 
-    private static string ScoreColor(string value) =>
-        int.TryParse(value, out var score) && score >= 80 ? "green-600" : "gray-600";
-
-    private static string Rows()
+    private static List<Person> CreateRows(int count)
     {
-        var roles = new[] { "Engineer", "Designer", "Manager", "Analyst", "Support" };
-        var teams = new[] { "Platform", "Growth", "Infra", "Design", "Data" };
-        var statuses = new[] { "Active", "Away", "Offline" };
-        var builder = new StringBuilder(RowCount * 40);
-        for (var i = 0; i < RowCount; i++)
+        var rows = new List<Person>(count);
+        for (var i = 0; i < count; i++)
         {
-            if (i > 0)
-            {
-                builder.Append('\n');
-            }
-            builder
-                .Append("Person ")
-                .Append(i + 1)
-                .Append('\t')
-                .Append(roles[i % roles.Length])
-                .Append('\t')
-                .Append(teams[i % teams.Length])
-                .Append('\t')
-                .Append(statuses[i % statuses.Length])
-                .Append('\t')
-                .Append(50 + ((i * 7) % 50));
+            rows.Add(
+                new Person(
+                    $"Person {i + 1}",
+                    Roles[i % Roles.Length],
+                    Teams[i % Teams.Length],
+                    Statuses[i % Statuses.Length],
+                    50 + ((i * 7) % 50)
+                )
+            );
         }
-        return builder.ToString();
+        return rows;
     }
+
+    private readonly record struct Person(string Name, string Role, string Team, string Status, int Score);
 }

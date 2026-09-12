@@ -46,6 +46,30 @@ public sealed class GpuiApplication
         }
     }
 
+    /// <summary>Repaints every live session. Called after a Hot Reload update.</summary>
+    internal static void InvalidateAll()
+    {
+        GpuiApplication[] applications;
+        lock (Gate)
+        {
+            applications = [.. Instances.Values];
+        }
+        foreach (var application in applications)
+        {
+            application.Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// Drops managed render caches before a Hot Reload update. The element tree
+    /// is rebuilt every frame, so there is nothing held here beyond the root
+    /// view's own state; this is the seam for any future cached render state.
+    /// </summary>
+    internal static void ClearRenderCaches()
+    {
+        // Intentional no-op today.
+    }
+
     internal int OnStarted() => NativeProtocol.StatusOk;
 
     internal int OnWindowClosed(int status) => status;

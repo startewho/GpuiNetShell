@@ -16,14 +16,16 @@ use gpui_component::menu::{ContextMenuExt as _, PopupMenuItem};
 
 use super::common::nonempty_id;
 use crate::registry::{
-    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback, ComponentDescriptor,
-    ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
-    MaterializeRequest, MethodDescriptor,
+    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
+    ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
+    ComponentRegistry, ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
 };
 use crate::typed_child::{take_typed, Carrier};
 
+/// One context-menu entry, shared by `ContextMenu` (element right-click) and
+/// `DataTable` (row right-click).
 #[derive(Clone)]
-enum Entry {
+pub(crate) enum Entry {
     Item {
         label: String,
         disabled: bool,
@@ -31,6 +33,40 @@ enum Entry {
         callback: Option<ComponentCallback>,
     },
     Separator,
+}
+
+impl Entry {
+    /// Builds the `PopupMenuItem`, optionally reporting `row` to the callback.
+    pub(crate) fn into_menu_item(self, row: Option<usize>) -> PopupMenuItem {
+        match self {
+            Entry::Item {
+                label,
+                disabled,
+                checked,
+                callback,
+            } => {
+                let mut item = PopupMenuItem::new(label)
+                    .disabled(disabled)
+                    .checked(checked);
+                if let Some(callback) = callback {
+                    item = item.on_click(move |_, window, cx| {
+                        let arguments = match row {
+                            Some(row) => vec![ComponentCallbackArgument::Number(row as f64)],
+                            None => Vec::new(),
+                        };
+                        callback.invoke_with(
+                            "context-menu item callback failed",
+                            &arguments,
+                            window,
+                            cx,
+                        );
+                    });
+                }
+                item
+            }
+            Entry::Separator => PopupMenuItem::separator(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -127,30 +163,7 @@ impl ComponentMaterializer for ContextMenuMaterializer {
             .children(target);
         let component = target.context_menu(move |mut menu, _window, _cx| {
             for entry in entries.clone() {
-                menu = match entry {
-                    Entry::Item {
-                        label,
-                        disabled,
-                        checked,
-                        callback,
-                    } => {
-                        let mut item = PopupMenuItem::new(label)
-                            .disabled(disabled)
-                            .checked(checked);
-                        if let Some(callback) = callback {
-                            item = item.on_click(move |_, window, cx| {
-                                callback.invoke_with(
-                                    "ContextMenuItem.on_select callback failed",
-                                    &[],
-                                    window,
-                                    cx,
-                                )
-                            });
-                        }
-                        menu.item(item)
-                    }
-                    Entry::Separator => menu.separator(),
-                };
+                menu = menu.item(entry.into_menu_item(None));
             }
             menu
         });
