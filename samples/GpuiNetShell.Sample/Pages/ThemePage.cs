@@ -58,7 +58,7 @@ internal sealed class ThemePage : GalleryPage
     {
         _mode = mode;
         _custom = custom;
-        Application.SetTheme(mode, custom ? CustomPalette : null);
         Invalidate();
+        Application.SetTheme(mode, custom ? CustomPalette : null);
     }
 }

@@ -239,11 +239,15 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                     cx.update(|cx| {
                         let _ = window.update(cx, |_root, window, cx| {
                             let _ = weak_root.update(cx, |root, cx| match command {
-                                Command::Invalidate => root.invalidate_view(cx),
+                                Command::Invalidate => {
+                                    root.invalidate_view(cx);
+                                    window.refresh();
+                                }
                                 Command::OpenPopup { items } => root.open_popup(items, window, cx),
                                 Command::SetTheme { mode, colors } => {
                                     apply_theme(mode, &colors, window, cx);
                                     root.invalidate_view(cx);
+                                    window.refresh();
                                 }
                             });
                         });

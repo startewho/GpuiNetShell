@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, px, rgba, AnyElement, App, Context, IntoElement, MouseButton, Render, ScrollDelta, Window,
+    div, px, AnyElement, App, Context, IntoElement, MouseButton, Render, ScrollDelta, Window,
 };
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
@@ -27,6 +27,7 @@ use crate::materialize::materialize;
 use crate::registry::FrozenComponentRegistry;
 use crate::schema::STATUS_OK;
 use crate::snapshot::{RenderSnapshot, Snapshot};
+use gpui_component::ActiveTheme as _;
 
 /// A window root carrying a managed view.
 pub struct ShellView {
@@ -217,7 +218,7 @@ impl Render for ShellView {
         div()
             .id("gpui-net-shell-root")
             .size_full()
-            .bg(rgba(0xFFFFFFFF))
+            .bg(cx.theme().background)
             .on_mouse_down(MouseButton::Left, move |event, _, _| {
                 emit_input(
                     callbacks,

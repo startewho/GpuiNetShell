@@ -1,7 +1,13 @@
+using System.Reflection.Metadata;
 using GpuiNetShell;
 using GpuiNetShell.Elements;
 using GpuiNetShell.Rendering;
 using GpuiNetShell.Sample.Pages;
+
+// The hot-reload handler lives in GpuiNetShell.dll, but the runtime only sees
+// handlers declared by the assembly being edited. Declaring the attribute here
+// (the app assembly) is what makes an edit trigger a repaint.
+[assembly: MetadataUpdateHandler(typeof(GpuiNetShell.HotReload))]
 
 // --check loads the native host and negotiates the ABI/schema without opening a
 // window. It is the quickest end-to-end check of the C ABI boundary.
