@@ -37,7 +37,6 @@ if (
 GpuiApplication? application = null;
 application = new GpuiApplication(() => new GalleryView(application!, initialPage));
 application.UseCustomTitlebar = true;
-application.ChildWindowsUseCustomTitlebar = true;
 application.AlwaysShowScrollbars = true;
 
 // A dev affordance for verifying multi-window deterministically: open N child
@@ -61,6 +60,28 @@ if (
             () => handle?.Close()
         );
         handle = application.OpenWindow(() => child);
+    }
+}
+
+// A dev affordance for verifying per-window title bars: open one window that
+// inherits the parent, one with a custom title bar, and one with the system
+// title bar.
+if (args.Contains("--open-mixed", StringComparer.Ordinal))
+{
+    OpenChild(1, "Inherit", null);
+    OpenChild(2, "Custom", true);
+    OpenChild(3, "System", false);
+
+    void OpenChild(int ordinal, string label, bool? useCustomTitlebar)
+    {
+        WindowHandle? handle = null;
+        var child = new SecondaryWindowView(
+            application!,
+            ordinal,
+            $"{label} titlebar",
+            () => handle?.Close()
+        );
+        handle = application!.OpenWindow(() => child, new WindowOptions(useCustomTitlebar));
     }
 }
 

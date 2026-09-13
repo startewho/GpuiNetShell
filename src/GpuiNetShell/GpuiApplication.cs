@@ -35,23 +35,23 @@ public sealed class GpuiApplication
     /// </summary>
     public bool AlwaysShowScrollbars { get; set; }
 
-    /// <summary>
-    /// Draw a custom title bar in windows opened through <see cref="OpenWindow"/>.
-    /// Independent of <see cref="UseCustomTitlebar"/>, which configures the
-    /// primary window.
-    /// </summary>
-    public bool ChildWindowsUseCustomTitlebar { get; set; }
-
     public GpuiApplication(Func<View> rootFactory)
     {
         ArgumentNullException.ThrowIfNull(rootFactory);
-        _primary = new Session(this, rootFactory);
+        _primary = new Session(this, rootFactory, resolveCustomTitlebar(null));
         lock (Gate)
         {
             _primary.SessionId = ++_nextSession;
             Instances[_primary.SessionId] = _primary;
         }
     }
+
+    /// <summary>
+    /// Resolves the title-bar mode of a window: an explicit per-window choice
+    /// wins; otherwise the primary window's setting is inherited.
+    /// </summary>
+    private bool resolveCustomTitlebar(bool? explicitChoice) =>
+        explicitChoice ?? UseCustomTitlebar;
 
     /// <summary>The primary window's session id.</summary>
     public ulong SessionId => _primary.SessionId;
@@ -66,15 +66,23 @@ public sealed class GpuiApplication
 
     /// <summary>
     /// Opens a new top-level window whose content is built by
-    /// <paramref name="rootFactory"/>. The returned <see cref="WindowHandle"/>
-    /// can invalidate the window and close it. Call before or during
-    /// <see cref="Run"/>; a call before <see cref="Run"/> is queued until the
-    /// event loop starts.
+    /// <paramref name="rootFactory"/>, inheriting the primary window's title-bar
+    /// mode. The returned <see cref="WindowHandle"/> can invalidate the window
+    /// and close it. Call before or during <see cref="Run"/>; a call before
+    /// <see cref="Run"/> is queued until the event loop starts.
     /// </summary>
-    public unsafe WindowHandle OpenWindow(Func<View> rootFactory)
+    public WindowHandle OpenWindow(Func<View> rootFactory) => OpenWindow(rootFactory, null);
+
+    /// <summary>
+    /// Opens a new top-level window with explicit <paramref name="options"/>.
+    /// A <see langword="null"/> <see cref="WindowOptions.UseCustomTitlebar"/>
+    /// inherits the primary window's title-bar mode.
+    /// </summary>
+    public unsafe WindowHandle OpenWindow(Func<View> rootFactory, WindowOptions? options)
     {
         ArgumentNullException.ThrowIfNull(rootFactory);
-        var session = new Session(this, rootFactory);
+        var useCustomTitlebar = resolveCustomTitlebar(options?.UseCustomTitlebar);
+        var session = new Session(this, rootFactory, useCustomTitlebar);
         lock (Gate)
         {
             _children.Add(session);
@@ -82,15 +90,7 @@ public sealed class GpuiApplication
 
         if (_running)
         {
-            var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
-            if (api == null || api->OpenWindow == null)
-            {
-                throw new InvalidOperationException(
-                    "The native host does not support opening windows."
-                );
-            }
-            var flags = ChildWindowsUseCustomTitlebar ? 1u : 0u;
-            var opened = api->OpenWindow(_primary.SessionId, flags);
+            var opened = OpenNativeWindow(session);
             if (opened <= 0)
             {
                 throw new InvalidOperationException(
@@ -109,6 +109,22 @@ public sealed class GpuiApplication
         }
 
         return new WindowHandle(this, session);
+    }
+
+    /// <summary>Opens one native window for an already-created session.</summary>
+    private unsafe long OpenNativeWindow(Session session)
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->OpenWindow == null)
+        {
+            throw new InvalidOperationException("The native host does not support opening windows.");
+        }
+        var flags = session.UseCustomTitlebar ? 1u : 0u;
+        if (AlwaysShowScrollbars)
+        {
+            flags |= 2u;
+        }
+        return api->OpenWindow(_primary.SessionId, flags);
     }
 
     private readonly List<Session> _pendingOpen = [];
@@ -185,6 +201,7 @@ public sealed class GpuiApplication
         if (api->Configure != null)
         {
             var flags = 0u;
+            _primary.UseCustomTitlebar = UseCustomTitlebar;
             if (UseCustomTitlebar)
             {
                 flags |= 1u;
@@ -222,8 +239,7 @@ public sealed class GpuiApplication
         _pendingOpen.Clear();
         foreach (var session in pending)
         {
-            var flags = ChildWindowsUseCustomTitlebar ? 1u : 0u;
-            var opened = api->OpenWindow(_primary.SessionId, flags);
+            var opened = OpenNativeWindow(session);
             if (opened <= 0)
             {
                 continue;
@@ -343,10 +359,11 @@ public sealed class GpuiApplication
         private RenderContext _renderContext = null!;
         private View? _root;
 
-        internal Session(GpuiApplication owner, Func<View> rootFactory)
+        internal Session(GpuiApplication owner, Func<View> rootFactory, bool useCustomTitlebar)
         {
             Owner = owner;
             RootFactory = rootFactory;
+            UseCustomTitlebar = useCustomTitlebar;
             _renderContext = new RenderContext(_arena, _events, () => Owner.InvalidateSession(SessionId));
         }
 
@@ -355,6 +372,9 @@ public sealed class GpuiApplication
         internal ulong SessionId { get; set; }
 
         internal Func<View> RootFactory { get; }
+
+        /// <summary>This window's resolved title-bar mode.</summary>
+        internal bool UseCustomTitlebar { get; set; }
 
         internal EventRegistry Events => _events;
 

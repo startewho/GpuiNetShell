@@ -288,12 +288,15 @@ with its own `ShellView`, `Root`, arenas, and event registry, so the managed
 - `GpuiApplication.OpenWindow(factory)` returns a `WindowHandle`; calling it
   before `Run` queues the window and it opens on the primary window's first
   frame, when the native ingress is live.
+- `open_window`'s `flags` (custom title bar, always-show scrollbars) are set per
+  window. `OpenWindow(factory, options)` takes a `WindowOptions` whose
+  `UseCustomTitlebar` is `null` to inherit the primary window's mode, or an
+  explicit `true`/`false` to override it, so one app can mix custom and system
+  title bars across windows.
 - `close_window(session)` posts a `Close` command; the owning window calls
   `Window::remove_window`, and GPUI quits once the last window closes.
 - Native-menu actions carry their owning session, so one global action listener
   routes to the right managed callback.
-- `configure(session, flags)` and `open_window`'s own `flags` set the custom
-  title bar per window.
 
 ## Windows apartment
 

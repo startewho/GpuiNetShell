@@ -37,13 +37,22 @@ public sealed unsafe class MultiWindowTests
     }
 
     [Fact]
-    public void ChildWindowsCanOptIntoCustomTitlebars()
+    public void ChildWindowsCanChooseTheirTitlebarMode()
     {
         var application = new GpuiApplication(() => new ProbeView());
-        application.ChildWindowsUseCustomTitlebar = true;
+        application.UseCustomTitlebar = true;
 
-        Assert.True(application.ChildWindowsUseCustomTitlebar);
+        // An explicit per-window choice overrides the parent's setting.
+        var custom = application.OpenWindow(() => new ProbeView());
+        var system = application.OpenWindow(
+            () => new ProbeView(),
+            new WindowOptions(useCustomTitlebar: false)
+        );
+        var inherit = application.OpenWindow(() => new ProbeView(), new WindowOptions());
+
         Assert.NotEqual(0UL, application.SessionId);
+        Assert.NotSame(custom, system);
+        Assert.NotSame(system, inherit);
     }
 
     [Fact]
