@@ -23,13 +23,38 @@ public sealed class EventRegistry
         Func<RenderContext, IReadOnlyList<string>, Element>
     > _elementRenderers = [];
     private readonly Dictionary<ulong, List<ulong>> _generations = [];
+
+    // An entity-backed subtree is retained natively, so its renderer is not
+    // generation-scoped: it is keyed by entity id and replaced in place.
+    private readonly Dictionary<ulong, ulong> _persistentElements = [];
+    private readonly HashSet<ulong> _renderedEntities = [];
     private ulong _next = 1;
     private ulong _generation;
 
     /// <summary>Marks the snapshot generation new handlers belong to.</summary>
     public void BeginGeneration(ulong generation)
     {
+        // An entity that was not rendered last generation has left the tree;
+        // release its persistent renderer so the token table does not grow.
+        List<ulong>? stale = null;
+        foreach (var (entityId, token) in _persistentElements)
+        {
+            if (!_renderedEntities.Contains(entityId))
+            {
+                (stale ??= []).Add(entityId);
+                _elementRenderers.Remove(token);
+            }
+        }
+        if (stale is not null)
+        {
+            foreach (var entityId in stale)
+            {
+                _persistentElements.Remove(entityId);
+            }
+        }
+
         _generation = generation;
+        _renderedEntities.Clear();
         _generations[generation] = [];
     }
 
@@ -98,23 +123,41 @@ public sealed class EventRegistry
     ) => _elementRenderers.TryGetValue(token, out renderer!);
 
     /// <summary>
-    /// Registers an element renderer that outlives snapshot generations. An
-    /// entity-backed subtree is retained natively across frames, so its renderer
-    /// must survive the generation that first declared it; release it with
-    /// <see cref="ReleasePersistent"/>.
+    /// Registers the element renderer for an entity-backed subtree. The native
+    /// host retains the returned token across frames, so it outlives snapshot
+    /// generations; re-registering the same <paramref name="entityId"/> replaces
+    /// the previous renderer (and releases its token).
     /// </summary>
     public ulong RegisterPersistentElement(
+        ulong entityId,
         Func<RenderContext, IReadOnlyList<string>, Element> renderer
     )
     {
         ArgumentNullException.ThrowIfNull(renderer);
+        if (_persistentElements.TryGetValue(entityId, out var previous))
+        {
+            _elementRenderers.Remove(previous);
+        }
         var token = _next++;
         _elementRenderers[token] = renderer;
+        _persistentElements[entityId] = token;
         return token;
     }
 
-    /// <summary>Releases a persistent element renderer.</summary>
-    public void ReleasePersistent(ulong token) => _elementRenderers.Remove(token);
+    /// <summary>Releases an entity's persistent element renderer.</summary>
+    public void ReleasePersistentElement(ulong entityId)
+    {
+        if (_persistentElements.Remove(entityId, out var token))
+        {
+            _elementRenderers.Remove(token);
+        }
+    }
+
+    /// <summary>Notes that <paramref name="entityId"/> was rendered this generation.</summary>
+    public void MarkEntityRendered(ulong entityId) => _renderedEntities.Add(entityId);
+
+    /// <summary>Whether an entity subtree is present in the current generation.</summary>
+    public bool RendersEntity(ulong entityId) => _renderedEntities.Contains(entityId);
 
     /// <summary>Runs the handler for <paramref name="token"/>; false when retired.</summary>
     public bool Dispatch(ulong token) => DispatchValue(token, EventValue.None);
@@ -153,6 +196,8 @@ public sealed class EventRegistry
         _rowProviders.Clear();
         _elementRenderers.Clear();
         _generations.Clear();
+        _persistentElements.Clear();
+        _renderedEntities.Clear();
         _next = 1;
         _generation = 0;
     }

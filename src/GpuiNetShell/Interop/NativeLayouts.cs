@@ -81,5 +81,6 @@ internal unsafe struct GpuiNetShellApi
     public delegate* unmanaged[Cdecl]<ulong, uint, byte*, uint, int> SetTheme;
     public delegate* unmanaged[Cdecl]<ulong, uint, long> OpenWindow;
     public delegate* unmanaged[Cdecl]<ulong, int> CloseWindow;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, int> NotifyEntity;
     public ulong Reserved;
 }

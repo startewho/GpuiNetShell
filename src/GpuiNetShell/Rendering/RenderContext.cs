@@ -1,4 +1,6 @@
+using System.Globalization;
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 
@@ -874,6 +876,38 @@ public sealed class RenderContext
         var index = _arena.AddNode(NativeProtocol.ComponentImage);
         _arena.SetNodeData(index, source);
         return new ImageElement(this, index);
+    }
+
+    /// <summary>
+    /// Declares a retained subtree owned by <paramref name="entity"/>. The native
+    /// host keeps one view per entity id, so a
+    /// <see cref="Context{T}.Notify"/> repaints only this subtree. The
+    /// <paramref name="render"/> delegate runs with the entity's current state;
+    /// it is re-invoked natively on each repaint, so it should read only live
+    /// entity state and its arguments.
+    /// </summary>
+    public EntityHostElement Child<T>(
+        Entity<T> entity,
+        Func<T, RenderContext, Context<T>, Element> render
+    )
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(render);
+        var id = entity.Id.Value;
+        var index = _arena.AddNode(NativeProtocol.ComponentEntityHost);
+        _arena.SetNodeData(index, id.ToString(CultureInfo.InvariantCulture));
+        var token = _events.RegisterPersistentElement(
+            id,
+            (context, _) =>
+            {
+                var state = entity.Read(out var cx);
+                return render(state, context, cx);
+            }
+        );
+        _events.MarkEntityRendered(id);
+        _arena.AddCallback(index, "render_entity", token);
+        return new EntityHostElement(this, index);
     }
 
     /// <summary>A column container.</summary>

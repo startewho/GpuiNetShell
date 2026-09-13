@@ -6,13 +6,11 @@
 //! subtree rather than the whole window — the native counterpart of the managed
 //! `Context::notify`, scoped to an entity.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::prelude::*;
-use gpui::{
-    div, AnyElement, App, Context, ElementId, Refineable as _, Render, SharedString, Styled as _,
-    Window,
-};
+use gpui::{div, AnyElement, Context, ElementId, Render, SharedString, Window};
 
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
@@ -62,9 +60,11 @@ impl ComponentMaterializer for EntityHostMaterializer {
             .clone();
         let renderer = request
             .methods()
-            .find_map(|method| match method.payload().downcast_ref::<EntityHostOp>() {
-                Some(EntityHostOp::Render(argument)) => Some(argument.clone()),
-                None => None,
+            .find_map(|method| {
+                method
+                    .payload()
+                    .downcast_ref::<EntityHostOp>()
+                    .map(|EntityHostOp::Render(argument)| argument.clone())
             })
             .ok_or_else(|| "EntityHost requires a render_entity callback".to_string())
             .and_then(|argument| request.resolve_element_callback(&argument))?;
@@ -84,6 +84,18 @@ impl ComponentMaterializer for EntityHostMaterializer {
             view.renderer = Some(renderer);
         });
 
+        // Retain a way to notify this entity later: managed `Context::notify`
+        // arrives as a command and repaints only this subtree.
+        if let Ok(numeric_id) = payload.entity_id.parse::<u64>() {
+            let handle = entity.clone();
+            request.host().register_entity_host(
+                numeric_id,
+                Rc::new(move |cx| {
+                    handle.update(cx, |_view, cx| cx.notify());
+                }),
+            );
+        }
+
         let style = request.take_style();
         let mut wrapper = div().size_full().child(entity);
         wrapper.style().refine(&style);
@@ -91,28 +103,9 @@ impl ComponentMaterializer for EntityHostMaterializer {
     }
 }
 
-/// The keyed-state name for one entity id. Shared with the host's
-/// `notify_entity` path so both agree on the key.
+/// The keyed-state name for one entity id.
 pub(crate) fn entity_key(entity_id: &str) -> ElementId {
     ElementId::Name(SharedString::from(format!("shell-entity:{entity_id}")))
-}
-
-/// Repaints the retained entity subtree `entity_id` in `window`, if present.
-///
-/// `use_keyed_state` returns the existing entity without running the init
-/// closure; a missing key creates a placeholder view that renders nothing until
-/// the next full frame materializes it.
-pub(crate) fn notify_entity(
-    entity_id: u64,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let key = entity_key(&entity_id.to_string());
-    let entity = window.use_keyed_state(key, cx, |_window, _cx| EntityHostView {
-        id: SharedString::default(),
-        renderer: None,
-    });
-    entity.update(cx, |_view, cx| cx.notify());
 }
 
 pub(super) fn register(registry: &mut ComponentRegistry) {
@@ -133,7 +126,10 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                 )])
                 .with_methods(vec![MethodDescriptor::new(
                     "render_entity",
-                    vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+                    vec![ArgumentDescriptor::new(
+                        "callback",
+                        ArgumentSchema::Callback,
+                    )],
                     |arguments| match arguments {
                         [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
                             EntityHostOp::Render(ComponentArgument::Callback(*token)),

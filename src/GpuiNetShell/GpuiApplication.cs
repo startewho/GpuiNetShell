@@ -21,6 +21,28 @@ public sealed class GpuiApplication
     private static readonly Dictionary<ulong, Session> Instances = [];
     private static ulong _nextSession;
 
+    static GpuiApplication()
+    {
+        EntityRegistry.Notified += OnEntityNotified;
+    }
+
+    /// <summary>
+    /// Bridges a managed entity notification to the native host: every live
+    /// session currently rendering that entity repaints just its subtree.
+    /// </summary>
+    private static void OnEntityNotified(ulong entityId)
+    {
+        Session[] sessions;
+        lock (Gate)
+        {
+            sessions = [.. Instances.Values];
+        }
+        foreach (var session in sessions)
+        {
+            session.NotifyEntity(entityId);
+        }
+    }
+
     private readonly Session _primary;
     private readonly List<Session> _children = [];
 
@@ -544,6 +566,25 @@ public sealed class GpuiApplication
         {
             _events.Retire(generation);
             return NativeProtocol.StatusOk;
+        }
+
+        /// <summary>
+        /// Repaints one entity subtree, if this window currently renders it. The
+        /// call is safe from any thread; the native host marshals it to the GPUI
+        /// thread.
+        /// </summary>
+        internal unsafe void NotifyEntity(ulong entityId)
+        {
+            if (SessionId == 0 || !_events.RendersEntity(entityId))
+            {
+                return;
+            }
+            var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+            if (api == null || api->NotifyEntity == null)
+            {
+                return;
+            }
+            _ = api->NotifyEntity(SessionId, entityId);
         }
     }
 

@@ -49,7 +49,9 @@ enum Command {
     /// Closes the window belonging to `session`.
     Close,
     /// Repaints the retained entity subtree `entity_id` in `session`.
-    NotifyEntity { entity_id: u64 },
+    NotifyEntity {
+        entity_id: u64,
+    },
 }
 
 /// Per-session window options, set before the window opens.
@@ -383,7 +385,7 @@ fn open_managed_window(
                             window.remove_window();
                         }
                         Command::NotifyEntity { entity_id } => {
-                            crate::components::entity_host::notify_entity(entity_id, window, cx);
+                            root.notify_entity(entity_id, cx);
                         }
                     });
                 });

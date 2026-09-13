@@ -1,4 +1,5 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
@@ -748,6 +749,57 @@ public sealed unsafe class RenderContextTests
             NativeProtocol.OpCallback,
             Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
         );
+    }
+
+    [Fact]
+    public void EntityChildRecordsItsIdentityAndPersistentRenderer()
+    {
+        using var arena = new RenderArena();
+        var events = new EventRegistry();
+        var ui = new RenderContext(arena, events, () => { });
+        var registry = new EntityRegistry();
+        var counter = registry.Create<EntityState>(_ => new EntityState { Count = 3 });
+
+        ui.Child(counter, (state, context, _) => context.Label($"count={state.Count}"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal(1u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentEntityHost, descriptor.Nodes[0].Component);
+        Assert.Equal(1u, descriptor.OpsLen);
+        Assert.Equal(NativeProtocol.OpCallback, descriptor.Ops[0].Code);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("render_entity", DecodePacked(descriptor.Ops[0].A, utf8));
+        var nodeData =
+            ((ulong)descriptor.Nodes[0].DataOffset << 32) | descriptor.Nodes[0].DataLen;
+        Assert.Equal(
+            counter.Id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DecodePacked(nodeData, utf8)
+        );
+
+        var token = descriptor.Ops[0].B;
+        Assert.True(events.TryGetElement(token, out var renderer));
+        Assert.True(events.RendersEntity(counter.Id.Value));
+
+        // The persistent renderer reads the live entity state on each invocation.
+        using var innerArena = new RenderArena();
+        var inner = new RenderContext(innerArena, events, () => { });
+        var subtree = renderer!(inner, [counter.Id.Value.ToString()]);
+        Assert.IsType<LabelElement>(subtree);
+
+        var innerBytes = innerArena.Publish();
+        var innerUtf8 = new ReadOnlySpan<byte>(
+            innerBytes.Utf8,
+            checked((int)innerBytes.Utf8Len)
+        );
+        var labelData =
+            ((ulong)innerBytes.Nodes[0].DataOffset << 32) | innerBytes.Nodes[0].DataLen;
+        Assert.Equal("count=3", DecodePacked(labelData, innerUtf8));
+    }
+
+    private sealed class EntityState
+    {
+        public int Count { get; set; }
     }
 
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)

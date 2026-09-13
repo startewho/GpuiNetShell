@@ -144,6 +144,12 @@ impl Root {
         self.view.update(cx, |view, cx| view.refresh(cx));
     }
 
+    /// Repaints one retained entity subtree inside the managed content view.
+    pub fn notify_entity(&mut self, entity_id: u64, cx: &mut Context<Self>) {
+        self.view
+            .update(cx, |view, cx| view.notify_entity(entity_id, cx));
+    }
+
     // -- Popup (a sheet) -----------------------------------------------------
 
     /// Opens the option menu as a `Bottom` sheet, replacing any open sheet.

@@ -1,6 +1,6 @@
 # 设计方案：C# 侧 View / Entity、通知与关注、父子数据传递
 
-> 状态：**待审阅**。审阅通过后再进入执行。
+> 状态：**P1–P5 已实现**（P6 未做）。本文档已按实现回填。
 > 目标：在 C# 侧复刻 GPUI 的 `Entity`/`Context`/`observe`/`subscribe`/`emit` 心智模型，
 > 使多组件、可复用状态、父子通信有统一、可组合的写法，同时不破坏现有 `View`/`Render` ABI。
 
@@ -98,10 +98,13 @@ public sealed class Context<T> where T : class
 ```csharp
 public sealed class Subscription : IDisposable
 {
-    public void Dispose();     // 取消订阅
-    public void Detach();      // 生命周期绑定到当前实体（随实体释放自动取消）
+    public static Subscription Empty { get; }
+    public void Dispose();     // 取消订阅（幂等）
 }
 ```
+
+> `Detach()` 本轮未实现：订阅在 `Dispose()` 或**持有它的实体 `Release()`** 时取消
+> （`EntityRegistry.Release` 会移除该实体所有出边）。C# 无确定性析构，故不依赖 GC。
 
 ### 4.2 `View` 升级：实体化视图
 
@@ -126,17 +129,19 @@ public interface IEntityView<T> where T : class
 用法（父页面渲染子组件）：
 
 ```csharp
-var counter = App.New<CounterState>(cx => new CounterState());
+var counter = app.New<CounterState>(cx => new CounterState());
 
 ui.Child(counter, (state, ui, cx) =>        // 渲染实体化子视图
     ui.HStack(
         ui.Label($"count={state.Count}"),
-        ui.Button("inc").Label("+1").OnClick(() => cx.Update(s => s.Count++))
+        ui.Button("inc").Label("+1").OnClick(() =>
+            counter.Update((s, c) => { s.Count++; c.Notify(); }))
     ));
 ```
 
 > `ui.Child(entity, render)` 会把该实体注册为原生 keyed entity，
-> 于是 `cx.Notify()` 只重渲染这个子树。
+> 于是 `cx.Notify()` 只重渲染这个子树。`render` 委托每次（原生）重绘时重新执行，
+> 因此它应只读取实体当前状态与其参数。
 
 ### 4.3 通知（notify）语义
 
@@ -186,10 +191,21 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 
 ### 5.1 身份：EntityId ↔ 原生 keyed entity
 
-- C# `EntityId.Value` 直接作为原生 `use_keyed_state` 的 key（`SharedString`）。
-- 渲染实体化子视图时，托管在 arena 里发一个新的 op：`OP_ENTITY_CHILD { a = entityId, b = childNodeIndex }`（或复用 `OP_SLOT` 的命名槽 + 新组件 `EntityHost`）。
-  - 原生为该 key 建立/复用 `Entity<EntityHostView>`，`EntityHostView` 渲染托管给的子节点，并持有 `cx.subscribe` 到自身以响应 notify。
-- `Notify` → ABI 新增 `notify_entity(session, entity_id)`（any-thread），原生 `Entity::update` + `cx.notify()`，只标记该实体 dirty 子渲染。
+- C# `EntityId.Value` 直接作为原生 keyed state 的 key。
+- 渲染实体化子视图时，托管用新组件 `EntityHost`（`COMPONENT_ENTITY_HOST = 102`）表达：
+  - 节点 data = 十进制 entity id；
+  - 方法 `render_entity(callbackToken)` = 托管侧注册的「持久」element renderer（不随 snapshot generation 退休，见 §5.2）。
+- 原生 `EntityHostMaterializer` 在 render 期间 `use_keyed_state("shell-entity:{id}")`
+  建立/复用 `Entity<EntityHostView>`，设置 renderer，并把一个 notifier 注册进
+  **窗口级** `EntityHosts` 表（`ShellView` 持有，key = entity id）。
+- `Notify` → ABI `notify_entity(session, entity_id)`（any-thread）打成命令；
+  GPUI 线程上 `Root::notify_entity` → `ShellView::notify_entity` 从 `EntityHosts`
+  取出 notifier，`Entity::update` + `cx.notify()`，只标记该子树 dirty。
+
+> 关键修正：**不能**在 render 之外调用 `window.use_keyed_state`——GPUI 会断言
+> 调用处于 layout/prepaint。因此 notify 走的不是再次 `use_keyed_state` 查表，而是
+> 渲染期间记下的 `EntityHosts` notifier。`ShellView::content` 每帧先清空该表，
+> 由本帧的 `EntityHost` materialize 重新登记，于是离开树的实体会被释放。
 
 ### 5.2 通知/事件的托管实现
 
@@ -200,15 +216,17 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 - `Emit(e)`：按 `typeof(e)` 查 listeners 派发。
 - 生命周期：`Subscription.Dispose` 从表里移除；实体被 GC/显式释放时移除其所有入/出边。**弱引用**避免父→子→父 的强引用环。
 
-### 5.3 ABI 变更（草案）
+### 5.3 ABI 变更（已实现）
 
 | 新增 | 签名 | 用途 |
 |---|---|---|
 | `notify_entity` | `(u64 session, u64 entity_id) -> i32` | 实体级重渲染 |
-| 渲染 op | `OP_ENTITY_CHILD`（`code=6`?） | arena 表达「实体化子视图」 |
-| 组件 | `COMPONENT_ENTITY_HOST = 102` | 承载实体子树的原生组件 |
+| 组件 | `COMPONENT_ENTITY_HOST = 102` | 承载实体子树的原生组件（data = entity id，方法 `render_entity`） |
 
-> ABI 6→7 已在多窗口时用过；本次若加表项需 **ABI 8 + schema bump**，或把 `notify_entity` 复用 `invalidate` 的通道（带 entity 参数，另开表项）。
+> 未新增 op：复用现有 `OpMethod` / `OpCallback`。已 **ABI 7→8**、schema hash
+> `…6C55 → …6C56`。托管 `GpuiNetShellApi` 已同步新增 `NotifyEntity` 表项。
+> 附带新增 `EventRegistry.RegisterPersistentElement(entityId, renderer)`：实体
+> 子树的 renderer 不随 generation 退休，按 entity id 原地替换。
 
 ---
 
@@ -231,20 +249,27 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 
 ## 8. 分阶段执行计划（审阅后）
 
-| 阶段 | 内容 | 交付 |
-|---|---|---|
-| P1 | `Entity<T>`/`WeakEntity<T>`/`EntityId`/`EntityRegistry`（纯托管，无 ABI）+ 单元测试 | 可 `New/Read/Update/Downgrade` |
-| P2 | `Context<T>` + `Notify` + `Observe`（托管内级联，无原生） | 观察者回调可跑 |
-| P3 | `Subscribe`/`Emit` 类型化事件 + `Subscription` 生命周期 | 事件派发可跑 |
-| P4 | 原生实体子树：`OP_ENTITY_CHILD` + `COMPONENT_ENTITY_HOST` + `notify_entity`（ABI bump） | 实体级局部重渲染 |
-| P5 | Sample：`EntityPage`（计数器 + 列表选择 + 父子同步）+ 文档 | 可运行示例 |
-| P6 | （可选）`cx.Spawn` / 全局状态 | — |
+| 阶段 | 内容 | 交付 | 状态 |
+|---|---|---|---|
+| P1 | `Entity<T>`/`WeakEntity<T>`/`EntityId`/`EntityRegistry`（纯托管，无 ABI）+ 单元测试 | 可 `New/Read/Update/Downgrade` | ✅ |
+| P2 | `Context<T>` + `Notify` + `Observe`（托管内级联，无原生） | 观察者回调可跑 | ✅ |
+| P3 | `Subscribe`/`Emit` 类型化事件 + `Subscription` 生命周期 | 事件派发可跑 | ✅ |
+| P4 | 原生实体子树：`COMPONENT_ENTITY_HOST` + `render_entity` + `notify_entity`（ABI bump） | 实体级局部重渲染 | ✅ |
+| P5 | Sample：`EntityPage`（计数器 + 列表选择 + 父子同步）+ 文档 | 可运行示例 | ✅ |
+| P6 | （可选）`cx.Spawn` / 全局状态 | — | ⬜ |
 
 每阶段：`cargo test/fmt/clippy` + `dotnet build/test` + `--check` + 冒烟。
 
+> 实测：`cargo test` 74 通过、`dotnet test` 60 通过（3 个需 manifest 的 native 测试跳过）、
+> `dotnet run -- --check` 报 abi 8 / schema `0x6E65747368656C56`。
+
 ---
 
-## 9. 待你确认的决策点
+## 9. 决策点（回溯）
+
+> 已按下列选择落地：范围做到 P4（真·实体级局部重渲染）；命名用 `New<T>` /
+> `Child(entity, render)` / `Context<T>`；父子默认「共享 Entity + 回调」；
+> 实体状态严格 GPUI 单线程；接受 ABI 8 / schema `…6C56`；本轮不整合源生成器。
 
 1. **范围**：先做纯托管 P1–P3（不改 ABI），还是直接到 P4（真·实体级局部重渲染）？
 2. **API 命名**：`App.New<T>` / `ui.Child(entity, render)` / `Context<T>` 是否符合你的偏好？是否要更贴近 GPUI 的 `cx.new`/`entity.update` 英文命名？

@@ -22,7 +22,7 @@ use gpui::{
 };
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
-use crate::context::{HostContext, Invalidate};
+use crate::context::{EntityHosts, HostContext, Invalidate};
 use crate::materialize::materialize;
 use crate::registry::FrozenComponentRegistry;
 use crate::schema::STATUS_OK;
@@ -42,6 +42,9 @@ pub struct ShellView {
     revision: u64,
     dirty: bool,
     retired: bool,
+    /// Retained entity subtrees for this window, keyed by managed entity id.
+    /// Rebuilt on each render; `notify_entity` repaints one in place.
+    entity_hosts: EntityHosts,
     /// The failure of the most recent build, if it failed. Held rather than
     /// re-derived so a broken render is not re-run every frame.
     error: Option<String>,
@@ -63,6 +66,7 @@ impl ShellView {
             revision: 0,
             dirty: true,
             retired: false,
+            entity_hosts: EntityHosts::default(),
             error: None,
         }
     }
@@ -81,6 +85,18 @@ impl ShellView {
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.invalidate();
         cx.notify();
+    }
+
+    /// Notifies one retained entity subtree so only that subtree repaints.
+    ///
+    /// The managed `Context::notify` arrives as a command carrying the entity
+    /// id; the notifier was registered by the `EntityHost` materializer on the
+    /// most recent render.
+    pub fn notify_entity(&mut self, entity_id: u64, cx: &mut Context<Self>) {
+        let notifier = self.entity_hosts.borrow().get(&entity_id).cloned();
+        if let Some(notifier) = notifier {
+            notifier(cx);
+        }
     }
 
     /// The published description, if one has been built.
@@ -167,6 +183,11 @@ impl ShellView {
     /// The subtree for the current description, with a banner when the most
     /// recent build failed over an earlier good snapshot.
     fn content(&mut self, host: &HostContext, window: &mut Window, cx: &mut App) -> AnyElement {
+        // Entity notifiers are re-registered as each `EntityHost` materializes;
+        // clear so an entity that left the tree stops being retained.
+        if let Ok(mut hosts) = self.entity_hosts.try_borrow_mut() {
+            hosts.clear();
+        }
         let materialized = self
             .current
             .as_ref()
@@ -210,6 +231,7 @@ impl Render for ShellView {
             session_id: self.session_id,
             callbacks: self.callbacks,
             invalidate,
+            entity_hosts: self.entity_hosts.clone(),
         };
 
         let content = self.content(&host, window, cx);

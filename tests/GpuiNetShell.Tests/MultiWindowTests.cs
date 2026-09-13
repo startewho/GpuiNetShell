@@ -66,6 +66,7 @@ public sealed unsafe class MultiWindowTests
         Assert.True(api != null);
         Assert.True(api->OpenWindow != null);
         Assert.True(api->CloseWindow != null);
+        Assert.True(api->NotifyEntity != null);
     }
 
     private static bool TryLoadHost()
