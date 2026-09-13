@@ -196,6 +196,15 @@ pub struct GpuiNetShellApi {
     pub set_theme: Option<
         unsafe extern "C" fn(session_id: u64, mode: u32, colors: *const u8, colors_len: u32) -> i32,
     >,
+    /// Opens a new top-level window from `parent_session` and returns its new
+    /// session id (> 0), or a negative status. The returned session is
+    /// independent: it renders through the same managed callbacks with its own
+    /// view factory, and is configured by a prior `configure(new_session, flags)`
+    /// or `open_window`'s own `flags`.
+    pub open_window: Option<unsafe extern "C" fn(parent_session: u64, flags: u32) -> i64>,
+    /// Closes `session`'s window. The managed host may keep the session alive
+    /// until its view is dropped.
+    pub close_window: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
     pub _reserved: u64,
 }
 
@@ -224,5 +233,17 @@ mod tests {
             std::mem::align_of::<*const u8>()
         );
         assert_eq!(std::mem::align_of::<GpuiNetOp>(), 8);
+    }
+
+    #[test]
+    fn the_api_table_exposes_window_management() {
+        // The managed mirror sizes its function pointers from this table; a
+        // missing or reordered entry would drift the ABI.
+        let api = crate::ffi::gpui_net_shell_get_api(crate::schema::ABI_VERSION);
+        assert!(!api.is_null());
+        // SAFETY: the returned pointer has static lifetime and was just checked.
+        let api = unsafe { &*api };
+        assert!(api.open_window.is_some());
+        assert!(api.close_window.is_some());
     }
 }

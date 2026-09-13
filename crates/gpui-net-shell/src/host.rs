@@ -6,6 +6,7 @@
 //! This module owns the event loop, the window, and the session channel.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use gpui::prelude::*;
@@ -25,17 +26,43 @@ const FLAG_CUSTOM_TITLEBAR: u32 = 1;
 /// `configure` flag: keep scrollbars visible instead of auto-hiding them.
 const FLAG_ALWAYS_SHOW_SCROLLBARS: u32 = 2;
 
+/// The window bounds every new window opens at.
+const DEFAULT_WINDOW_WIDTH: f32 = 900.0;
+const DEFAULT_WINDOW_HEIGHT: f32 = 600.0;
+
 /// A managed request delivered on the GPUI thread.
 enum Command {
     Invalidate,
-    OpenPopup { items: Vec<PopupItem> },
-    SetTheme { mode: u32, colors: String },
+    OpenPopup {
+        items: Vec<PopupItem>,
+    },
+    SetTheme {
+        mode: u32,
+        colors: String,
+    },
+    /// Opens a new top-level window for `session`, delivered to the parent
+    /// window's task so `cx.open_window` runs on the GPUI thread.
+    OpenChild {
+        session: u64,
+        flags: u32,
+    },
+    /// Closes the window belonging to `session`.
+    Close,
 }
 
-/// Per-session window options, set before `run`.
+/// Per-session window options, set before the window opens.
 fn window_configs() -> &'static Mutex<HashMap<u64, u32>> {
     static CONFIGS: OnceLock<Mutex<HashMap<u64, u32>>> = OnceLock::new();
     CONFIGS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Allocates child session ids. The primary session uses the managed
+/// application id; children start above it and never collide.
+fn next_session_id() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    // Start high enough to clear the primary session's numeric id and grow
+    // monotonically.
+    NEXT.fetch_add(1, Ordering::Relaxed) + 0x1_0000_0000
 }
 
 /// The bundle's icons plus a filesystem fallback, so `Image("C:\\a.png")`
@@ -108,6 +135,27 @@ pub fn configure(session_id: u64, flags: u32) -> i32 {
 /// Applies a theme (mode and optional color overrides) from any thread.
 pub fn set_theme(session_id: u64, mode: u32, colors: String) -> i32 {
     send(session_id, Command::SetTheme { mode, colors })
+}
+
+/// Opens a new top-level window owned by `parent_session` from any thread.
+///
+/// Allocates the child session id, records its window options, then asks the
+/// parent window's task to open it on the GPUI thread. Returns the child
+/// session id, or a negative status.
+pub fn open_window(parent_session: u64, flags: u32) -> i64 {
+    let session = next_session_id();
+    if let Ok(mut configs) = window_configs().lock() {
+        configs.insert(session, flags);
+    }
+    match send(parent_session, Command::OpenChild { session, flags }) {
+        STATUS_OK => session as i64,
+        status => status as i64,
+    }
+}
+
+/// Closes the window belonging to `session` from any thread.
+pub fn close_window(session_id: u64) -> i32 {
+    send(session_id, Command::Close)
 }
 
 /// Applies a theme on the GPUI thread.
@@ -192,12 +240,7 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
         }
     }
 
-    let flags = window_configs()
-        .lock()
-        .ok()
-        .and_then(|configs| configs.get(&application_id).copied())
-        .unwrap_or(0);
-    let custom_titlebar = flags & FLAG_CUSTOM_TITLEBAR != 0;
+    let flags = session_flags(application_id);
     let always_show_scrollbars = flags & FLAG_ALWAYS_SHOW_SCROLLBARS != 0;
 
     gpui_platform::application()
@@ -211,86 +254,133 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
                 );
             }
 
-            let registry = crate::components::catalog();
-            let view = cx.new(|_| ShellView::new(application_id, callbacks, registry));
-            let root = cx.new(|cx| Root::new(view, application_id, callbacks, custom_titlebar, cx));
-            let weak_root = root.downgrade();
-
             // Native menu selection dispatches a `ManagedMenuAction`; route it to
-            // the managed callback token it carries, then request a re-render.
-            cx.on_action({
-                let weak_root = weak_root.clone();
-                move |action: &crate::menu_action::ManagedMenuAction, cx| {
-                    if let Some(click) = callbacks.click {
-                        // SAFETY: the managed callback copies anything it keeps.
-                        unsafe {
-                            let _ = click(application_id, action.token());
-                        }
+            // the managed callback token it carries. The action names its owning
+            // session, so one global listener serves every window. The managed
+            // handler requests its own repaint through `invalidate`.
+            cx.on_action(move |action: &crate::menu_action::ManagedMenuAction, _cx| {
+                if let Some(click) = callbacks.click {
+                    // SAFETY: the managed callback copies anything it keeps.
+                    unsafe {
+                        let _ = click(action.session(), action.token());
                     }
-                    let _ = weak_root.update(cx, |root, cx| root.invalidate_view(cx));
                 }
             });
 
-            // Any-thread commands are delivered here, on the GPUI thread, with
-            // the window's current handle so overlay operations are
-            // window-scoped.
-            let (sender, receiver) = async_channel::bounded(64);
-            if let Ok(mut sessions) = ingress().lock() {
-                sessions.insert(application_id, sender);
+            if let Err(error) = open_managed_window(cx, application_id, callbacks, flags) {
+                eprintln!("gpui-net-shell: failed to open the window: {error}");
             }
-
-            let bounds = Bounds::centered(None, size(px(900.0), px(600.0)), cx);
-            let base = if custom_titlebar {
-                gpui_component::TitleBar::window_options()
-            } else {
-                WindowOptions {
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("GpuiNetShell".into()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }
-            };
-            let opened = cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    ..base
-                },
-                move |window, cx| cx.new(|cx| gpui_component::Root::new(root, window, cx)),
-            );
-            let window = match opened {
-                Ok(window) => window,
-                Err(error) => {
-                    eprintln!("gpui-net-shell: failed to open the window: {error}");
-                    cx.activate(true);
-                    return;
-                }
-            };
-
-            cx.spawn(async move |cx| {
-                while let Ok(command) = receiver.recv().await {
-                    cx.update(|cx| {
-                        let _ = window.update(cx, |_root, window, cx| {
-                            let _ = weak_root.update(cx, |root, cx| match command {
-                                Command::Invalidate => {
-                                    root.invalidate_view(cx);
-                                    window.refresh();
-                                }
-                                Command::OpenPopup { items } => root.open_popup(items, window, cx),
-                                Command::SetTheme { mode, colors } => {
-                                    apply_theme(mode, &colors, window, cx);
-                                    root.invalidate_view(cx);
-                                    window.refresh();
-                                }
-                            });
-                        });
-                    });
-                }
-            })
-            .detach();
 
             cx.activate(true);
         });
 
     STATUS_OK
+}
+
+/// Records the window options for `session` and returns them.
+fn session_flags(session: u64) -> u32 {
+    window_configs()
+        .lock()
+        .ok()
+        .and_then(|configs| configs.get(&session).copied())
+        .unwrap_or(0)
+}
+
+/// Opens one managed window and installs its command ingress task.
+fn open_managed_window(
+    cx: &mut App,
+    session_id: u64,
+    callbacks: GpuiNetCallbacks,
+    flags: u32,
+) -> Result<(), String> {
+    let custom_titlebar = flags & FLAG_CUSTOM_TITLEBAR != 0;
+    let registry = crate::components::catalog();
+    let view = cx.new(|_| ShellView::new(session_id, callbacks, registry));
+    let root = cx.new(|cx| Root::new(view, session_id, callbacks, custom_titlebar, cx));
+    let weak_root = root.downgrade();
+
+    let (sender, receiver) = async_channel::bounded(64);
+    if let Ok(mut sessions) = ingress().lock() {
+        sessions.insert(session_id, sender);
+    }
+
+    let bounds = Bounds::centered(
+        None,
+        size(px(DEFAULT_WINDOW_WIDTH), px(DEFAULT_WINDOW_HEIGHT)),
+        cx,
+    );
+    let base = if custom_titlebar {
+        gpui_component::TitleBar::window_options()
+    } else {
+        WindowOptions {
+            titlebar: Some(TitlebarOptions {
+                title: Some("GpuiNetShell".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    };
+    let window = cx
+        .open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                ..base
+            },
+            move |window, cx| cx.new(|cx| gpui_component::Root::new(root, window, cx)),
+        )
+        .map_err(|error| error.to_string())?;
+
+    // When the OS closes this window, release its session and tell managed code.
+    // GPUI quits on its own once the last window closes, so children can close
+    // without ending the process.
+    {
+        let window_id = window.window_id();
+        cx.on_window_closed(move |_cx, closed_id| {
+            if closed_id != window_id {
+                return;
+            }
+            unregister_session(session_id);
+            if let Some(closed) = callbacks.window_closed {
+                // SAFETY: acknowledgement only; managed code copies what it keeps.
+                unsafe {
+                    let _ = closed(session_id, STATUS_OK);
+                }
+            }
+        })
+        .detach();
+    }
+
+    // Any-thread commands are delivered here, on the GPUI thread, with the
+    // window's current handle so overlay operations are window-scoped.
+    cx.spawn(async move |cx| {
+        while let Ok(command) = receiver.recv().await {
+            cx.update(|cx| {
+                let _ = window.update(cx, |_root, window, cx| {
+                    let _ = weak_root.update(cx, |root, cx| match command {
+                        Command::Invalidate => {
+                            root.invalidate_view(cx);
+                            window.refresh();
+                        }
+                        Command::OpenPopup { items } => root.open_popup(items, window, cx),
+                        Command::SetTheme { mode, colors } => {
+                            apply_theme(mode, &colors, window, cx);
+                            root.invalidate_view(cx);
+                            window.refresh();
+                        }
+                        Command::OpenChild { session, flags } => {
+                            if let Err(error) = open_managed_window(cx, session, callbacks, flags) {
+                                eprintln!("gpui-net-shell: failed to open a child window: {error}");
+                            }
+                        }
+                        Command::Close => {
+                            window.remove_window();
+                        }
+                    });
+                });
+            });
+        }
+    })
+    .detach();
+
+    Ok(())
 }

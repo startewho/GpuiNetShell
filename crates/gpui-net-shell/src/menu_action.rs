@@ -9,15 +9,21 @@
 
 use gpui::{Action, Result};
 
-/// One native-menu selection, carrying the managed callback token to run.
+/// One native-menu selection, carrying the managed callback token to run and
+/// the session whose window owns the menu.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ManagedMenuAction {
+    session_id: u64,
     token: u64,
 }
 
 impl ManagedMenuAction {
-    pub fn new(token: u64) -> Self {
-        Self { token }
+    pub fn new(session_id: u64, token: u64) -> Self {
+        Self { session_id, token }
+    }
+
+    pub fn session(&self) -> u64 {
+        self.session_id
     }
 
     pub fn token(&self) -> u64 {
@@ -35,7 +41,7 @@ impl Action for ManagedMenuAction {
         action
             .as_any()
             .downcast_ref::<Self>()
-            .is_some_and(|other| other.token == self.token)
+            .is_some_and(|other| other.token == self.token && other.session_id == self.session_id)
     }
 
     fn name(&self) -> &'static str {
@@ -56,7 +62,11 @@ impl Action for ManagedMenuAction {
                      `{{ \"token\": 1 }}`"
                 )
             })?;
-        Ok(Box::new(Self { token }))
+        let session_id = value
+            .get("session")
+            .and_then(gpui::private::serde_json::Value::as_u64)
+            .unwrap_or(0);
+        Ok(Box::new(Self { session_id, token }))
     }
 }
 
@@ -66,13 +76,17 @@ mod tests {
 
     #[test]
     fn the_action_round_trips_its_token() {
-        let action = ManagedMenuAction::new(7);
+        let action = ManagedMenuAction::new(3, 7);
+        assert_eq!(action.session(), 3);
         assert_eq!(action.token(), 7);
         assert_eq!(action.name(), "gpui_net_shell::ManagedMenuAction");
 
-        let built =
-            ManagedMenuAction::build(gpui::private::serde_json::json!({ "token": 42 })).unwrap();
+        let built = ManagedMenuAction::build(
+            gpui::private::serde_json::json!({ "token": 42, "session": 9 }),
+        )
+        .unwrap();
         let built = built.as_any().downcast_ref::<ManagedMenuAction>().unwrap();
+        assert_eq!(built.session(), 9);
         assert_eq!(built.token(), 42);
 
         assert!(ManagedMenuAction::build(gpui::private::serde_json::json!({})).is_err());
@@ -80,7 +94,8 @@ mod tests {
 
     #[test]
     fn equality_is_by_token_not_only_type() {
-        assert!(ManagedMenuAction::new(1).partial_eq(&ManagedMenuAction::new(1)));
-        assert!(!ManagedMenuAction::new(1).partial_eq(&ManagedMenuAction::new(2)));
+        assert!(ManagedMenuAction::new(1, 1).partial_eq(&ManagedMenuAction::new(1, 1)));
+        assert!(!ManagedMenuAction::new(1, 1).partial_eq(&ManagedMenuAction::new(1, 2)));
+        assert!(!ManagedMenuAction::new(1, 1).partial_eq(&ManagedMenuAction::new(2, 1)));
     }
 }

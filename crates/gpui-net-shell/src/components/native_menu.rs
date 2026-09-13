@@ -116,6 +116,7 @@ impl ComponentMaterializer for TriggerMaterializer {
             .ok_or_else(|| "NativeMenuTrigger received an incompatible payload".to_string())?
             .clone();
         let disabled = request.disabled();
+        let session_id = request.host().session_id;
         let mut entries = Vec::new();
         let mut request = request;
         for (name, mut element) in request.take_children_named() {
@@ -146,7 +147,7 @@ impl ComponentMaterializer for TriggerMaterializer {
                         } => menu.menu_with_disabled(
                             label,
                             true,
-                            Box::new(ManagedMenuAction::new(token)),
+                            Box::new(ManagedMenuAction::new(session_id, token)),
                         ),
                         Entry::Item {
                             label,
@@ -156,10 +157,10 @@ impl ComponentMaterializer for TriggerMaterializer {
                         } => menu.menu_with_check(
                             label,
                             true,
-                            Box::new(ManagedMenuAction::new(token)),
+                            Box::new(ManagedMenuAction::new(session_id, token)),
                         ),
                         Entry::Item { label, token, .. } => {
-                            menu.menu(label, Box::new(ManagedMenuAction::new(token)))
+                            menu.menu(label, Box::new(ManagedMenuAction::new(session_id, token)))
                         }
                         Entry::Separator => menu.separator(),
                     };

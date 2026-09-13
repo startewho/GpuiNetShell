@@ -6,7 +6,9 @@ namespace GpuiNetShell.Interop;
 
 /// <summary>
 /// The managed callback table. Every callback is a cdecl unmanaged function
-/// pointer and never lets a managed exception cross the boundary.
+/// pointer and never lets a managed exception cross the boundary. Each callback
+/// resolves the session it was invoked for and dispatches to that window's
+/// managed state.
 /// </summary>
 internal static unsafe class ManagedCallbacks
 {
@@ -31,8 +33,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnStarted()
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnStarted()
                 : NativeProtocol.StatusOk;
         }
         catch
@@ -46,8 +48,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnWindowClosed(status)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnWindowClosed(status)
                 : NativeProtocol.StatusOk;
         }
         catch
@@ -66,8 +68,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.RenderInto(generation, arena, root)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.RenderInto(generation, arena, root)
                 : -1;
         }
         catch
@@ -81,8 +83,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnRenderCompleted(generation, status)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnRenderCompleted(generation, status)
                 : NativeProtocol.StatusOk;
         }
         catch
@@ -96,8 +98,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnClick(token)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnClick(token)
                 : -1;
         }
         catch
@@ -111,8 +113,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnRetireCallbacks(generation)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnRetireCallbacks(generation)
                 : NativeProtocol.StatusOk;
         }
         catch
@@ -133,8 +135,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnInvoke(token, kind, number, data, dataLength)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnInvoke(token, kind, number, data, dataLength)
                 : -1;
         }
         catch
@@ -154,8 +156,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnResolveRows(token, buffer, capacity, outLen)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnResolveRows(token, buffer, capacity, outLen)
                 : -1;
         }
         catch
@@ -176,8 +178,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnRenderElement(token, arguments, argumentsLength, outArena, outRoot)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnRenderElement(token, arguments, argumentsLength, outArena, outRoot)
                 : -1;
         }
         catch
@@ -200,8 +202,8 @@ internal static unsafe class ManagedCallbacks
     {
         try
         {
-            return GpuiApplication.Find(sessionId) is { } application
-                ? application.OnInputEvent(kind, flags, a, b, c, text, textLength)
+            return GpuiApplication.Find(sessionId) is { } session
+                ? session.OnInputEvent(kind, flags, a, b, c, text, textLength)
                 : NativeProtocol.StatusOk;
         }
         catch

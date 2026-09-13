@@ -67,5 +67,6 @@ internal static class PageRegistry
             new ThemePage(),
             new VirtualListPage(),
             new ImagePage(),
+            new MultiWindowPage(),
         ];
 }

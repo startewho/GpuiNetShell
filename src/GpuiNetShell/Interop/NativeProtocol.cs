@@ -14,10 +14,10 @@ namespace GpuiNetShell.Interop;
 /// </remarks>
 public static class NativeProtocol
 {
-    public const uint AbiVersion = 6;
+    public const uint AbiVersion = 7;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C54;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C55;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one

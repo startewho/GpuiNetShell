@@ -233,21 +233,18 @@ struct GpuiNetShellApi {
     uint64_t schema_hash;
     int32_t (*run_application)(uint64_t, const GpuiNetCallbacks*);
     int32_t (*invalidate)(uint64_t session);
-    int32_t (*open_dialog)(uint64_t, const uint8_t* title, uint32_t, const uint8_t* body, uint32_t);
-    int32_t (*close_dialog)(uint64_t session);
-    int32_t (*open_sheet)(uint64_t, uint32_t placement, const uint8_t* title, uint32_t, const uint8_t* body, uint32_t);
-    int32_t (*close_sheet)(uint64_t session);
-    int32_t (*push_notification)(uint64_t, const uint8_t* message, uint32_t, uint32_t level);
+    int32_t (*configure)(uint64_t session, uint32_t flags);
+    int32_t (*set_theme)(uint64_t session, uint32_t mode, const uint8_t* colors, uint32_t);
+    int64_t (*open_window)(uint64_t parent_session, uint32_t flags);
+    int32_t (*close_window)(uint64_t session);
     uint64_t reserved;
 };
 ```
 
 `run_application` blocks in the GPUI event loop. `invalidate` is the any-thread
 request behind `View.Invalidate()`: it posts to the session's view, which marks
-itself dirty and repaints. `open_dialog`, `close_dialog`, `open_sheet`,
-`close_sheet`, and `push_notification` post overlay commands to the same
-ingress; `Root` applies them on the GPUI thread with the window handle it
-captured when the window opened.
+itself dirty and repaints. `open_window`/`close_window` manage additional
+top-level windows (see "Multi-window" below).
 
 `GpuiNetCallbacks` carries the managed `application_started`, `window_closed`,
 `render(session, generation, arena, root)`, `render_completed(session,
@@ -279,6 +276,25 @@ When a component id or payload rule changes, bump `SCHEMA_HASH` on both sides.
 When a C record layout changes, bump `ABI_VERSION` and update both sides
 together.
 
+## Multi-window
+
+Each top-level window is an independent **session**. The primary window uses the
+managed application id; `open_window(parent, flags)` allocates a fresh session id
+and asks the parent window's ingress task to run `cx.open_window` on the GPUI
+thread. The child session renders through the same managed callback table, but
+with its own `ShellView`, `Root`, arenas, and event registry, so the managed
+`Session` is looked up per callback by session id.
+
+- `GpuiApplication.OpenWindow(factory)` returns a `WindowHandle`; calling it
+  before `Run` queues the window and it opens on the primary window's first
+  frame, when the native ingress is live.
+- `close_window(session)` posts a `Close` command; the owning window calls
+  `Window::remove_window`, and GPUI quits once the last window closes.
+- Native-menu actions carry their owning session, so one global action listener
+  routes to the right managed callback.
+- `configure(session, flags)` and `open_window`'s own `flags` set the custom
+  title bar per window.
+
 ## Windows apartment
 
 GPUI's Windows platform initializes OLE as a single-threaded apartment, but a
@@ -289,8 +305,5 @@ manifest requirement for Windows common controls.
 ## Not yet built
 
 - rich overlay content (dialogs and notifications currently carry plain text);
-- retained controls beyond Button (Input, Slider, Scroll, List/Table);
-- multi-window support and window options over the ABI;
 - a theme payload from C# (the native host uses the gpui-component default);
-- hot reload of managed code;
 - virtualized item batches.

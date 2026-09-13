@@ -9,23 +9,19 @@ using GpuiNetShell.Rendering;
 namespace GpuiNetShell;
 
 /// <summary>
-/// Owns one native GPUI application and its root <see cref="View"/>. The native
-/// host blocks inside <see cref="Run"/> until the window closes.
+/// Owns one native GPUI application and its windows. The first window renders
+/// the root <see cref="View"/> given to the constructor; additional windows are
+/// opened with <see cref="OpenWindow"/>, each with its own view and session.
+/// The native host blocks inside <see cref="Run"/> until the last window closes.
 /// </summary>
 public sealed class GpuiApplication
 {
     private static readonly object Gate = new();
-    private static readonly Dictionary<ulong, GpuiApplication> Instances = [];
+    private static readonly Dictionary<ulong, Session> Instances = [];
     private static ulong _nextSession;
 
-    private readonly ulong _sessionId;
-    private readonly Func<View> _rootFactory;
-    private readonly EventRegistry _events = new();
-    private readonly RenderArena _arena = new();
-    private readonly RenderArena _elementArena = new();
-
-    private RenderContext _renderContext = null!;
-    private View? _root;
+    private readonly Session _primary;
+    private readonly List<Session> _children = [];
 
     /// <summary>
     /// Draw a custom title bar instead of the native one. Set before
@@ -39,36 +35,112 @@ public sealed class GpuiApplication
     /// </summary>
     public bool AlwaysShowScrollbars { get; set; }
 
+    /// <summary>
+    /// Draw a custom title bar in windows opened through <see cref="OpenWindow"/>.
+    /// Independent of <see cref="UseCustomTitlebar"/>, which configures the
+    /// primary window.
+    /// </summary>
+    public bool ChildWindowsUseCustomTitlebar { get; set; }
+
     public GpuiApplication(Func<View> rootFactory)
     {
-        _rootFactory = rootFactory ?? throw new ArgumentNullException(nameof(rootFactory));
-        _renderContext = new RenderContext(_arena, _events, Invalidate);
+        ArgumentNullException.ThrowIfNull(rootFactory);
+        _primary = new Session(this, rootFactory);
         lock (Gate)
         {
-            _sessionId = ++_nextSession;
-            Instances[_sessionId] = this;
+            _primary.SessionId = ++_nextSession;
+            Instances[_primary.SessionId] = _primary;
         }
     }
 
-    internal static GpuiApplication? Find(ulong sessionId)
+    /// <summary>The primary window's session id.</summary>
+    public ulong SessionId => _primary.SessionId;
+
+    internal static Session? Find(ulong sessionId)
     {
         lock (Gate)
         {
-            return Instances.TryGetValue(sessionId, out var application) ? application : null;
+            return Instances.TryGetValue(sessionId, out var session) ? session : null;
         }
+    }
+
+    /// <summary>
+    /// Opens a new top-level window whose content is built by
+    /// <paramref name="rootFactory"/>. The returned <see cref="WindowHandle"/>
+    /// can invalidate the window and close it. Call before or during
+    /// <see cref="Run"/>; a call before <see cref="Run"/> is queued until the
+    /// event loop starts.
+    /// </summary>
+    public unsafe WindowHandle OpenWindow(Func<View> rootFactory)
+    {
+        ArgumentNullException.ThrowIfNull(rootFactory);
+        var session = new Session(this, rootFactory);
+        lock (Gate)
+        {
+            _children.Add(session);
+        }
+
+        if (_running)
+        {
+            var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+            if (api == null || api->OpenWindow == null)
+            {
+                throw new InvalidOperationException(
+                    "The native host does not support opening windows."
+                );
+            }
+            var flags = ChildWindowsUseCustomTitlebar ? 1u : 0u;
+            var opened = api->OpenWindow(_primary.SessionId, flags);
+            if (opened <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"The native host refused to open a window (status {opened})."
+                );
+            }
+            session.SessionId = (ulong)opened;
+            lock (Gate)
+            {
+                Instances[session.SessionId] = session;
+            }
+        }
+        else
+        {
+            _pendingOpen.Add(session);
+        }
+
+        return new WindowHandle(this, session);
+    }
+
+    private readonly List<Session> _pendingOpen = [];
+    private volatile bool _running;
+
+    /// <summary>Closes a window previously opened by <see cref="OpenWindow"/>.</summary>
+    internal unsafe void CloseWindow(Session session)
+    {
+        if (session.SessionId == 0)
+        {
+            _pendingOpen.Remove(session);
+            return;
+        }
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->CloseWindow == null)
+        {
+            return;
+        }
+        _ = api->CloseWindow(session.SessionId);
     }
 
     /// <summary>Repaints every live session. Called after a Hot Reload update.</summary>
     internal static void InvalidateAll()
     {
-        GpuiApplication[] applications;
+        ulong[] sessions;
         lock (Gate)
         {
-            applications = [.. Instances.Values];
+            sessions = [.. Instances.Keys];
         }
-        foreach (var application in applications)
+        foreach (var session in sessions)
         {
-            application.Invalidate();
+            Find(session)?.Owner.InvalidateSession(session);
         }
     }
 
@@ -82,190 +154,12 @@ public sealed class GpuiApplication
         // Intentional no-op today.
     }
 
-    internal int OnStarted() => NativeProtocol.StatusOk;
-
-    internal int OnWindowClosed(int status) => status;
-
-    /// <summary>
-    /// Builds one description for <paramref name="generation"/> and publishes it
-    /// into the arena. Event handlers registered here belong to that generation
-    /// and are released when its snapshot is retired.
-    /// </summary>
-    internal unsafe int RenderInto(ulong generation, NativeArena* arena, uint* root)
+    internal void ForgetSession(ulong sessionId)
     {
-        _arena.Reset();
-        _events.BeginGeneration(generation);
-
-        _root ??= _rootFactory();
-        _root.AttachInvalidator(Invalidate);
-
-        _renderContext.BeginRender();
-        var element = _root.RenderRoot(ref _renderContext);
-        _renderContext.EndRender();
-
-        *arena = _arena.Publish();
-        *root = (uint)element.Index;
-        return NativeProtocol.StatusOk;
-    }
-
-    internal int OnRenderCompleted(ulong generation, int status) => status;
-
-    internal int OnClick(ulong token) =>
-        _events.Dispatch(token) ? NativeProtocol.StatusOk : -1;
-
-    /// <summary>
-    /// Delivers a typed callback value (a boolean, number, or string) to the
-    /// handler registered for <paramref name="token"/>.
-    /// </summary>
-    internal unsafe int OnInvoke(
-        ulong token,
-        uint kind,
-        double number,
-        byte* data,
-        uint dataLength
-    )
-    {
-        var value = kind switch
+        lock (Gate)
         {
-            NativeProtocol.CallbackValueBoolean => EventValue.FromBoolean(number != 0),
-            NativeProtocol.CallbackValueNumber => EventValue.FromNumber(number),
-            NativeProtocol.CallbackValueString => EventValue.FromString(ReadUtf8(data, dataLength)),
-            _ => EventValue.None,
-        };
-        return _events.DispatchValue(token, value) ? NativeProtocol.StatusOk : -1;
-    }
-
-    private static unsafe string ReadUtf8(byte* data, uint length)
-    {
-        if (data == null || length == 0)
-        {
-            return string.Empty;
-        }
-        return Marshal.PtrToStringUTF8((IntPtr)data, (int)length) ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Fills <paramref name="buffer"/> with the tab-separated rows a row
-    /// provider returns for <paramref name="token"/>. Reports the required byte
-    /// count so native code can retry with a larger buffer.
-    /// </summary>
-    internal unsafe int OnResolveRows(ulong token, byte* buffer, uint capacity, uint* outLen)
-    {
-        if (!_events.TryGetRows(token, out var provider))
-        {
-            return -1;
-        }
-        var bytes = Encoding.UTF8.GetBytes(provider() ?? string.Empty);
-        *outLen = (uint)bytes.Length;
-        if (bytes.Length > capacity)
-        {
-            return NativeProtocol.StatusTruncated;
-        }
-        if (bytes.Length > 0)
-        {
-            Marshal.Copy(bytes, 0, (IntPtr)buffer, bytes.Length);
-        }
-        return NativeProtocol.StatusOk;
-    }
-
-    /// <summary>
-    /// Renders one managed subtree for an element callback (P7) into a scratch
-    /// arena. The native host decodes the arena and materializes it before this
-    /// call returns.
-    /// </summary>
-    internal unsafe int OnRenderElement(
-        ulong token,
-        byte* arguments,
-        uint argumentsLength,
-        NativeArena* outArena,
-        uint* outRoot
-    )
-    {
-        if (!_events.TryGetElement(token, out var renderer))
-        {
-            return -1;
-        }
-        var text = ReadUtf8(arguments, argumentsLength);
-        var args = text.Length == 0 ? Array.Empty<string>() : text.Split('\n');
-
-        _elementArena.Reset();
-        var context = new RenderContext(_elementArena, _events, Invalidate);
-        context.BeginRender();
-        Element root;
-        try
-        {
-            root = renderer(context, args);
-        }
-        finally
-        {
-            context.EndRender();
-        }
-        *outArena = _elementArena.Publish();
-        *outRoot = (uint)root.Index;
-        return NativeProtocol.StatusOk;
-    }
-
-    /// <summary>Delivers one window input event to the managed view.</summary>
-    internal unsafe int OnInputEvent(
-        uint kind,
-        uint flags,
-        float a,
-        float b,
-        float c,
-        byte* text,
-        uint textLength
-    )
-    {
-        var name = ReadUtf8(text, textLength);
-        var input = new InputEvent((InputEventKind)kind, (InputModifiers)flags, a, b, c, name);
-        _root?.DispatchInput(input);
-        return NativeProtocol.StatusOk;
-    }
-
-    /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
-    internal int OnRetireCallbacks(ulong generation)
-    {
-        _events.Retire(generation);
-        return NativeProtocol.StatusOk;
-    }
-
-    /// <summary>
-    /// Requests a re-render from any thread. Equivalent to shell's
-    /// <c>cx.notify()</c>: the native view marks itself dirty and repaints.
-    /// </summary>
-    public unsafe void Invalidate()
-    {
-        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
-        if (api == null || api->Invalidate == null)
-        {
-            return;
-        }
-        _ = api->Invalidate(_sessionId);
-    }
-
-    /// <summary>
-    /// Applies a theme at runtime. <paramref name="colors"/> maps semantic names
-    /// (<c>background</c>, <c>foreground</c>, <c>primary</c>, <c>border</c>, …)
-    /// to <c>#rrggbb</c> values; pass <see langword="null"/> to clear overrides.
-    /// </summary>
-    public unsafe void SetTheme(
-        ThemeMode mode,
-        IReadOnlyDictionary<string, string>? colors = null
-    )
-    {
-        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
-        if (api == null || api->SetTheme == null)
-        {
-            return;
-        }
-        var text =
-            colors is null || colors.Count == 0
-                ? string.Empty
-                : string.Join('\n', colors.Select(pair => $"{pair.Key}={pair.Value}"));
-        var bytes = Encoding.UTF8.GetBytes(text);
-        fixed (byte* pointer = bytes)
-        {
-            _ = api->SetTheme(_sessionId, (uint)mode, pointer, (uint)bytes.Length);
+            Instances.Remove(sessionId);
+            _children.RemoveAll(session => session.SessionId == sessionId);
         }
     }
 
@@ -299,14 +193,97 @@ public sealed class GpuiApplication
             {
                 flags |= 2u;
             }
-            _ = api->Configure(_sessionId, flags);
+            _ = api->Configure(_primary.SessionId, flags);
         }
 
+        _running = true;
+
         var callbacks = ManagedCallbacks.Create();
-        var status = api->RunApplication(_sessionId, &callbacks);
+        var status = api->RunApplication(_primary.SessionId, &callbacks);
         if (status != NativeProtocol.StatusOk)
         {
             throw new InvalidOperationException($"The native host exited with status {status}.");
+        }
+    }
+
+    /// <summary>Opens any windows queued before the event loop started.</summary>
+    internal unsafe void FlushPendingWindows()
+    {
+        if (_pendingOpen.Count == 0)
+        {
+            return;
+        }
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->OpenWindow == null)
+        {
+            return;
+        }
+        var pending = _pendingOpen.ToArray();
+        _pendingOpen.Clear();
+        foreach (var session in pending)
+        {
+            var flags = ChildWindowsUseCustomTitlebar ? 1u : 0u;
+            var opened = api->OpenWindow(_primary.SessionId, flags);
+            if (opened <= 0)
+            {
+                continue;
+            }
+            session.SessionId = (ulong)opened;
+            lock (Gate)
+            {
+                Instances[session.SessionId] = session;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Requests a re-render of the primary window. For a secondary window, use
+    /// its <see cref="WindowHandle.Invalidate"/>.
+    /// </summary>
+    public void Invalidate() => InvalidateSession(_primary.SessionId);
+
+    internal void InvalidateSessionFor(Session session)
+    {
+        if (session.SessionId == 0)
+        {
+            return;
+        }
+        InvalidateSession(session.SessionId);
+    }
+
+    private unsafe void InvalidateSession(ulong sessionId)
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->Invalidate == null)
+        {
+            return;
+        }
+        _ = api->Invalidate(sessionId);
+    }
+
+    /// <summary>
+    /// Applies a theme at runtime. <paramref name="colors"/> maps semantic names
+    /// (<c>background</c>, <c>foreground</c>, <c>primary</c>, <c>border</c>, …)
+    /// to <c>#rrggbb</c> values; pass <see langword="null"/> to clear overrides.
+    /// </summary>
+    public unsafe void SetTheme(
+        ThemeMode mode,
+        IReadOnlyDictionary<string, string>? colors = null
+    )
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->SetTheme == null)
+        {
+            return;
+        }
+        var text =
+            colors is null || colors.Count == 0
+                ? string.Empty
+                : string.Join('\n', colors.Select(pair => $"{pair.Key}={pair.Value}"));
+        var bytes = Encoding.UTF8.GetBytes(text);
+        fixed (byte* pointer = bytes)
+        {
+            _ = api->SetTheme(_primary.SessionId, (uint)mode, pointer, (uint)bytes.Length);
         }
     }
 
@@ -352,4 +329,228 @@ public sealed class GpuiApplication
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
     }
+
+    /// <summary>
+    /// One window's managed state: its view, render arenas, and event registry.
+    /// A session survives across frames and is released when its window closes.
+    /// </summary>
+    internal sealed class Session
+    {
+        private readonly EventRegistry _events = new();
+        private readonly RenderArena _arena = new();
+        private readonly RenderArena _elementArena = new();
+
+        private RenderContext _renderContext = null!;
+        private View? _root;
+
+        internal Session(GpuiApplication owner, Func<View> rootFactory)
+        {
+            Owner = owner;
+            RootFactory = rootFactory;
+            _renderContext = new RenderContext(_arena, _events, () => Owner.InvalidateSession(SessionId));
+        }
+
+        internal GpuiApplication Owner { get; }
+
+        internal ulong SessionId { get; set; }
+
+        internal Func<View> RootFactory { get; }
+
+        internal EventRegistry Events => _events;
+
+        internal int OnStarted() => NativeProtocol.StatusOk;
+
+        internal int OnWindowClosed(int status)
+        {
+            Owner.ForgetSession(SessionId);
+            return status;
+        }
+
+        /// <summary>
+        /// Builds one description for <paramref name="generation"/> and publishes
+        /// it into the arena. Event handlers registered here belong to that
+        /// generation and are released when its snapshot is retired.
+        /// </summary>
+        internal unsafe int RenderInto(ulong generation, NativeArena* arena, uint* root)
+        {
+            // The primary window's first frame is the earliest point where the
+            // native event loop (and its ingress) is live, so any window queued
+            // before `Run` opens now.
+            if (Owner._primary.SessionId == SessionId)
+            {
+                Owner.FlushPendingWindows();
+            }
+
+            _arena.Reset();
+            _events.BeginGeneration(generation);
+
+            _root ??= RootFactory();
+            _root.AttachInvalidator(() => Owner.InvalidateSession(SessionId));
+
+            _renderContext.BeginRender();
+            var element = _root.RenderRoot(ref _renderContext);
+            _renderContext.EndRender();
+
+            *arena = _arena.Publish();
+            *root = (uint)element.Index;
+            return NativeProtocol.StatusOk;
+        }
+
+        internal int OnRenderCompleted(ulong generation, int status) => status;
+
+        internal int OnClick(ulong token) =>
+            _events.Dispatch(token) ? NativeProtocol.StatusOk : -1;
+
+        /// <summary>
+        /// Delivers a typed callback value (a boolean, number, or string) to the
+        /// handler registered for <paramref name="token"/>.
+        /// </summary>
+        internal unsafe int OnInvoke(
+            ulong token,
+            uint kind,
+            double number,
+            byte* data,
+            uint dataLength
+        )
+        {
+            var value = kind switch
+            {
+                NativeProtocol.CallbackValueBoolean => EventValue.FromBoolean(number != 0),
+                NativeProtocol.CallbackValueNumber => EventValue.FromNumber(number),
+                NativeProtocol.CallbackValueString => EventValue.FromString(
+                    ReadUtf8(data, dataLength)
+                ),
+                _ => EventValue.None,
+            };
+            return _events.DispatchValue(token, value) ? NativeProtocol.StatusOk : -1;
+        }
+
+        /// <summary>
+        /// Fills <paramref name="buffer"/> with the tab-separated rows a row
+        /// provider returns for <paramref name="token"/>. Reports the required
+        /// byte count so native code can retry with a larger buffer.
+        /// </summary>
+        internal unsafe int OnResolveRows(ulong token, byte* buffer, uint capacity, uint* outLen)
+        {
+            if (!_events.TryGetRows(token, out var provider))
+            {
+                return -1;
+            }
+            var bytes = Encoding.UTF8.GetBytes(provider() ?? string.Empty);
+            *outLen = (uint)bytes.Length;
+            if (bytes.Length > capacity)
+            {
+                return NativeProtocol.StatusTruncated;
+            }
+            if (bytes.Length > 0)
+            {
+                Marshal.Copy(bytes, 0, (IntPtr)buffer, bytes.Length);
+            }
+            return NativeProtocol.StatusOk;
+        }
+
+        /// <summary>
+        /// Renders one managed subtree for an element callback (P7) into a
+        /// scratch arena. The native host decodes the arena and materializes it
+        /// before this call returns.
+        /// </summary>
+        internal unsafe int OnRenderElement(
+            ulong token,
+            byte* arguments,
+            uint argumentsLength,
+            NativeArena* outArena,
+            uint* outRoot
+        )
+        {
+            if (!_events.TryGetElement(token, out var renderer))
+            {
+                return -1;
+            }
+            var text = ReadUtf8(arguments, argumentsLength);
+            var args = text.Length == 0 ? Array.Empty<string>() : text.Split('\n');
+
+            _elementArena.Reset();
+            var context = new RenderContext(
+                _elementArena,
+                _events,
+                () => Owner.InvalidateSession(SessionId)
+            );
+            context.BeginRender();
+            Element root;
+            try
+            {
+                root = renderer(context, args);
+            }
+            finally
+            {
+                context.EndRender();
+            }
+            *outArena = _elementArena.Publish();
+            *outRoot = (uint)root.Index;
+            return NativeProtocol.StatusOk;
+        }
+
+        /// <summary>Delivers one window input event to the managed view.</summary>
+        internal unsafe int OnInputEvent(
+            uint kind,
+            uint flags,
+            float a,
+            float b,
+            float c,
+            byte* text,
+            uint textLength
+        )
+        {
+            var name = ReadUtf8(text, textLength);
+            var input = new InputEvent((InputEventKind)kind, (InputModifiers)flags, a, b, c, name);
+            _root?.DispatchInput(input);
+            return NativeProtocol.StatusOk;
+        }
+
+        /// <summary>Releases the event handlers of a retired snapshot generation.</summary>
+        internal int OnRetireCallbacks(ulong generation)
+        {
+            _events.Retire(generation);
+            return NativeProtocol.StatusOk;
+        }
+    }
+
+    private static unsafe string ReadUtf8(byte* data, uint length)
+    {
+        if (data == null || length == 0)
+        {
+            return string.Empty;
+        }
+        return Marshal.PtrToStringUTF8((IntPtr)data, (int)length) ?? string.Empty;
+    }
+}
+
+/// <summary>
+/// A handle to a window opened with <see cref="GpuiApplication.OpenWindow"/>.
+/// </summary>
+public sealed class WindowHandle
+{
+    private readonly GpuiApplication _application;
+    private readonly GpuiApplication.Session _session;
+
+    internal WindowHandle(GpuiApplication application, GpuiApplication.Session session)
+    {
+        _application = application;
+        _session = session;
+    }
+
+    /// <summary>The window's session id, or 0 until the window opens.</summary>
+    public ulong SessionId => _session.SessionId;
+
+    /// <summary>Requests a repaint of this window.</summary>
+    public void Invalidate()
+    {
+        if (_session.SessionId != 0)
+        {
+            _application.InvalidateSessionFor(_session);
+        }
+    }
+
+    /// <summary>Closes this window.</summary>
+    public void Close() => _application.CloseWindow(_session);
 }

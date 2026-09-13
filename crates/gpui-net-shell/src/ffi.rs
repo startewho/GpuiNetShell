@@ -18,6 +18,8 @@ static API: GpuiNetShellApi = GpuiNetShellApi {
     invalidate: Some(invalidate),
     configure: Some(configure),
     set_theme: Some(set_theme),
+    open_window: Some(open_window),
+    close_window: Some(close_window),
     _reserved: 0,
 };
 
@@ -76,6 +78,20 @@ unsafe extern "C" fn set_theme(
         let colors = read_utf8(colors, colors_len)?;
         Ok(crate::host::set_theme(session_id, mode, colors))
     })
+}
+
+unsafe extern "C" fn open_window(parent_session: u64, flags: u32) -> i64 {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::host::open_window(parent_session, flags)
+    }));
+    match outcome {
+        Ok(session_id) => session_id,
+        Err(_) => crate::schema::STATUS_PANIC as i64,
+    }
+}
+
+unsafe extern "C" fn close_window(session_id: u64) -> i32 {
+    guard(|| Ok(crate::host::close_window(session_id)))
 }
 
 /// Runs a fallible body, turning a panic into [`STATUS_PANIC`].

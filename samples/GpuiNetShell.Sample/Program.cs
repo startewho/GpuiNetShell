@@ -37,7 +37,56 @@ if (
 GpuiApplication? application = null;
 application = new GpuiApplication(() => new GalleryView(application!, initialPage));
 application.UseCustomTitlebar = true;
+application.ChildWindowsUseCustomTitlebar = true;
 application.AlwaysShowScrollbars = true;
+
+// A dev affordance for verifying multi-window deterministically: open N child
+// windows before the event loop starts. Every window is its own session.
+var openWindowsArgument = args.FirstOrDefault(argument =>
+    argument.StartsWith("--open-windows=", StringComparison.Ordinal)
+);
+if (
+    openWindowsArgument is not null
+    && int.TryParse(openWindowsArgument["--open-windows=".Length..], out var openCount)
+)
+{
+    for (var i = 1; i <= openCount; i++)
+    {
+        var ordinal = i;
+        WindowHandle? handle = null;
+        var child = new SecondaryWindowView(
+            application,
+            ordinal,
+            $"Child window {ordinal}",
+            () => handle?.Close()
+        );
+        handle = application.OpenWindow(() => child);
+    }
+}
+
+// A dev affordance for verifying programmatic close: close the first child
+// window after a delay, exercising `WindowHandle.Close` -> native `close_window`.
+var closeAfterArgument = args.FirstOrDefault(argument =>
+    argument.StartsWith("--close-after=", StringComparison.Ordinal)
+);
+if (
+    closeAfterArgument is not null
+    && int.TryParse(closeAfterArgument["--close-after=".Length..], out var closeAfterMs)
+)
+{
+    var target = application.OpenWindow(() => new SecondaryWindowView(
+        application,
+        99,
+        "Auto-close window",
+        () => { }
+    ));
+    _ = Task.Run(async () =>
+    {
+        await Task.Delay(closeAfterMs);
+        target.Close();
+    });
+}
+
 application.Run();
 return 0;
 
