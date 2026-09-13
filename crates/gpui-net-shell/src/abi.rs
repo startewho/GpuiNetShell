@@ -189,6 +189,13 @@ pub struct GpuiNetShellApi {
     >,
     /// Requests a re-render of one session from any thread.
     pub invalidate: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
+    /// Sets per-session window options before running. `flags` bit 0 = custom titlebar.
+    pub configure: Option<unsafe extern "C" fn(session_id: u64, flags: u32) -> i32>,
+    /// Applies a theme. `mode` 0 = light, 1 = dark, 2 = system; `colors` is an
+    /// optional UTF-8, newline-separated `name=#rrggbb` override list.
+    pub set_theme: Option<
+        unsafe extern "C" fn(session_id: u64, mode: u32, colors: *const u8, colors_len: u32) -> i32,
+    >,
     pub _reserved: u64,
 }
 

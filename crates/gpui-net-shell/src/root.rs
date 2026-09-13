@@ -111,6 +111,8 @@ pub struct Root {
     session_id: u64,
     callbacks: GpuiNetCallbacks,
     sheet: Option<ActiveSheet>,
+    /// Draw a custom title bar above the content (the native one is hidden).
+    custom_titlebar: bool,
 }
 
 #[allow(dead_code)] // accessors used by tests and future integrations
@@ -119,6 +121,7 @@ impl Root {
         view: Entity<ShellView>,
         session_id: u64,
         callbacks: GpuiNetCallbacks,
+        custom_titlebar: bool,
         cx: &mut Context<Self>,
     ) -> Self {
         install_key_bindings(cx);
@@ -127,6 +130,7 @@ impl Root {
             session_id,
             callbacks,
             sheet: None,
+            custom_titlebar,
         }
     }
 
@@ -306,19 +310,31 @@ impl Render for Root {
         let component_dialogs = gpui_component::Root::render_dialog_layer(window, cx);
         let component_notifications = gpui_component::Root::render_notification_layer(window, cx);
 
+        let titlebar_height = px(34.0);
+        let content = div()
+            .relative()
+            .size_full()
+            .when(self.custom_titlebar, |this| this.pt(titlebar_height))
+            .child(self.view.clone())
+            .children(sheet)
+            .children(component_sheets)
+            .children(component_dialogs)
+            .children(component_notifications);
+
         div()
-            .id("gpui-net-shell-root")
+            .id("gpui-net-shell-host")
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::on_escape))
             .relative()
             .size_full()
             .bg(background)
             .text_color(foreground)
-            .child(self.view.clone())
-            .children(sheet)
-            .children(component_sheets)
-            .children(component_dialogs)
-            .children(component_notifications)
+            .child(content)
+            .when(self.custom_titlebar, |this| {
+                this.child(div().absolute().top_0().left_0().right_0().child(
+                    gpui_component::TitleBar::new().child(div().text_sm().child("GpuiNetShell")),
+                ))
+            })
     }
 }
 

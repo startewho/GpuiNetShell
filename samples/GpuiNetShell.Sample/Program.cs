@@ -30,6 +30,7 @@ if (
 
 GpuiApplication? application = null;
 application = new GpuiApplication(() => new GalleryView(application!, initialPage));
+application.UseCustomTitlebar = true;
 application.Run();
 return 0;
 

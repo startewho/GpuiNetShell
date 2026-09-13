@@ -77,5 +77,7 @@ internal unsafe struct GpuiNetShellApi
     public ulong SchemaHash;
     public delegate* unmanaged[Cdecl]<ulong, NativeCallbacks*, int> RunApplication;
     public delegate* unmanaged[Cdecl]<ulong, int> Invalidate;
+    public delegate* unmanaged[Cdecl]<ulong, uint, int> Configure;
+    public delegate* unmanaged[Cdecl]<ulong, uint, byte*, uint, int> SetTheme;
     public ulong Reserved;
 }

@@ -101,6 +101,8 @@
 | AOT | 确认 NativeAOT 可用（`dotnet publish -p:PublishAot=true`，AOT 二进制正常运行）；库加 `IsAotCompatible`，csproj 按配置选择 debug/release 原生宿主 | — | 6 | `…6C4F` | — | ✅ |
 | 焦点 | 输入族 `Input`/`NumberInput`/`Textarea`/`OtpInput`/`Editor` 增加 `on_focus`/`on_blur`（订阅 `InputEvent`/`OtpEvent` 的 Focus/Blur）；C# `FocusExtensions.OnFocus/OnBlur` | — | 6 | `…6C50` | Focus | ✅ |
 | 源生成器 | `GpuiNetShell.SourceGen`（Roslyn `IIncrementalGenerator`，analyzer 接入 sample）：`[GpuiCallbacks]`+`[GpuiCallback("Name")]` 生成 token 属性与 `RegisterGeneratedCallbacks(ref RenderContext)`；按签名推断 action/typed/rows/element 回调。DataTablePage 已改用生成的行渲染回调 | — | 6 | `…6C50` | DataTable | ✅ |
+| 主题 | 主题模式 Light/Dark/System + 自定义语义色覆盖：ABI `set_theme`/`configure`；Rust `Theme::change` + `Theme::global_mut` 覆盖后 `sync_base`；C# `GpuiApplication.SetTheme(ThemeMode, colors)`、`ThemeColors`；Sample 新增 Theme 页 | — | 6 | `…6C50` | Theme | ✅ |
+| 标题栏 | 自定义标题栏：ABI `configure(flags)`，`GpuiApplication.UseCustomTitlebar`；Rust 用 `TitleBar::window_options()` 建窗，`Root` 叠加 `gpui_component::TitleBar`（拖拽/最小化/最大化/关闭由组件处理） | — | 6 | `…6C50` | — | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖

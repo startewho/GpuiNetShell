@@ -27,6 +27,12 @@ public sealed class GpuiApplication
     private RenderContext _renderContext = null!;
     private View? _root;
 
+    /// <summary>
+    /// Draw a custom title bar instead of the native one. Set before
+    /// <see cref="Run"/>; the application renders it via the theme's title bar.
+    /// </summary>
+    public bool UseCustomTitlebar { get; set; }
+
     public GpuiApplication(Func<View> rootFactory)
     {
         _rootFactory = rootFactory ?? throw new ArgumentNullException(nameof(rootFactory));
@@ -231,6 +237,32 @@ public sealed class GpuiApplication
         _ = api->Invalidate(_sessionId);
     }
 
+    /// <summary>
+    /// Applies a theme at runtime. <paramref name="colors"/> maps semantic names
+    /// (<c>background</c>, <c>foreground</c>, <c>primary</c>, <c>border</c>, …)
+    /// to <c>#rrggbb</c> values; pass <see langword="null"/> to clear overrides.
+    /// </summary>
+    public unsafe void SetTheme(
+        ThemeMode mode,
+        IReadOnlyDictionary<string, string>? colors = null
+    )
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->SetTheme == null)
+        {
+            return;
+        }
+        var text =
+            colors is null || colors.Count == 0
+                ? string.Empty
+                : string.Join('\n', colors.Select(pair => $"{pair.Key}={pair.Value}"));
+        var bytes = Encoding.UTF8.GetBytes(text);
+        fixed (byte* pointer = bytes)
+        {
+            _ = api->SetTheme(_sessionId, (uint)mode, pointer, (uint)bytes.Length);
+        }
+    }
+
     /// <summary>Runs the native application event loop. Blocking.</summary>
     public void Run() => RunOnUiThread(RunCore);
 
@@ -248,6 +280,11 @@ public sealed class GpuiApplication
             throw new InvalidOperationException(
                 "The managed and native schema hashes do not match; rebuild both."
             );
+        }
+
+        if (api->Configure != null)
+        {
+            _ = api->Configure(_sessionId, UseCustomTitlebar ? 1u : 0u);
         }
 
         var callbacks = ManagedCallbacks.Create();
