@@ -31,6 +31,7 @@ pub mod group_box;
 pub mod hover_card;
 pub mod icon;
 pub mod input;
+mod input_events;
 pub mod kbd;
 pub mod label;
 pub mod link;

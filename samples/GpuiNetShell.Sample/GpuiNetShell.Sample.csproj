@@ -8,5 +8,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\GpuiNetShell\GpuiNetShell.csproj" />
+        <ProjectReference
+            Include="..\..\src\GpuiNetShell.SourceGen\GpuiNetShell.SourceGen.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+        />
     </ItemGroup>
 </Project>

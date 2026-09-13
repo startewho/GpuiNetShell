@@ -63,5 +63,6 @@ internal static class PageRegistry
             new EditorPage(),
             new NativeMenuPage(),
             new ContextMenuPage(),
+            new FocusPage(),
         ];
 }

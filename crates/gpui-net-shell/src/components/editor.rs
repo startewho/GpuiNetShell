@@ -7,10 +7,14 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, Entity, IntoElement as _, Refineable as _, SharedString, Styled as _};
+use gpui::{
+    AnyElement, AppContext as _, Entity, IntoElement as _, Refineable as _, SharedString,
+    Styled as _, Subscription,
+};
 use gpui_component::input::{Editor, EditorState};
 
 use super::common::nonempty_id;
+use super::input_events::{InputCallbacks, RetainedInputCallbacks};
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
     ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
@@ -28,6 +32,14 @@ enum EditorOp {
     Bordered(bool),
     Readonly(bool),
     AriaLabel(String),
+    OnFocus(ComponentArgument),
+    OnBlur(ComponentArgument),
+}
+
+struct Host {
+    state: Entity<EditorState>,
+    callbacks: RetainedInputCallbacks,
+    _selection: Subscription,
 }
 
 struct EditorMaterializer;
@@ -57,20 +69,57 @@ impl ComponentMaterializer for EditorMaterializer {
             _ => None,
         });
         let disabled = request.disabled();
+        let callback_for = |pick: fn(&EditorOp) -> Option<&ComponentArgument>| {
+            operations
+                .iter()
+                .rev()
+                .find_map(pick)
+                .cloned()
+                .map(|argument| request.resolve_callback(&argument))
+                .transpose()
+        };
+        let callbacks = InputCallbacks {
+            change: None,
+            focus: callback_for(|op| match op {
+                EditorOp::OnFocus(argument) => Some(argument),
+                _ => None,
+            })?,
+            blur: callback_for(|op| match op {
+                EditorOp::OnBlur(argument) => Some(argument),
+                _ => None,
+            })?,
+        };
 
         let key = SharedString::from(format!("shell-editor:{id}"));
-        let state: Entity<EditorState> = request.use_keyed_state(key, move |window, cx| {
-            let state = EditorState::new(window, cx).default_value(value);
-            match language {
-                Some(language) => state.language(language),
-                None => state,
+        let init_callbacks = callbacks.clone();
+        let host: Entity<Host> = request.use_keyed_state(key, move |window, cx| {
+            let state = cx.new(|cx| {
+                let state = EditorState::new(window, cx).default_value(value);
+                match language {
+                    Some(language) => state.language(language),
+                    None => state,
+                }
+            });
+            let retained = RetainedInputCallbacks::new(init_callbacks);
+            let selection = retained.subscribe(window, cx, &state, |state: &EditorState| {
+                state.value().to_string()
+            });
+            Host {
+                state,
+                callbacks: retained,
+                _selection: selection,
             }
         });
+        request.update_entity(&host, |host, _| host.callbacks.set(callbacks));
+        let state = request.with_window_app(|_, app| host.read(app).state.clone());
 
         let mut editor = Editor::new(&state).disabled(disabled);
         for operation in &operations {
             editor = match operation {
-                EditorOp::Value(_) | EditorOp::Language(_) => editor,
+                EditorOp::Value(_)
+                | EditorOp::Language(_)
+                | EditorOp::OnFocus(_)
+                | EditorOp::OnBlur(_) => editor,
                 EditorOp::Appearance(value) => editor.appearance(*value),
                 EditorOp::Bordered(value) => editor.bordered(*value),
                 EditorOp::Readonly(value) => editor.readonly(*value),
@@ -96,6 +145,27 @@ fn bool_method(name: &'static str, op: fn(bool) -> EditorOp) -> MethodDescriptor
         },
     )
     .with_documentation("Sets native Editor behavior.")
+}
+
+fn callback(
+    name: &'static str,
+    documentation: &'static str,
+    make: fn(ComponentArgument) -> EditorOp,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
+        move |arguments| match arguments {
+            [argument @ ComponentArgument::Callback(_)] => {
+                Ok(ComponentPayload::new(make(argument.clone())))
+            }
+            _ => Err(format!("Editor.{name}(callback) expects a callback")),
+        },
+    )
+    .with_documentation(documentation)
 }
 
 pub(super) fn register(registry: &mut ComponentRegistry) {
@@ -152,6 +222,16 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         },
                     )
                     .with_documentation("Sets the editor accessibility label."),
+                    callback(
+                        "on_focus",
+                        "Runs when the editor gains focus.",
+                        EditorOp::OnFocus,
+                    ),
+                    callback(
+                        "on_blur",
+                        "Runs when the editor loses focus.",
+                        EditorOp::OnBlur,
+                    ),
                 ])
                 .with_documentation(
                     "A retained native source editor. Shell disabled and style are honored; \

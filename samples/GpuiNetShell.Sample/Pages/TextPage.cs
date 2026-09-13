@@ -11,7 +11,7 @@ internal sealed class TextPage : GalleryPage
         Page(
             ref ui,
             "Text",
-            "Plain gpui-component text in a styleable wrapper.",
+            "Plain1 2gpui-component text in a styleable wrapper.",
             ui.Text("The quick brown fox jumps over the lazy dog."),
             ui.Text("A second run of text, styled through the shared surface.")
                 .FontSemibold()

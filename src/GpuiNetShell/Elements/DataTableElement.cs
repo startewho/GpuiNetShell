@@ -55,6 +55,16 @@ public sealed class DataTableElement : Element
     }
 
     /// <summary>
+    /// Uses a callback token registered elsewhere (for example by a
+    /// source-generated <c>[GpuiCallback]</c> method) as the cell renderer.
+    /// </summary>
+    public DataTableElement RenderCell(ulong token)
+    {
+        Arena.AddCallback(Index, "render_cell", token);
+        return this;
+    }
+
+    /// <summary>
     /// Adds row right-click menu entries (<see cref="ContextMenuItemElement"/> /
     /// <see cref="ContextMenuSeparatorElement"/>). Item callbacks receive the
     /// right-clicked row index.

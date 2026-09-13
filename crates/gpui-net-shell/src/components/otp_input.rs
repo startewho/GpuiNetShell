@@ -3,22 +3,21 @@
 //! A retained fixed-length one-time-password field. It keeps a native `OtpState`
 //! in keyed state and reports the entered code through `on_change(string)`.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
     div, AnyElement, AppContext as _, Entity, IntoElement as _, ParentElement as _,
     Refineable as _, SharedString, Styled as _, Subscription,
 };
-use gpui_component::input::{OtpEvent, OtpInput, OtpState};
+use gpui_component::input::{OtpInput, OtpState};
 use gpui_component::Disableable as _;
 
 use super::common::nonempty_id;
+use super::input_events::{InputCallbacks, RetainedInputCallbacks};
 use crate::registry::{
-    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
-    ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
-    ComponentRegistry, ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
+    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
+    ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
+    MaterializeRequest, MethodDescriptor,
 };
 
 const DEFAULT_LENGTH: usize = 6;
@@ -32,11 +31,13 @@ enum OtpInputOp {
     Groups(usize),
     Disabled(bool),
     OnChange(ComponentArgument),
+    OnFocus(ComponentArgument),
+    OnBlur(ComponentArgument),
 }
 
 struct Host {
     state: Entity<OtpState>,
-    callback: Rc<RefCell<Option<ComponentCallback>>>,
+    callbacks: RetainedInputCallbacks,
     _selection: Subscription,
 }
 
@@ -74,49 +75,46 @@ impl ComponentMaterializer for OtpInputMaterializer {
                 _ => None,
             })
             .unwrap_or_else(|| request.disabled());
-        let on_change = operations
-            .iter()
-            .rev()
-            .find_map(|op| match op {
-                OtpInputOp::OnChange(argument) => Some(argument.clone()),
+        let callback_for = |pick: fn(&OtpInputOp) -> Option<&ComponentArgument>| {
+            operations
+                .iter()
+                .rev()
+                .find_map(pick)
+                .cloned()
+                .map(|argument| request.resolve_callback(&argument))
+                .transpose()
+        };
+        let callbacks = InputCallbacks {
+            change: callback_for(|op| match op {
+                OtpInputOp::OnChange(argument) => Some(argument),
                 _ => None,
-            })
-            .map(|argument| request.resolve_callback(&argument))
-            .transpose()?;
+            })?,
+            focus: callback_for(|op| match op {
+                OtpInputOp::OnFocus(argument) => Some(argument),
+                _ => None,
+            })?,
+            blur: callback_for(|op| match op {
+                OtpInputOp::OnBlur(argument) => Some(argument),
+                _ => None,
+            })?,
+        };
         let style = request.take_style();
 
         let key = gpui::ElementId::Name(SharedString::from(format!("shell-otp:{id}")));
-        let on_change_for_init = on_change.clone();
+        let init_callbacks = callbacks.clone();
         let host = request.use_keyed_state(key, move |window, cx| {
             let state = cx.new(|cx| OtpState::new(length, window, cx));
-            let callback = Rc::new(RefCell::new(on_change_for_init));
-            let event_callback = callback.clone();
-            let selection = window.subscribe(
-                &state,
-                cx,
-                move |state: Entity<OtpState>, event: &OtpEvent, window, cx| {
-                    if matches!(event, OtpEvent::Change) {
-                        let text = state.read(cx).value().to_string();
-                        if let Some(callback) = event_callback.borrow().clone() {
-                            callback.invoke_with(
-                                "OtpInput.on_change callback failed",
-                                &[ComponentCallbackArgument::String(text)],
-                                window,
-                                cx,
-                            );
-                        }
-                    }
-                },
-            );
+            let retained = RetainedInputCallbacks::new(init_callbacks);
+            let selection = retained.subscribe_otp(window, cx, &state, |state: &OtpState| {
+                state.value().to_string()
+            });
             Host {
                 state,
-                callback,
+                callbacks: retained,
                 _selection: selection,
             }
         });
-        request.update_entity(&host, |host, _| {
-            *host.callback.borrow_mut() = on_change;
-        });
+        request.update_entity(&host, |host, _| host.callbacks.set(callbacks));
 
         let state = request.with_window_app(|_, app| host.read(app).state.clone());
         let mut input = OtpInput::new(&state);
@@ -146,6 +144,27 @@ fn method(
                 .and_then(make)
                 .map(ComponentPayload::new)
                 .ok_or_else(|| format!("OtpInput.{name} received an invalid value"))
+        },
+    )
+    .with_documentation(documentation)
+}
+
+fn callback(
+    name: &'static str,
+    documentation: &'static str,
+    make: fn(ComponentArgument) -> OtpInputOp,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
+        move |arguments| match arguments {
+            [argument @ ComponentArgument::Callback(_)] => {
+                Ok(ComponentPayload::new(make(argument.clone())))
+            }
+            _ => Err(format!("OtpInput.{name}(callback) expects a callback")),
         },
     )
     .with_documentation(documentation)
@@ -215,6 +234,16 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         },
                     )
                     .with_documentation("Reports the entered code after each edit."),
+                    callback(
+                        "on_focus",
+                        "Runs when the field gains focus.",
+                        OtpInputOp::OnFocus,
+                    ),
+                    callback(
+                        "on_blur",
+                        "Runs when the field loses focus.",
+                        OtpInputOp::OnBlur,
+                    ),
                 ])
                 .with_documentation("A retained fixed-length one-time-password field."),
         )

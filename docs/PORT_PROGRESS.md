@@ -99,6 +99,8 @@
 | 重设计 | DataTable：托管侧保留行对象，`DataTable(id, rowCount)` + `render_cell` 回调按 `[rowIndex, column]` 取行；`ContextMenuItem` 子项成为行右键菜单，回调收到行号 | — | 6 | `…6C4F` | DataTable | ✅ |
 | 热重载 | `MetadataUpdateHandler`：Hot Reload 后清缓存并重绘所有会话（`GpuiApplication.InvalidateAll`） | — | 6 | `…6C4F` | — | ✅ |
 | AOT | 确认 NativeAOT 可用（`dotnet publish -p:PublishAot=true`，AOT 二进制正常运行）；库加 `IsAotCompatible`，csproj 按配置选择 debug/release 原生宿主 | — | 6 | `…6C4F` | — | ✅ |
+| 焦点 | 输入族 `Input`/`NumberInput`/`Textarea`/`OtpInput`/`Editor` 增加 `on_focus`/`on_blur`（订阅 `InputEvent`/`OtpEvent` 的 Focus/Blur）；C# `FocusExtensions.OnFocus/OnBlur` | — | 6 | `…6C50` | Focus | ✅ |
+| 源生成器 | `GpuiNetShell.SourceGen`（Roslyn `IIncrementalGenerator`，analyzer 接入 sample）：`[GpuiCallbacks]`+`[GpuiCallback("Name")]` 生成 token 属性与 `RegisterGeneratedCallbacks(ref RenderContext)`；按签名推断 action/typed/rows/element 回调。DataTablePage 已改用生成的行渲染回调 | — | 6 | `…6C50` | DataTable | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖

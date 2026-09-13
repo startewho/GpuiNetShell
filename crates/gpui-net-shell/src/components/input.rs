@@ -4,21 +4,20 @@
 //! keyed state and its `InputEvent::Change` is forwarded to managed code through
 //! `on_change(string)`.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
     div, AnyElement, AppContext as _, Entity, IntoElement as _, ParentElement as _,
     Refineable as _, SharedString, Styled as _, Subscription,
 };
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{Input, InputState};
 
 use super::common::nonempty_id;
+use super::input_events::{InputCallbacks, RetainedInputCallbacks};
 use crate::registry::{
-    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
-    ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
-    ComponentRegistry, ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
+    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
+    ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
+    MaterializeRequest, MethodDescriptor,
 };
 
 #[derive(Clone)]
@@ -30,11 +29,13 @@ enum InputOp {
     Value(String),
     Disabled(bool),
     OnChange(ComponentArgument),
+    OnFocus(ComponentArgument),
+    OnBlur(ComponentArgument),
 }
 
 struct Host {
     state: Entity<InputState>,
-    callback: Rc<RefCell<Option<ComponentCallback>>>,
+    callbacks: RetainedInputCallbacks,
     _selection: Subscription,
 }
 
@@ -76,19 +77,33 @@ impl ComponentMaterializer for InputMaterializer {
                 _ => None,
             })
             .unwrap_or_else(|| request.disabled());
-        let on_change = operations
-            .iter()
-            .rev()
-            .find_map(|op| match op {
-                InputOp::OnChange(argument) => Some(argument.clone()),
+        let callback_for = |pick: fn(&InputOp) -> Option<&ComponentArgument>| {
+            operations
+                .iter()
+                .rev()
+                .find_map(pick)
+                .cloned()
+                .map(|argument| request.resolve_callback(&argument))
+                .transpose()
+        };
+        let callbacks = InputCallbacks {
+            change: callback_for(|op| match op {
+                InputOp::OnChange(argument) => Some(argument),
                 _ => None,
-            })
-            .map(|argument| request.resolve_callback(&argument))
-            .transpose()?;
+            })?,
+            focus: callback_for(|op| match op {
+                InputOp::OnFocus(argument) => Some(argument),
+                _ => None,
+            })?,
+            blur: callback_for(|op| match op {
+                InputOp::OnBlur(argument) => Some(argument),
+                _ => None,
+            })?,
+        };
         let style = request.take_style();
 
         let key = gpui::ElementId::Name(SharedString::from(format!("shell-input:{id}")));
-        let on_change_for_init = on_change.clone();
+        let init_callbacks = callbacks.clone();
         let host = request.use_keyed_state(key, {
             let placeholder = placeholder.clone();
             let default_value = default_value.clone();
@@ -98,35 +113,18 @@ impl ComponentMaterializer for InputMaterializer {
                         .placeholder(placeholder)
                         .default_value(default_value)
                 });
-                let callback = Rc::new(RefCell::new(on_change_for_init));
-                let event_callback = callback.clone();
-                let selection = window.subscribe(
-                    &state,
-                    cx,
-                    move |state: Entity<InputState>, event: &InputEvent, window, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            let text = state.read(cx).value().to_string();
-                            if let Some(callback) = event_callback.borrow().clone() {
-                                callback.invoke_with(
-                                    "Input.on_change callback failed",
-                                    &[ComponentCallbackArgument::String(text)],
-                                    window,
-                                    cx,
-                                );
-                            }
-                        }
-                    },
-                );
+                let retained = RetainedInputCallbacks::new(init_callbacks);
+                let selection = retained.subscribe(window, cx, &state, |state: &InputState| {
+                    state.value().to_string()
+                });
                 Host {
                     state,
-                    callback,
+                    callbacks: retained,
                     _selection: selection,
                 }
             }
         });
-        request.update_entity(&host, |host, _| {
-            *host.callback.borrow_mut() = on_change;
-        });
+        request.update_entity(&host, |host, _| host.callbacks.set(callbacks));
 
         let state = request.with_window_app(|_, app| host.read(app).state.clone());
         let mut input = Input::new(&state);
@@ -153,6 +151,27 @@ fn method(
                 .and_then(make)
                 .map(ComponentPayload::new)
                 .ok_or_else(|| format!("Input.{name} received an invalid value"))
+        },
+    )
+    .with_documentation(documentation)
+}
+
+fn callback(
+    name: &'static str,
+    documentation: &'static str,
+    make: fn(ComponentArgument) -> InputOp,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
+        move |arguments| match arguments {
+            [argument @ ComponentArgument::Callback(_)] => {
+                Ok(ComponentPayload::new(make(argument.clone())))
+            }
+            _ => Err(format!("Input.{name}(callback) expects a callback")),
         },
     )
     .with_documentation(documentation)
@@ -216,8 +235,32 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         },
                     )
                     .with_documentation("Reports the new text after each edit."),
+                    callback(
+                        "on_focus",
+                        "Runs when the field gains focus.",
+                        InputOp::OnFocus,
+                    ),
+                    callback(
+                        "on_blur",
+                        "Runs when the field loses focus.",
+                        InputOp::OnBlur,
+                    ),
                 ])
                 .with_documentation("A retained single-line text field."),
         )
         .expect("the built-in Input descriptor is valid");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn input_declares_focus_and_blur_events() {
+        let frozen = crate::components::catalog();
+        let descriptor = frozen
+            .descriptors()
+            .find(|descriptor| descriptor.name() == "Input")
+            .expect("Input is registered");
+        assert!(descriptor.method("on_focus").is_some());
+        assert!(descriptor.method("on_blur").is_some());
+    }
 }

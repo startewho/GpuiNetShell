@@ -1,5 +1,6 @@
 <Solution>
     <Project Path="samples/GpuiNetShell.Sample/GpuiNetShell.Sample.csproj" />
     <Project Path="src/GpuiNetShell/GpuiNetShell.csproj" />
+    <Project Path="src/GpuiNetShell.SourceGen/GpuiNetShell.SourceGen.csproj" />
     <Project Path="tests/GpuiNetShell.Tests/GpuiNetShell.Tests.csproj" />
 </Solution>

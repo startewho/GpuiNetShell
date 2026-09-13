@@ -4,22 +4,21 @@
 //! the native `InputState` with `Input` and reports edits through
 //! `on_change(string)`.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
     div, AnyElement, AppContext as _, Entity, IntoElement as _, ParentElement as _,
     Refineable as _, SharedString, Styled as _, Subscription,
 };
-use gpui_component::input::{InputEvent, InputState, NumberInput};
+use gpui_component::input::{InputState, NumberInput};
 use gpui_component::Disableable as _;
 
 use super::common::nonempty_id;
+use super::input_events::{InputCallbacks, RetainedInputCallbacks};
 use crate::registry::{
-    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
-    ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
-    ComponentRegistry, ConstructorDescriptor, MaterializeRequest, MethodDescriptor,
+    ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
+    ComponentMaterializer, ComponentPayload, ComponentRegistry, ConstructorDescriptor,
+    MaterializeRequest, MethodDescriptor,
 };
 
 #[derive(Clone)]
@@ -31,11 +30,13 @@ enum NumberInputOp {
     Value(String),
     Disabled(bool),
     OnChange(ComponentArgument),
+    OnFocus(ComponentArgument),
+    OnBlur(ComponentArgument),
 }
 
 struct Host {
     state: Entity<InputState>,
-    callback: Rc<RefCell<Option<ComponentCallback>>>,
+    callbacks: RetainedInputCallbacks,
     _selection: Subscription,
 }
 
@@ -77,19 +78,33 @@ impl ComponentMaterializer for NumberInputMaterializer {
                 _ => None,
             })
             .unwrap_or_else(|| request.disabled());
-        let on_change = operations
-            .iter()
-            .rev()
-            .find_map(|op| match op {
-                NumberInputOp::OnChange(argument) => Some(argument.clone()),
+        let callback_for = |pick: fn(&NumberInputOp) -> Option<&ComponentArgument>| {
+            operations
+                .iter()
+                .rev()
+                .find_map(pick)
+                .cloned()
+                .map(|argument| request.resolve_callback(&argument))
+                .transpose()
+        };
+        let callbacks = InputCallbacks {
+            change: callback_for(|op| match op {
+                NumberInputOp::OnChange(argument) => Some(argument),
                 _ => None,
-            })
-            .map(|argument| request.resolve_callback(&argument))
-            .transpose()?;
+            })?,
+            focus: callback_for(|op| match op {
+                NumberInputOp::OnFocus(argument) => Some(argument),
+                _ => None,
+            })?,
+            blur: callback_for(|op| match op {
+                NumberInputOp::OnBlur(argument) => Some(argument),
+                _ => None,
+            })?,
+        };
         let style = request.take_style();
 
         let key = gpui::ElementId::Name(SharedString::from(format!("shell-number-input:{id}")));
-        let on_change_for_init = on_change.clone();
+        let init_callbacks = callbacks.clone();
         let host = request.use_keyed_state(key, {
             let placeholder = placeholder.clone();
             let default_value = default_value.clone();
@@ -99,35 +114,18 @@ impl ComponentMaterializer for NumberInputMaterializer {
                         .placeholder(placeholder)
                         .default_value(default_value)
                 });
-                let callback = Rc::new(RefCell::new(on_change_for_init));
-                let event_callback = callback.clone();
-                let selection = window.subscribe(
-                    &state,
-                    cx,
-                    move |state: Entity<InputState>, event: &InputEvent, window, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            let text = state.read(cx).value().to_string();
-                            if let Some(callback) = event_callback.borrow().clone() {
-                                callback.invoke_with(
-                                    "NumberInput.on_change callback failed",
-                                    &[ComponentCallbackArgument::String(text)],
-                                    window,
-                                    cx,
-                                );
-                            }
-                        }
-                    },
-                );
+                let retained = RetainedInputCallbacks::new(init_callbacks);
+                let selection = retained.subscribe(window, cx, &state, |state: &InputState| {
+                    state.value().to_string()
+                });
                 Host {
                     state,
-                    callback,
+                    callbacks: retained,
                     _selection: selection,
                 }
             }
         });
-        request.update_entity(&host, |host, _| {
-            *host.callback.borrow_mut() = on_change;
-        });
+        request.update_entity(&host, |host, _| host.callbacks.set(callbacks));
 
         let state = request.with_window_app(|_, app| host.read(app).state.clone());
         let mut input = NumberInput::new(&state).placeholder(placeholder);
@@ -154,6 +152,27 @@ fn method(
                 .and_then(make)
                 .map(ComponentPayload::new)
                 .ok_or_else(|| format!("NumberInput.{name} received an invalid value"))
+        },
+    )
+    .with_documentation(documentation)
+}
+
+fn callback(
+    name: &'static str,
+    documentation: &'static str,
+    make: fn(ComponentArgument) -> NumberInputOp,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
+        move |arguments| match arguments {
+            [argument @ ComponentArgument::Callback(_)] => {
+                Ok(ComponentPayload::new(make(argument.clone())))
+            }
+            _ => Err(format!("NumberInput.{name}(callback) expects a callback")),
         },
     )
     .with_documentation(documentation)
@@ -221,6 +240,16 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         },
                     )
                     .with_documentation("Reports the new text after each edit."),
+                    callback(
+                        "on_focus",
+                        "Runs when the field gains focus.",
+                        NumberInputOp::OnFocus,
+                    ),
+                    callback(
+                        "on_blur",
+                        "Runs when the field loses focus.",
+                        NumberInputOp::OnBlur,
+                    ),
                 ])
                 .with_documentation("A retained numeric text field."),
         )

@@ -52,6 +52,27 @@ public sealed class RenderContext
     /// <summary>Marks that managed rendering has ended.</summary>
     internal void EndRender() => _rendering = false;
 
+    /// <summary>
+    /// Registers a parameterless callback and returns its token. This is the
+    /// public entry point source-generated callback registration uses.
+    /// </summary>
+    public ulong RegisterCallback(Action handler) => _events.Register(handler);
+
+    /// <summary>Registers a typed callback and returns its token.</summary>
+    public ulong RegisterCallback(Action<EventValue> handler) => _events.Register(handler);
+
+    /// <summary>
+    /// Registers a row/cell element renderer and returns its token. The renderer
+    /// receives the string arguments the component passes (for `DataTable`:
+    /// <c>[row_index, column]</c>).
+    /// </summary>
+    public ulong RegisterElement(
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    ) => _events.RegisterElement(renderer);
+
+    /// <summary>Registers a row-snapshot provider and returns its token.</summary>
+    public ulong RegisterRows(Func<string> provider) => _events.RegisterRows(provider);
+
     /// <summary>Declares a button. <paramref name="id"/> is its stable identity.</summary>
     public ButtonElement Button(string id)
     {
