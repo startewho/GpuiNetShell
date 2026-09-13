@@ -16,11 +16,13 @@ use gpui::{
 };
 use gpui_component::{
     attachment::{Attachment, AttachmentContent, AttachmentStatus},
+    avatar::Avatar,
     bubble::{Bubble, BubbleVariant},
     marker::{Marker, MarkerLoadingStyle, MarkerVariant},
-    message::{Message, MessageAlignment, MessageContent},
+    message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader},
     message_scroller::{MessageScroller, MessageScrollerState},
     shimmer::ShimmerText,
+    text::Text,
     Sizable as _, Size,
 };
 
@@ -49,6 +51,9 @@ enum Op {
     JumpButton(bool),
     JumpButtonLabel(String),
     RenderItem(ComponentArgument),
+    Name(String),
+    Time(String),
+    Avatar(String),
 }
 
 #[derive(Clone)]
@@ -152,9 +157,13 @@ impl ComponentMaterializer for MessageMaterializer {
     fn materialize(&self, mut request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let mut message = Message::new();
         for operation in operations(&request) {
-            if let Op::Alignment(value) = operation {
-                message = message.alignment(value);
-            }
+            message = match operation {
+                Op::Alignment(value) => message.alignment(value),
+                Op::Name(value) => message.header(MessageHeader::new().child(Text::from(value))),
+                Op::Time(value) => message.footer(MessageFooter::new().child(Text::from(value))),
+                Op::Avatar(value) => message.avatar(Avatar::new().name(value)),
+                _ => message,
+            };
         }
         let children = request.take_children();
         if !children.is_empty() {
@@ -285,6 +294,24 @@ fn bool_method(
         move |arguments| match arguments {
             [ComponentArgument::Boolean(value)] => Ok(ComponentPayload::new(wrap(*value))),
             _ => Err(format!("{component}.{name} expects one boolean")),
+        },
+    )
+    .with_documentation("Sets a native Chat family option.")
+}
+
+fn text_method(
+    component: &'static str,
+    name: &'static str,
+    wrap: fn(String) -> Op,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(name, ArgumentSchema::String)],
+        move |arguments| match arguments {
+            [ComponentArgument::String(value)] if !value.trim().is_empty() => {
+                Ok(ComponentPayload::new(wrap(value.clone())))
+            }
+            _ => Err(format!("{component}.{name} expects non-empty text")),
         },
     )
     .with_documentation("Sets a native Chat family option.")
@@ -445,20 +472,20 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                 .with_constructors(vec![ConstructorDescriptor::new("Message", vec![], |_| {
                     Ok(ComponentPayload::new(MessagePayload))
                 })])
-                .with_methods(vec![enum_method(
-                    "Message",
-                    "alignment",
-                    &["start", "end"],
-                    |value| {
+                .with_methods(vec![
+                    enum_method("Message", "alignment", &["start", "end"], |value| {
                         Some(Op::Alignment(match value {
                             "start" => MessageAlignment::Start,
                             "end" => MessageAlignment::End,
                             _ => return None,
                         }))
-                    },
-                )])
+                    }),
+                    text_method("Message", "name", Op::Name),
+                    text_method("Message", "time", Op::Time),
+                    text_method("Message", "avatar", Op::Avatar),
+                ])
                 .with_documentation(
-                    "A message row composing ordinary children into its content slot.",
+                    "A message row with an avatar, sender header, content, and footer slots.",
                 ),
         )
         .expect("the built-in Message descriptor is valid");

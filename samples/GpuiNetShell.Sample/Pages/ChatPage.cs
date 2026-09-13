@@ -5,66 +5,96 @@ namespace GpuiNetShell.Sample.Pages;
 
 internal sealed class ChatPage : GalleryPage
 {
+    private const int MessageCount = 5000;
+
+    private static readonly string[] Senders = ["Ada", "Grace", "Linus", "Margaret", "Alan"];
+
     public override string Title => "Chat";
 
     public override Element Render(ref RenderContext ui) =>
         Page(
             ref ui,
             "Chat",
-            "Message bubbles, status markers, attachments, shimmer text, and a virtualized transcript.",
-            Group(
-                ref ui,
-                "Bubbles",
-                ui.Bubble()
-                    .Alignment("start")
-                    .Add(ui.Label("Hello from the managed shell runtime.")),
-                ui.Bubble()
-                    .Alignment("end")
-                    .Variant("filled")
-                    .Add(ui.Label("Bubbles align to their sender edge."))
-            ),
-            Group(
-                ref ui,
-                "Marker & Shimmer",
-                ui.Marker("marker-today").Variant("separator").Add(ui.Label("Today")),
-                ui.ShimmerText("Loading more messages…").DurationMs(1400).Spread(0.4)
-            ),
-            Group(
-                ref ui,
-                "Attachment",
-                ui.Attachment("report")
-                    .Status("complete")
-                    .Axis("horizontal")
-                    .Size(ControlSize.Medium)
-                    .Add(ui.Label("quarterly-report.pdf"))
-            ),
-            Group(
-                ref ui,
-                "Message",
-                ui.Message()
-                    .Alignment("start")
-                    .Add(ui.Label("A message row composes ordinary children into its content."))
-            ),
-            Group(
-                ref ui,
-                "Message Scroller",
-                ui.MessageScroller("transcript", 2000)
-                    .Scrollbar()
-                    .JumpButton()
-                    .JumpButtonLabel("Jump to latest")
-                    .H(320)
-                    .RenderItem((context, index) => context.Label($"Message {index + 1}"))
-            )
+            $"{MessageCount} messages, virtualized: the transcript renders only the visible rows.",
+            ui.MessageScroller("transcript", MessageCount)
+                .Scrollbar()
+                .JumpButton()
+                .JumpButtonLabel("Jump to latest")
+                .H(520)
+                .RenderItem((context, index) => BuildMessage(context, index))
         );
 
-    private static Element Group(
-        ref RenderContext ui,
-        string title,
-        params Element[] children
-    )
+    private static Element BuildMessage(RenderContext ui, int index)
     {
-        var column = new List<Element> { ui.Label(title).FontSemibold() };
-        column.AddRange(children);
-        return ui.VStack(column.ToArray()).Gap(6);
+        var sender = Senders[index % Senders.Length];
+        var outgoing = index % 3 == 0;
+        var alignment = outgoing ? "end" : "start";
+
+        // Every 11th row is a day separator.
+        if (index % 11 == 0)
+        {
+            return ui.Marker($"marker-{index}")
+                .Variant("separator")
+                .Add(ui.Label($"Day {index / 11 + 1}"));
+        }
+
+        var message = ui.Message()
+            .Alignment(alignment)
+            .Name(sender)
+            .Time($"10:{(index / 5) % 60:00}")
+            .Avatar(sender);
+
+        switch (index % 9)
+        {
+            case 1:
+                message = message.Add(
+                    ui.Bubble()
+                        .Alignment(alignment)
+                        .Variant("secondary")
+                        .Add(ui.Text($"Attachment shared in message {index + 1}."))
+                );
+                return message.Add(
+                    ui.Attachment($"attachment-{index}")
+                        .Status("complete")
+                        .Axis("horizontal")
+                        .Size(ControlSize.Small)
+                        .Add(ui.Label($"design-{index}.png"))
+                );
+            case 2:
+                return message.Add(
+                    ui.Bubble().Alignment(alignment).Add(ui.ShimmerText("Assistant is typing…"))
+                );
+            case 3:
+                return message.Add(
+                    ui.Bubble()
+                        .Alignment(alignment)
+                        .Variant("outline")
+                        .Add(ui.Text($"Question {index + 1}: how should we render {index * 3} rows?"))
+                );
+            case 4:
+                return message.Add(
+                    ui.Bubble()
+                        .Alignment(alignment)
+                        .Variant("tinted")
+                        .Add(
+                            ui.VStack(
+                                    ui.Label("Answer").FontSemibold(),
+                                    ui.Text("Ask the managed side for one row at a time.")
+                                )
+                                .Gap(4)
+                        )
+                );
+            default:
+                return message.Add(
+                    ui.Bubble()
+                        .Alignment(alignment)
+                        .Variant(outgoing ? "filled" : index % 2 == 0 ? "secondary" : "muted")
+                        .Add(
+                            ui.Text(
+                                $"Message {index + 1}: the quick brown fox jumps over the lazy dog."
+                            )
+                        )
+                );
+        }
     }
 }

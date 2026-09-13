@@ -11,7 +11,7 @@ internal sealed partial class DataTablePage : GalleryPage
     private static readonly string[] Teams = ["Platform", "Growth", "Infra", "Design", "Data"];
     private static readonly string[] Statuses = ["Active", "Away", "Offline"];
 
-    private readonly List<Person> _rows = CreateRows(2000);
+    private readonly List<Person> _rows = CreateRows(200_000);
 
     private string _status = "(no row action yet)";
 

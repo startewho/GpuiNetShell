@@ -122,6 +122,27 @@ public sealed class MessageElement : Element
         return this;
     }
 
+    /// <summary>Sets the sender-name header.</summary>
+    public MessageElement Name(string name)
+    {
+        Arena.AddMethodString(Index, "name", name);
+        return this;
+    }
+
+    /// <summary>Sets the timestamp footer.</summary>
+    public MessageElement Time(string time)
+    {
+        Arena.AddMethodString(Index, "time", time);
+        return this;
+    }
+
+    /// <summary>Sets the sender avatar from a name (initials are derived).</summary>
+    public MessageElement Avatar(string name)
+    {
+        Arena.AddMethodString(Index, "avatar", name);
+        return this;
+    }
+
     public MessageElement Add(params Element[] children)
     {
         ArgumentNullException.ThrowIfNull(children);

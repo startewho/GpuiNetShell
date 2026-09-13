@@ -74,17 +74,19 @@ impl StyleArg {
         Ok(px(self.as_f32()?))
     }
 
-    /// A `#rgb`, `#rrggbb`, or `#rrggbbaa` color value.
+    /// A `#rgb`, `#rrggbb`, or `#rrggbbaa` color value, or a named color.
     fn as_color(&self) -> Result<Hsla, String> {
         let text = self.as_str()?;
-        let Some(hex) = text.strip_prefix('#') else {
-            return Err(format!(
-                "`{text}` is not a color literal (expected #rgb, #rrggbb or #rrggbbaa)"
-            ));
-        };
-        parse_hex(hex).ok_or_else(|| {
-            format!("`{text}` is not a valid color literal (expected #rgb, #rrggbb or #rrggbbaa)")
-        })
+        if let Some(hex) = text.strip_prefix('#') {
+            return parse_hex(hex).ok_or_else(|| {
+                format!(
+                    "`{text}` is not a valid color literal (expected #rgb, #rrggbb or #rrggbbaa)"
+                )
+            });
+        }
+        // Named colors (e.g. `red`, `orange-500`, `blue-600`) come from the
+        // component library's palette, so a style can use them too.
+        gpui_component::try_parse_color(text).map_err(|error| format!("`{text}`: {error}"))
     }
 }
 

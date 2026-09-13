@@ -37,6 +37,11 @@ enum ItemOp {
 #[derive(Clone)]
 struct TreePayload(String);
 
+#[derive(Clone)]
+enum TreeOp {
+    RenderItem(ComponentArgument),
+}
+
 struct RetainedTree {
     native: Entity<TreeState>,
     fingerprint: Vec<ItemFingerprint>,
@@ -92,6 +97,15 @@ impl ComponentMaterializer for TreeMaterializer {
         let items = request.take_typed_children::<TreeItem>(&["TreeItem"])?;
         validate_unique_ids(&items)?;
         let fingerprint = fingerprint(&items);
+        let render_item = request
+            .methods()
+            .filter_map(|method| method.payload().downcast_ref::<TreeOp>())
+            .map(|op| match op {
+                TreeOp::RenderItem(argument) => argument.clone(),
+            })
+            .next()
+            .map(|argument| request.resolve_element_callback(&argument))
+            .transpose()?;
         let style = request.take_style();
 
         let state = request.with_window_app(|window, cx| {
@@ -127,13 +141,34 @@ impl ComponentMaterializer for TreeMaterializer {
             retained.read(cx).native.clone()
         });
 
-        let mut tree = Tree::new(&state, move |_ix, entry, selected, _, _| {
-            ListItem::new(entry.item().id.clone())
+        let indent = move |depth: usize| px(16.) * depth + px(12.);
+        let mut tree = Tree::new(&state, move |ix, entry, selected, window, cx| {
+            let item = ListItem::new(entry.item().id.clone())
                 .selected(selected)
                 .w_full()
                 .px_3()
-                .pl(px(16.) * entry.depth() + px(12.))
-                .child(
+                .pl(indent(entry.depth()));
+            match &render_item {
+                Some(callback) => {
+                    let arguments = vec![
+                        ix.to_string(),
+                        entry.item().id.to_string(),
+                        entry.item().label.to_string(),
+                        entry.depth().to_string(),
+                        selected.to_string(),
+                        entry.is_folder().to_string(),
+                        entry.is_expanded().to_string(),
+                    ];
+                    let content = callback
+                        .build(&arguments, window, cx)
+                        .unwrap_or_else(|error| {
+                            gpui::div()
+                                .child(format!("Failed to render tree row: {error}"))
+                                .into_any_element()
+                        });
+                    item.child(content)
+                }
+                None => item.child(
                     h_flex()
                         .gap_2()
                         .child(Icon::new(if !entry.is_folder() {
@@ -144,7 +179,8 @@ impl ComponentMaterializer for TreeMaterializer {
                             IconName::Folder
                         }))
                         .child(entry.item().label.clone()),
-                )
+                ),
+            }
         });
         tree.style().refine(&style);
         Ok(tree.into_any_element())
@@ -262,7 +298,23 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         _ => Err("Tree expects a non-empty id".into()),
                     },
                 )])
-                .with_methods(Vec::new())
+                .with_methods(vec![MethodDescriptor::new(
+                    "render_item",
+                    vec![ArgumentDescriptor::new(
+                        "callback",
+                        ArgumentSchema::Callback,
+                    )],
+                    |arguments| match arguments {
+                        [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
+                            TreeOp::RenderItem(ComponentArgument::Callback(*token)),
+                        )),
+                        _ => Err("Tree.render_item(callback) expects a callback".into()),
+                    },
+                )
+                .with_documentation(
+                    "Renders each node with managed code, receiving its index, id, label, \
+                     depth, selection, and folder/expanded state.",
+                )])
                 .with_documentation(
                     "Native retained tree keyed by a stable id; label/structure data syncs by \
                      unique item id while native expansion, selection, focus, and scroll persist.",

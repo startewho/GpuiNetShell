@@ -5,13 +5,30 @@ namespace GpuiNetShell.Sample.Pages;
 
 internal sealed class TablePage : GalleryPage
 {
+    private const int RowCount = 1000;
+
     public override string Title => "Table";
 
-    public override Element Render(ref RenderContext ui) =>
-        Page(
+    public override Element Render(ref RenderContext ui)
+    {
+        var body = new List<TableRowElement>(RowCount);
+        for (var i = 0; i < RowCount; i++)
+        {
+            var index = i;
+            body.Add(
+                ui.TableRow()
+                    .Add(
+                        ui.TableCell().Add(ui.Text($"Person {index + 1}")),
+                        ui.TableCell().Add(ui.Text(IndexRole(index))),
+                        ui.TableCell().TextRight().Add(ui.Text((50 + ((index * 7) % 50)).ToString()))
+                    )
+            );
+        }
+
+        return Page(
             ref ui,
             "Table",
-            "A simple structural table built from typed header/body/footer/cell parts.",
+            $"A structural table built from typed parts with {RowCount} rows.",
             ui.Table()
                 .AccessibilityLabel("Team scores")
                 .Size(ControlSize.Medium)
@@ -25,36 +42,27 @@ internal sealed class TablePage : GalleryPage
                                     ui.TableHead().TextRight().Add(ui.Text("Score"))
                                 )
                         ),
-                    ui.TableBody()
-                        .Add(
-                            ui.TableRow()
-                                .Add(
-                                    ui.TableCell().Add(ui.Text("Ada Lovelace")),
-                                    ui.TableCell().Add(ui.Text("Engineer")),
-                                    ui.TableCell().TextRight().Add(ui.Text("98"))
-                                ),
-                            ui.TableRow()
-                                .Add(
-                                    ui.TableCell().Add(ui.Text("Grace Hopper")),
-                                    ui.TableCell().Add(ui.Text("Admiral")),
-                                    ui.TableCell().TextRight().Add(ui.Text("95"))
-                                ),
-                            ui.TableRow()
-                                .Add(
-                                    ui.TableCell().Add(ui.Text("Linus Torvalds")),
-                                    ui.TableCell().Add(ui.Text("Maintainer")),
-                                    ui.TableCell().TextRight().Add(ui.Text("91"))
-                                )
-                        ),
+                    ui.TableBody().Add(body.ToArray()),
                     ui.TableFooter()
                         .Add(
                             ui.TableRow()
                                 .Add(
                                     ui.TableCell().ColSpan(2).Add(ui.Text("Average")),
-                                    ui.TableCell().TextRight().Add(ui.Text("94.7"))
+                                    ui.TableCell().TextRight().Add(ui.Text("74.5"))
                                 )
                         ),
-                    ui.TableCaption().Add(ui.Text("Team scores for the current quarter"))
+                    ui.TableCaption().Add(ui.Text("Generated rows for the current quarter"))
                 )
         );
+    }
+
+    private static string IndexRole(int index) =>
+        (index % 5) switch
+        {
+            0 => "Engineer",
+            1 => "Designer",
+            2 => "Manager",
+            3 => "Analyst",
+            _ => "Support",
+        };
 }

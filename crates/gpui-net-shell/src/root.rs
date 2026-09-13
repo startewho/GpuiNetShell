@@ -28,8 +28,8 @@ use gpui::{
     Global, IntoElement, KeyBinding, MouseButton, Render, WeakEntity, WeakFocusHandle, Window,
 };
 use gpui_base::Placement;
-use gpui_component::button::Button;
-use gpui_component::ActiveTheme as _;
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::{ActiveTheme as _, Sizable as _};
 
 use crate::abi::GpuiNetCallbacks;
 use crate::view::ShellView;
@@ -221,6 +221,25 @@ impl Root {
         }
     }
 
+    /// The title bar's theme toggle: flips between light and dark.
+    fn on_titlebar_theme(
+        &mut self,
+        _: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let dark = !cx.theme().is_dark();
+        gpui_component::Theme::change(
+            if dark {
+                gpui_component::ThemeMode::Dark
+            } else {
+                gpui_component::ThemeMode::Light
+            },
+            Some(window),
+            cx,
+        );
+    }
+
     // -- Layers --------------------------------------------------------------
 
     /// The sheet, anchored to a viewport edge. A combobox popup is this layer.
@@ -321,6 +340,30 @@ impl Render for Root {
             .children(component_dialogs)
             .children(component_notifications);
 
+        let theme_icon = if cx.theme().is_dark() {
+            gpui_component::IconName::Sun
+        } else {
+            gpui_component::IconName::Moon
+        };
+        let titlebar = gpui_component::TitleBar::new()
+            .child(div().text_sm().child("GpuiNetShell"))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap_2()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(
+                        Button::new("titlebar-theme-toggle")
+                            .icon(theme_icon)
+                            .small()
+                            .ghost()
+                            .tooltip("Toggle light and dark")
+                            .on_click(cx.listener(Self::on_titlebar_theme)),
+                    ),
+            );
+
         div()
             .id("gpui-net-shell-host")
             .key_context(CONTEXT)
@@ -331,9 +374,7 @@ impl Render for Root {
             .text_color(foreground)
             .child(content)
             .when(self.custom_titlebar, |this| {
-                this.child(div().absolute().top_0().left_0().right_0().child(
-                    gpui_component::TitleBar::new().child(div().text_sm().child("GpuiNetShell")),
-                ))
+                this.child(div().absolute().top_0().left_0().right_0().child(titlebar))
             })
     }
 }

@@ -1,6 +1,18 @@
+using System.Globalization;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Elements;
+
+/// <summary>One tree node as seen by <see cref="TreeElement.RenderItem"/>.</summary>
+public readonly record struct TreeItemInfo(
+    int Index,
+    string Id,
+    string Label,
+    int Depth,
+    bool Selected,
+    bool IsFolder,
+    bool IsExpanded
+);
 
 /// <summary>
 /// A typed native tree data item with a Tree-wide unique id. Nested
@@ -50,6 +62,32 @@ public sealed class TreeElement : Element
         {
             Arena.AddChild(Index, root.Index);
         }
+        return this;
+    }
+
+    /// <summary>
+    /// Renders each node with managed code. The tree asks for one node at a
+    /// time; the renderer can look up its own data by <see cref="TreeItemInfo.Id"/>.
+    /// </summary>
+    public TreeElement RenderItem(Func<RenderContext, TreeItemInfo, Element> renderer)
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+        var token = Events.RegisterElement(
+            (context, arguments) =>
+                renderer(
+                    context,
+                    new TreeItemInfo(
+                        int.Parse(arguments[0], CultureInfo.InvariantCulture),
+                        arguments[1],
+                        arguments[2],
+                        int.Parse(arguments[3], CultureInfo.InvariantCulture),
+                        bool.Parse(arguments[4]),
+                        bool.Parse(arguments[5]),
+                        bool.Parse(arguments[6])
+                    )
+                )
+        );
+        Arena.AddCallback(Index, "render_item", token);
         return this;
     }
 }

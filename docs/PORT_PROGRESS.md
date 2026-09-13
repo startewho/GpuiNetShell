@@ -105,6 +105,11 @@
 | 标题栏 | 自定义标题栏：ABI `configure(flags)`，`GpuiApplication.UseCustomTitlebar`；Rust 用 `TitleBar::window_options()` 建窗，`Root` 叠加 `gpui_component::TitleBar`（拖拽/最小化/最大化/关闭由组件处理） | — | 6 | `…6C50` | — | ✅ |
 | 修复 | 深色主题文字不可见：`ShellView` 根写死白色 `bg(rgba(0xFFFFFFFF))`，改用 `cx.theme().background`；`Root` 已用 `theme.background/foreground`。深色下背景/文字均随主题 | — | 6 | `…6C50` | Theme | ✅ |
 | 修复 | HotReload 不刷新：`MetadataUpdateHandler` 只在库程序集声明，运行时只识别“被编辑程序集”上的特性；在 sample 程序集补 `[assembly: MetadataUpdateHandler(typeof(GpuiNetShell.HotReload))]`，且 `Command::Invalidate` 追加 `window.refresh()` | — | 6 | `…6C50` | — | ✅ |
+| 主题切换 | 自定义标题栏内加主题切换图标按钮（`Moon`/`Sun`），点击调 `Theme::change` 翻转深浅色；左右两个标题栏簇 + `stop_propagation`（同 gpui-kit story 写法） | — | 6 | `…6C50` | — | ✅ |
+| Tree | 新增 `Tree.render_item((ctx, TreeItemInfo) => Element)`：托管侧按 `Index/Id/Label/Depth/Selected/IsFolder/IsExpanded` 自定义每个节点；Sample 用 C# 字典按 id 渲染标签+大小 | — | 6 | `…6C51` | Tree | ✅ |
+| Chat | `Message` 增加 `name`/`time`/`avatar`（头/脚/头像槽）；Chat 页改为 5000 条各类消息（气泡变体、附件、Marker、Shimmer、头像/名字/时间）虚拟化展示 | — | 6 | `…6C51` | Chat | ✅ |
+| 数据量 | DataTable 示例 20 万行（按索引虚拟化）；结构化 Table 示例 1000 行 | — | 6 | `…6C51` | DataTable / Table | ✅ |
+| 样式 | 颜色样式支持命名色（`red`/`orange-500`/`blue-600` 等）：`style.rs::as_color` 在非 `#` 时回退 `gpui_component::try_parse_color` | — | 6 | `…6C51` | 各页 | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖
