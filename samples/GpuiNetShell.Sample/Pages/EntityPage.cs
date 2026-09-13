@@ -38,6 +38,11 @@ internal sealed class EntityPage : GalleryPage
         public string Text { get; set; } = "(nothing picked)";
     }
 
+    private sealed class GlobalCounter
+    {
+        public int Count { get; init; }
+    }
+
     private sealed record Incremented(int Delta);
 
     private sealed record ItemPicked(int Index, string Label);
@@ -151,6 +156,25 @@ internal sealed class EntityPage : GalleryPage
                                                         c.Notify();
                                                     }
                                                 )
+                                            ),
+                                        childUi
+                                            .Button("entity-async")
+                                            .Label("async +1")
+                                            .OnClick(() =>
+                                                cx.Spawn(
+                                                    async _ =>
+                                                    {
+                                                        await Task.Delay(500)
+                                                            .ConfigureAwait(false);
+                                                        return 1;
+                                                    },
+                                                    (s, delta, c) =>
+                                                    {
+                                                        s.Count += delta;
+                                                        c.Emit(new Incremented(delta));
+                                                        c.Notify();
+                                                    }
+                                                )
                                             )
                                     )
                                     .Gap(8)
@@ -196,6 +220,28 @@ internal sealed class EntityPage : GalleryPage
                     ui.Child(detail, (state, childUi, _) => childUi.Label($"picked: {state.Text}"))
                 )
                 .Gap(12)
+                .ItemsCenter(),
+            Section(
+                ref ui,
+                "Spawn / global",
+                "\"async +1\" computes off-thread and applies on the UI thread; the global counter is process-wide."
+            ),
+            ui
+                .HStack(
+                    ui.Label($"global = {Application.Global<GlobalCounter>()?.Count ?? 0}"),
+                    ui.Button("entity-global")
+                        .Label("+ global")
+                        .OnClick(() =>
+                            Application.SetGlobal(
+                                new GlobalCounter
+                                {
+                                    Count =
+                                        (Application.Global<GlobalCounter>()?.Count ?? 0) + 1,
+                                }
+                            )
+                        )
+                )
+                .Gap(8)
                 .ItemsCenter()
         );
     }

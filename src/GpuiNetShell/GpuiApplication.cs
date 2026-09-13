@@ -24,6 +24,8 @@ public sealed class GpuiApplication
     static GpuiApplication()
     {
         EntityRegistry.Notified += OnEntityNotified;
+        GlobalStore.Changed += OnGlobalChanged;
+        UiDispatcher.SetWake(InvalidateAll);
     }
 
     /// <summary>
@@ -42,6 +44,9 @@ public sealed class GpuiApplication
             session.NotifyEntity(entityId);
         }
     }
+
+    /// <summary>Repaints every live session when a global value changes.</summary>
+    private static void OnGlobalChanged(Type _) => InvalidateAll();
 
     private readonly Session _primary;
     private readonly List<Session> _children = [];
@@ -68,6 +73,21 @@ public sealed class GpuiApplication
 
     /// <summary>The process-wide entity registry behind <see cref="New{T}"/>.</summary>
     public EntityRegistry Entities => EntityRegistry.Default;
+
+    /// <summary>
+    /// Sets the process-wide global of type <typeparamref name="T"/>, mirroring
+    /// GPUI's <c>cx.set_global</c>. Every live window repaints.
+    /// </summary>
+    public void SetGlobal<T>(T value)
+        where T : class => GlobalStore.Default.Set(value);
+
+    /// <summary>Reads the process-wide global of type <typeparamref name="T"/>; false when unset.</summary>
+    public bool TryGetGlobal<T>(out T value)
+        where T : class => GlobalStore.Default.TryGet(out value);
+
+    /// <summary>The process-wide global of type <typeparamref name="T"/>, or <see langword="null"/> when unset.</summary>
+    public T? Global<T>()
+        where T : class => GlobalStore.Default.Get<T>();
 
     public GpuiApplication(Func<View> rootFactory)
     {
@@ -303,7 +323,20 @@ public sealed class GpuiApplication
 
     private unsafe void InvalidateSession(ulong sessionId)
     {
-        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        GpuiNetShellApi* api;
+        try
+        {
+            api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        }
+        catch (DllNotFoundException)
+        {
+            // Best-effort: without a native host there is nothing to repaint.
+            return;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return;
+        }
         if (api == null || api->Invalidate == null)
         {
             return;
@@ -434,6 +467,10 @@ public sealed class GpuiApplication
             {
                 Owner.FlushPendingWindows();
             }
+
+            // Background tasks post completions here; they run on the UI thread
+            // before the tree is built so the frame reflects their state changes.
+            UiDispatcher.Drain();
 
             _arena.Reset();
             _events.BeginGeneration(generation);

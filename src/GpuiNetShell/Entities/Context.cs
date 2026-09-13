@@ -63,4 +63,71 @@ public sealed class Context<T>
 
     /// <summary>Releases this entity and its subscriptions.</summary>
     public void Release() => _registry.Release(Entity.Id.Value);
+
+    // -- Global state ------------------------------------------------------
+
+    /// <summary>Reads a process-wide global value, or <see langword="null"/> when unset.</summary>
+    public TGlobal? TryGlobal<TGlobal>()
+        where TGlobal : class => GlobalStore.Default.Get<TGlobal>();
+
+    /// <summary>Sets a process-wide global value; observers repaint.</summary>
+    public void SetGlobal<TGlobal>(TGlobal value)
+        where TGlobal : class => GlobalStore.Default.Set(value);
+
+    // -- Spawn -------------------------------------------------------------
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread with this entity's
+    /// current state. Safe to call from any thread.
+    /// </summary>
+    public void Spawn(Action<T, Context<T>> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var id = Entity.Id.Value;
+        UiDispatcher.Post(() =>
+        {
+            if (!_registry.IsAlive(id))
+            {
+                return;
+            }
+            action(_registry.Read<T>(id), new Context<T>(_registry, id));
+        });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> on the thread pool, then applies its result
+    /// on the UI thread with this entity's current state. <paramref name="onError"/>
+    /// runs off the UI thread when <paramref name="work"/> throws.
+    /// </summary>
+    public void Spawn<TResult>(
+        Func<CancellationToken, Task<TResult>> work,
+        Action<T, TResult, Context<T>> apply,
+        Action<Exception>? onError = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        ArgumentNullException.ThrowIfNull(apply);
+        var id = Entity.Id.Value;
+        _ = Task.Run(async () =>
+        {
+            TResult result;
+            try
+            {
+                result = await work(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                onError?.Invoke(exception);
+                return;
+            }
+            UiDispatcher.Post(() =>
+            {
+                if (!_registry.IsAlive(id))
+                {
+                    return;
+                }
+                apply(_registry.Read<T>(id), result, new Context<T>(_registry, id));
+            });
+        });
+    }
 }

@@ -73,7 +73,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
 src/GpuiNetShell/              Managed runtime library
   Interop/                       layouts, P/Invoke, managed callbacks
   Rendering/                     RenderArena, RenderContext
-  Entities/                      Entity<T>, Context<T>, EntityRegistry (observe/subscribe)
+  Entities/                      Entity<T>, Context<T>, EntityRegistry, GlobalStore, UiDispatcher
   Elements/                      Element, ButtonElement, TextElement, DivElement
   Events/                        EventRegistry
   View.cs, GpuiApplication.cs

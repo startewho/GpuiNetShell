@@ -1,6 +1,6 @@
 # 设计方案：C# 侧 View / Entity、通知与关注、父子数据传递
 
-> 状态：**P1–P5 已实现**（P6 未做）。本文档已按实现回填。
+> 状态：**P1–P6 已实现**。本文档已按实现回填。
 > 目标：在 C# 侧复刻 GPUI 的 `Entity`/`Context`/`observe`/`subscribe`/`emit` 心智模型，
 > 使多组件、可复用状态、父子通信有统一、可组合的写法，同时不破坏现有 `View`/`Render` ABI。
 
@@ -89,9 +89,17 @@ public sealed class Context<T> where T : class
     public void Emit<TEvent>(TEvent e);                // 类型化事件
     public Subscription Observe<T2>(Entity<T2> target, Action<T, Entity<T2>, Context<T>> onNotify);
     public Subscription Subscribe<T2, TEvent>(Entity<T2> target, Action<T, Entity<T2>, TEvent, Context<T>> onEvent);
-    public TGlobal? TryGlobal<TGlobal>();              // 预留：全局状态
+    public TGlobal? TryGlobal<TGlobal>();              // 进程级全局状态
+    public void SetGlobal<TGlobal>(TGlobal value);      // 设置并触发重绘
+    public void Spawn(Action<T, Context<T>> action);    // 任意线程 -> UI 线程
+    public void Spawn<TResult>(                         // 后台计算，结果回 UI 线程
+        Func<CancellationToken, Task<TResult>> work,
+        Action<T, TResult, Context<T>> apply,
+        Action<Exception>? onError = null);
 }
 ```
+
+全局状态另见 `GlobalStore`：按类型唯一，`GpuiApplication.SetGlobal<T>` / `Global<T>` 为便捷入口；设置时所有活动窗口重绘。
 
 `Subscription`：
 
@@ -233,9 +241,17 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 ## 6. 线程与生命周期
 
 - 现有：GPUI 线程 STA；托管回调都在该线程；`Invalidate()` 可跨线程（ingress）。
-- 实体状态读写：**限定在 GPUI 线程**（与 GPUI 一致，避免锁）。`Context` 不跨线程；需要后台更新时用 `Invalidate`-style 的 ingress 回投（预留 `cx.Spawn`）。
-- 实体所有权：`EntityRegistry`（托管静态，按 session? 或全局）持有强引用直到显式 `Dispose` 或窗口关闭；其余用弱引用。
-- 子视图实体随其**父实体**释放（`Subscription.Detach` 绑定）。
+- 实体状态读写：**限定在 GPUI 线程**（与 GPUI 一致，避免锁）。`Context` 不跨线程。
+- 后台更新：`Context.Spawn` 把完成动作投到 `UiDispatcher`（进程级并发队列），
+  队列在每帧 `Session.RenderInto` 开头、构建元素树之前于 UI 线程 `Drain`；
+  `Post` 的唤醒回调是 `InvalidateAll`（复用现有 ingress，无需新 ABI）。
+  `Spawn` 在应用动作前检查实体是否仍存活。
+- 全局状态：`GlobalStore` 按类型唯一、加锁读写；`Set`/`Remove` 触发 `Changed`，
+  应用据此 `InvalidateAll` 重绘所有窗口。
+- 实体所有权：`EntityRegistry`（进程级）持有到显式 `Release`；`EntityHosts`
+  notifier 表随窗口存活，且每帧重建。
+- 订阅生命周期：`Subscription.Dispose()` 取消；持有它的实体 `Release()` 会移除其
+  所有出边。子视图实体不被父实体自动绑定（无 `Detach`）。
 
 ---
 
@@ -256,18 +272,18 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 | P3 | `Subscribe`/`Emit` 类型化事件 + `Subscription` 生命周期 | 事件派发可跑 | ✅ |
 | P4 | 原生实体子树：`COMPONENT_ENTITY_HOST` + `render_entity` + `notify_entity`（ABI bump） | 实体级局部重渲染 | ✅ |
 | P5 | Sample：`EntityPage`（计数器 + 列表选择 + 父子同步）+ 文档 | 可运行示例 | ✅ |
-| P6 | （可选）`cx.Spawn` / 全局状态 | — | ⬜ |
+| P6 | （可选）`cx.Spawn` / 全局状态 | 后台结果回 UI 线程；`GlobalStore` | ✅ |
 
 每阶段：`cargo test/fmt/clippy` + `dotnet build/test` + `--check` + 冒烟。
 
-> 实测：`cargo test` 74 通过、`dotnet test` 60 通过（3 个需 manifest 的 native 测试跳过）、
+> 实测：`cargo test` 74 通过、`dotnet test` 68 通过（3 个需 manifest 的 native 测试跳过）、
 > `dotnet run -- --check` 报 abi 8 / schema `0x6E65747368656C56`。
 
 ---
 
 ## 9. 决策点（回溯）
 
-> 已按下列选择落地：范围做到 P4（真·实体级局部重渲染）；命名用 `New<T>` /
+> 已按下列选择落地：范围做到 P6（含后台 `Spawn` 与全局状态）；命名用 `New<T>` /
 > `Child(entity, render)` / `Context<T>`；父子默认「共享 Entity + 回调」；
 > 实体状态严格 GPUI 单线程；接受 ABI 8 / schema `…6C56`；本轮不整合源生成器。
 
