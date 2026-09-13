@@ -14,9 +14,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    div, px, size, AnyElement, App, Axis, Context, ElementId, InteractiveElement as _,
-    IntoElement, ParentElement as _, Pixels, Refineable as _, Render, ScrollStrategy,
-    SharedString, Size, Styled as _, Window,
+    div, px, size, AnyElement, App, Axis, Context, ElementId, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Refineable as _, Render, ScrollStrategy, SharedString, Size,
+    StatefulInteractiveElement as _, Styled as _, Window,
 };
 use gpui_base::{h_virtual_list, v_virtual_list, VirtualListScrollHandle};
 use gpui_component::menu::ContextMenuExt as _;
@@ -26,7 +26,8 @@ use super::context_menu::Entry;
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentCallback,
     ComponentCallbackArgument, ComponentDescriptor, ComponentMaterializer, ComponentPayload,
-    ComponentRegistry, ConstructorDescriptor, ElementCallback, MaterializeRequest, MethodDescriptor,
+    ComponentRegistry, ConstructorDescriptor, ElementCallback, MaterializeRequest,
+    MethodDescriptor,
 };
 use crate::typed_child::take_typed;
 
@@ -43,7 +44,8 @@ enum VirtualListOp {
     Axis(Axis),
     RenderItem(ComponentArgument),
     OnSelect(ComponentArgument),
-    ScrollTo(usize, u64),
+    ScrollTo(usize),
+    ScrollToken(u64),
 }
 
 struct VirtualListView {
@@ -129,12 +131,14 @@ fn item_element(
     }
     if !row_menu.is_empty() {
         let entries = row_menu.to_vec();
-        item = item.context_menu(move |mut menu, _window, _cx| {
-            for entry in entries.clone() {
-                menu = menu.item(entry.into_menu_item(Some(index)));
-            }
-            menu
-        });
+        return item
+            .context_menu(move |mut menu, _window, _cx| {
+                for entry in entries.clone() {
+                    menu = menu.item(entry.into_menu_item(Some(index)));
+                }
+                menu
+            })
+            .into_any_element();
     }
     item.into_any_element()
 }
@@ -142,7 +146,8 @@ fn item_element(
 impl Render for VirtualListView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(target) = self.scroll_target.take() {
-            self.scroll_handle.scroll_to_item(target, ScrollStrategy::Top);
+            self.scroll_handle
+                .scroll_to_item(target, ScrollStrategy::Top);
         }
 
         let sizes: Rc<Vec<Size<Pixels>>> = Rc::new(match &self.item_sizes {
@@ -165,9 +170,7 @@ impl Render for VirtualListView {
                 move |_view: &mut VirtualListView, range: Range<usize>, window, cx| {
                     range
                         .map(|index| {
-                            item_element(
-                                &renderer, &on_select, &row_menu, true, index, window, cx,
-                            )
+                            item_element(&renderer, &on_select, &row_menu, true, index, window, cx)
                         })
                         .collect::<Vec<_>>()
                 },
@@ -182,9 +185,7 @@ impl Render for VirtualListView {
                 move |_view: &mut VirtualListView, range: Range<usize>, window, cx| {
                     range
                         .map(|index| {
-                            item_element(
-                                &renderer, &on_select, &row_menu, false, index, window, cx,
-                            )
+                            item_element(&renderer, &on_select, &row_menu, false, index, window, cx)
                         })
                         .collect::<Vec<_>>()
                 },
@@ -248,7 +249,11 @@ impl ComponentMaterializer for VirtualListMaterializer {
             .map(|argument| request.resolve_callback(&argument))
             .transpose()?;
         let scroll = operations.iter().rev().find_map(|op| match op {
-            VirtualListOp::ScrollTo(index, token) => Some((*index, *token)),
+            VirtualListOp::ScrollTo(index) => Some(*index),
+            _ => None,
+        });
+        let scroll_token = operations.iter().rev().find_map(|op| match op {
+            VirtualListOp::ScrollToken(token) => Some(*token),
             _ => None,
         });
         let sizes_argument = operations.iter().find_map(|op| match op {
@@ -299,10 +304,10 @@ impl ComponentMaterializer for VirtualListMaterializer {
             view.renderer = renderer;
             view.on_select = on_select;
             view.row_menu = row_menu;
-            if let Some((index, token)) = scroll {
+            if let Some(token) = scroll_token {
                 if token != view.scroll_token {
                     view.scroll_token = token;
-                    view.scroll_target = Some(index);
+                    view.scroll_target = scroll;
                 }
             }
         });
@@ -319,7 +324,10 @@ fn callback_method(
 ) -> MethodDescriptor {
     MethodDescriptor::new(
         name,
-        vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
         move |arguments| match arguments {
             [argument @ ComponentArgument::Callback(_)] => {
                 Ok(ComponentPayload::new(make(argument.clone())))
@@ -373,7 +381,10 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     .with_documentation("Sets the fixed item size along the scroll axis."),
                     MethodDescriptor::new(
                         "item_sizes",
-                        vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+                        vec![ArgumentDescriptor::new(
+                            "callback",
+                            ArgumentSchema::Callback,
+                        )],
                         |arguments| match arguments {
                             [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
                                 VirtualListOp::ItemSizes(ComponentArgument::Callback(*token)),
@@ -395,9 +406,9 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                                 "vertical" => {
                                     Ok(ComponentPayload::new(VirtualListOp::Axis(Axis::Vertical)))
                                 }
-                                "horizontal" => Ok(ComponentPayload::new(VirtualListOp::Axis(
-                                    Axis::Horizontal,
-                                ))),
+                                "horizontal" => {
+                                    Ok(ComponentPayload::new(VirtualListOp::Axis(Axis::Horizontal)))
+                                }
                                 _ => Err(format!("unsupported VirtualList axis `{value}`")),
                             },
                             _ => Err("VirtualList.axis expects vertical or horizontal".into()),
@@ -406,7 +417,10 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     .with_documentation("Sets the scroll axis."),
                     MethodDescriptor::new(
                         "render_item",
-                        vec![ArgumentDescriptor::new("callback", ArgumentSchema::Callback)],
+                        vec![ArgumentDescriptor::new(
+                            "callback",
+                            ArgumentSchema::Callback,
+                        )],
                         |arguments| match arguments {
                             [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(
                                 VirtualListOp::RenderItem(ComponentArgument::Callback(*token)),
@@ -418,26 +432,37 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     callback_method("on_select", VirtualListOp::OnSelect),
                     MethodDescriptor::new(
                         "scroll_to",
-                        vec![
-                            ArgumentDescriptor::new("index", ArgumentSchema::Number),
-                            ArgumentDescriptor::new("token", ArgumentSchema::Number),
-                        ],
+                        vec![ArgumentDescriptor::new("index", ArgumentSchema::Number)],
                         |arguments| match arguments {
-                            [ComponentArgument::Number(index), ComponentArgument::Number(token)]
-                                if index.is_finite()
-                                    && *index >= 0.0
-                                    && index.fract() == 0.0 =>
+                            [ComponentArgument::Number(index)]
+                                if index.is_finite() && *index >= 0.0 && index.fract() == 0.0 =>
                             {
                                 Ok(ComponentPayload::new(VirtualListOp::ScrollTo(
                                     *index as usize,
+                                )))
+                            }
+                            _ => Err("VirtualList.scroll_to expects an index".into()),
+                        },
+                    )
+                    .with_documentation("Sets the item index to scroll to when the token changes."),
+                    MethodDescriptor::new(
+                        "scroll_token",
+                        vec![ArgumentDescriptor::new("token", ArgumentSchema::Number)],
+                        |arguments| match arguments {
+                            [ComponentArgument::Number(token)]
+                                if token.is_finite() && *token >= 0.0 =>
+                            {
+                                Ok(ComponentPayload::new(VirtualListOp::ScrollToken(
                                     *token as u64,
                                 )))
                             }
-                            _ => Err("VirtualList.scroll_to expects an index and a token".into()),
+                            _ => {
+                                Err("VirtualList.scroll_token expects a non-negative token".into())
+                            }
                         },
                     )
                     .with_documentation(
-                        "Scrolls to an item once, when `token` changes; a token of 0 is ignored.",
+                        "Bumps the scroll token; a change applies the pending `scroll_to`.",
                     ),
                 ])
                 .with_documentation(
@@ -457,10 +482,8 @@ mod tests {
         let mut registry = ComponentRegistry::new();
         register(&mut registry);
         let frozen = registry.freeze();
-        assert!(
-            frozen
-                .descriptors()
-                .any(|descriptor| descriptor.name() == "VirtualList")
-        );
+        assert!(frozen
+            .descriptors()
+            .any(|descriptor| descriptor.name() == "VirtualList"));
     }
 }

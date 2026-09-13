@@ -113,6 +113,8 @@
 | 新增 | VirtualList（id 100）：`VirtualList(id, itemCount)` + `item_size`/`axis`(vertical/horizontal)/`render_item(index)`，基于 gpui-base 双向虚拟列表并保留滚动；与 DataTable/Tree/List 同一 index 回调模式，可由 `[GpuiCallback]` 统一生成 | 100 | 6 | `…6C52` | Virtual List | ✅ |
 | 新增 | Image（id 101）：按路径加载图片/SVG，`fit`(cover/contain/fill/none/scale_down)+样式尺寸/圆角；宿主 `FileAssets` 提供图标资产 + 文件系统回退，解码纹理由 gpui 资产缓存托管、无引用即释放 | 101 | 6 | `…6C52` | Image | ✅ |
 | 修复 | VirtualList 滚动条与不定尺寸：包裹 viewport 并用 `vertical_scrollbar`/`horizontal_scrollbar`（同一保留句柄）；新增 `item_sizes(() => "28\n44\n…")` 支持逐项不同尺寸；`GpuiApplication.AlwaysShowScrollbars`（configure bit1）让滚动条常显 | — | 6 | `…6C53` | Virtual List | ✅ |
+| 增强 | VirtualList 交互：`on_select(index)` 选中、`ContextMenuItem` 子项成为行右键菜单（回调收行号）、`scroll_to(index)`+`scroll_token(token)` 跳转到顶/底/指定行列；Sample 加 Top/Go to 50,000/Bottom 按钮、选中高亮与行菜单演示 | — | 6 | `…6C54` | Virtual List | ✅ |
+| 修复 | HotReload 真正生效：`PublishAot=true` 会被 `dotnet watch` 判定为“不支持热重载”并改为整进程重启，因此界面无刷新；sample csproj 增加 `<StartupHookSupport Condition="'$(Configuration)' == 'Debug'">true</StartupHookSupport>`（仅 Debug 开启，AOT/Release 发布不受影响）。实测编辑 Render 后同进程 `UpdateApplication`→`InvalidateAll`→`Invalidate`，UI 立即更新 | — | 6 | `…6C54` | — | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖

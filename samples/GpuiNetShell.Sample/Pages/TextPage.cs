@@ -10,8 +10,8 @@ internal sealed class TextPage : GalleryPage
     public override Element Render(ref RenderContext ui) =>
         Page(
             ref ui,
-            "Text",
-            "Plain1 2gpui-component text in a styleable wrapper.",
+            "Text1",
+            "Plain gpui-component text in a styleable wrapper.",
             ui.Text("The quick brown fox jumps over the lazy dog."),
             ui.Text("A second run of text, styled through the shared surface.")
                 .FontSemibold()

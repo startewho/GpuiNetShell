@@ -56,4 +56,42 @@ public sealed class VirtualListElement : Element
         Arena.AddCallback(Index, "render_item", token);
         return this;
     }
+
+    /// <summary>Reports the clicked item's index.</summary>
+    public VirtualListElement OnSelect(Action<int> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(
+            Index,
+            "on_select",
+            Events.Register(value => handler((int)value.Number))
+        );
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a row right-click menu (<see cref="ContextMenuItemElement"/> /
+    /// <see cref="ContextMenuSeparatorElement"/>). Item callbacks receive the
+    /// right-clicked item index.
+    /// </summary>
+    public VirtualListElement RowMenu(params Element[] items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        foreach (var item in items)
+        {
+            Arena.AddChild(Index, item.Index);
+        }
+        return this;
+    }
+
+    /// <summary>
+    /// Scrolls to <paramref name="index"/> once, when <paramref name="token"/>
+    /// changes (use a monotonically increasing token).
+    /// </summary>
+    public VirtualListElement ScrollTo(int index, long token)
+    {
+        Arena.AddMethodNumber(Index, "scroll_to", index);
+        Arena.AddMethodNumber(Index, "scroll_token", token);
+        return this;
+    }
 }
