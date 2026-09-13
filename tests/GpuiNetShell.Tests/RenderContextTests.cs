@@ -728,6 +728,28 @@ public sealed unsafe class RenderContextTests
         Assert.Equal("auto", DecodePacked(descriptor.Ops[2].B, utf8));
     }
 
+    [Fact]
+    public void VirtualListAndImageRecordTheirIdentities()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.VirtualList("list", 1000)
+            .ItemSize(24)
+            .Horizontal()
+            .RenderItem((ctx, index) => ctx.Label(index.ToString()));
+        ui.Image("icons/sun.svg").Fit("contain").Size(48);
+
+        var descriptor = arena.Publish();
+        Assert.Equal(2u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentVirtualList, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentImage, descriptor.Nodes[1].Component);
+        Assert.Contains(
+            NativeProtocol.OpCallback,
+            Enumerable.Range(0, (int)descriptor.OpsLen).Select(index => descriptor.Ops[index].Code)
+        );
+    }
+
     private static string DecodePacked(ulong packed, ReadOnlySpan<byte> utf8)
     {
         var offset = (int)(packed >> 32);

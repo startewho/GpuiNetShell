@@ -852,6 +852,30 @@ public sealed class RenderContext
         return new ContextMenuElement(this, index);
     }
 
+    /// <summary>
+    /// Declares a virtualized list over managed data. The native list asks for
+    /// one item index at a time.
+    /// </summary>
+    public VirtualListElement VirtualList(string id, int itemCount)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentVirtualList);
+        _arena.SetNodeData(
+            index,
+            id
+                + NativeProtocol.ConstructorArgSeparator
+                + itemCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
+        return new VirtualListElement(this, index);
+    }
+
+    /// <summary>Declares an image loaded from an asset or filesystem path.</summary>
+    public ImageElement Image(string source)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentImage);
+        _arena.SetNodeData(index, source);
+        return new ImageElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

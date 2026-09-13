@@ -22,6 +22,8 @@ const STATUS_INGRESS_POISONED: i32 = -22;
 
 /// `configure` flag: draw a custom title bar instead of the native one.
 const FLAG_CUSTOM_TITLEBAR: u32 = 1;
+/// `configure` flag: keep scrollbars visible instead of auto-hiding them.
+const FLAG_ALWAYS_SHOW_SCROLLBARS: u32 = 2;
 
 /// A managed request delivered on the GPUI thread.
 enum Command {
@@ -34,6 +36,30 @@ enum Command {
 fn window_configs() -> &'static Mutex<HashMap<u64, u32>> {
     static CONFIGS: OnceLock<Mutex<HashMap<u64, u32>>> = OnceLock::new();
     CONFIGS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// The bundle's icons plus a filesystem fallback, so `Image("C:\\a.png")`
+/// (and any relative path) resolves. gpui's asset cache owns decoded images
+/// and releases them once no view references them.
+struct FileAssets;
+
+impl gpui::AssetSource for FileAssets {
+    fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        if let Some(bytes) = gpui_kit_assets::Assets.load(path)? {
+            return Ok(Some(bytes));
+        }
+        if path.is_empty() {
+            return Ok(None);
+        }
+        match std::fs::read(path) {
+            Ok(bytes) => Ok(Some(std::borrow::Cow::Owned(bytes))),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
+        gpui_kit_assets::Assets.list(path)
+    }
 }
 
 type Ingress = Mutex<HashMap<u64, async_channel::Sender<Command>>>;
@@ -172,11 +198,18 @@ pub fn run(application_id: u64, callbacks: GpuiNetCallbacks) -> i32 {
         .and_then(|configs| configs.get(&application_id).copied())
         .unwrap_or(0);
     let custom_titlebar = flags & FLAG_CUSTOM_TITLEBAR != 0;
+    let always_show_scrollbars = flags & FLAG_ALWAYS_SHOW_SCROLLBARS != 0;
 
     gpui_platform::application()
-        .with_assets(gpui_kit_assets::Assets)
+        .with_assets(FileAssets)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
+            if always_show_scrollbars {
+                gpui_component::Theme::set_scrollbar_mode(
+                    gpui_component::scroll::ScrollbarMode::Always,
+                    cx,
+                );
+            }
 
             let registry = crate::components::catalog();
             let view = cx.new(|_| ShellView::new(application_id, callbacks, registry));

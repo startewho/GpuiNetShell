@@ -110,6 +110,9 @@
 | Chat | `Message` 增加 `name`/`time`/`avatar`（头/脚/头像槽）；Chat 页改为 5000 条各类消息（气泡变体、附件、Marker、Shimmer、头像/名字/时间）虚拟化展示 | — | 6 | `…6C51` | Chat | ✅ |
 | 数据量 | DataTable 示例 20 万行（按索引虚拟化）；结构化 Table 示例 1000 行 | — | 6 | `…6C51` | DataTable / Table | ✅ |
 | 样式 | 颜色样式支持命名色（`red`/`orange-500`/`blue-600` 等）：`style.rs::as_color` 在非 `#` 时回退 `gpui_component::try_parse_color` | — | 6 | `…6C51` | 各页 | ✅ |
+| 新增 | VirtualList（id 100）：`VirtualList(id, itemCount)` + `item_size`/`axis`(vertical/horizontal)/`render_item(index)`，基于 gpui-base 双向虚拟列表并保留滚动；与 DataTable/Tree/List 同一 index 回调模式，可由 `[GpuiCallback]` 统一生成 | 100 | 6 | `…6C52` | Virtual List | ✅ |
+| 新增 | Image（id 101）：按路径加载图片/SVG，`fit`(cover/contain/fill/none/scale_down)+样式尺寸/圆角；宿主 `FileAssets` 提供图标资产 + 文件系统回退，解码纹理由 gpui 资产缓存托管、无引用即释放 | 101 | 6 | `…6C52` | Image | ✅ |
+| 修复 | VirtualList 滚动条与不定尺寸：包裹 viewport 并用 `vertical_scrollbar`/`horizontal_scrollbar`（同一保留句柄）；新增 `item_sizes(() => "28\n44\n…")` 支持逐项不同尺寸；`GpuiApplication.AlwaysShowScrollbars`（configure bit1）让滚动条常显 | — | 6 | `…6C53` | Virtual List | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
 ## 样式（gpui style）覆盖

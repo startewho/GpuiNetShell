@@ -7,7 +7,7 @@ public sealed class NativeProtocolTests
     [Fact]
     public void SchemaHashMatchesTheNativeLiteral()
     {
-        Assert.Equal(0x6E65_7473_6865_6C51UL, NativeProtocol.SchemaHash);
+        Assert.Equal(0x6E65_7473_6865_6C53UL, NativeProtocol.SchemaHash);
     }
 
     [Fact]

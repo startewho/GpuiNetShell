@@ -33,6 +33,12 @@ public sealed class GpuiApplication
     /// </summary>
     public bool UseCustomTitlebar { get; set; }
 
+    /// <summary>
+    /// Keep scrollbars visible instead of auto-hiding them. Set before
+    /// <see cref="Run"/>.
+    /// </summary>
+    public bool AlwaysShowScrollbars { get; set; }
+
     public GpuiApplication(Func<View> rootFactory)
     {
         _rootFactory = rootFactory ?? throw new ArgumentNullException(nameof(rootFactory));
@@ -284,7 +290,16 @@ public sealed class GpuiApplication
 
         if (api->Configure != null)
         {
-            _ = api->Configure(_sessionId, UseCustomTitlebar ? 1u : 0u);
+            var flags = 0u;
+            if (UseCustomTitlebar)
+            {
+                flags |= 1u;
+            }
+            if (AlwaysShowScrollbars)
+            {
+                flags |= 2u;
+            }
+            _ = api->Configure(_sessionId, flags);
         }
 
         var callbacks = ManagedCallbacks.Create();

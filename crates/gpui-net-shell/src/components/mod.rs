@@ -30,6 +30,7 @@ pub mod form;
 pub mod group_box;
 pub mod hover_card;
 pub mod icon;
+pub mod image;
 pub mod input;
 mod input_events;
 pub mod kbd;
@@ -65,6 +66,7 @@ pub mod text;
 pub mod textarea;
 pub mod tooltip;
 pub mod tree;
+pub mod virtual_list;
 pub mod window_effects;
 
 use crate::registry::{ComponentRegistry, FrozenComponentRegistry};
@@ -131,6 +133,8 @@ pub fn register(registry: &mut ComponentRegistry) {
     editor::register(registry);
     native_menu::register(registry);
     context_menu::register(registry);
+    virtual_list::register(registry);
+    image::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -253,6 +257,8 @@ mod tests {
                 "ContextMenuItem",
                 "ContextMenuSeparator",
                 "ContextMenu",
+                "VirtualList",
+                "Image",
             ]
         );
     }
