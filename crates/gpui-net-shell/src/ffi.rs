@@ -20,6 +20,7 @@ static API: GpuiNetShellApi = GpuiNetShellApi {
     set_theme: Some(set_theme),
     open_window: Some(open_window),
     close_window: Some(close_window),
+    notify_entity: Some(notify_entity),
     _reserved: 0,
 };
 
@@ -92,6 +93,10 @@ unsafe extern "C" fn open_window(parent_session: u64, flags: u32) -> i64 {
 
 unsafe extern "C" fn close_window(session_id: u64) -> i32 {
     guard(|| Ok(crate::host::close_window(session_id)))
+}
+
+unsafe extern "C" fn notify_entity(session_id: u64, entity_id: u64) -> i32 {
+    guard(|| Ok(crate::host::notify_entity(session_id, entity_id)))
 }
 
 /// Runs a fallible body, turning a panic into [`STATUS_PANIC`].

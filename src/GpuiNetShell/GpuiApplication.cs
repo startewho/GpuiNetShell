@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Events;
 using GpuiNetShell.Interop;
 using GpuiNetShell.Rendering;
@@ -34,6 +35,17 @@ public sealed class GpuiApplication
     /// <see cref="Run"/>.
     /// </summary>
     public bool AlwaysShowScrollbars { get; set; }
+
+    /// <summary>
+    /// Creates an entity owned by the application, mirroring GPUI's
+    /// <c>cx.new(|cx| ..)</c>. The <paramref name="init"/> closure runs once and
+    /// may set up observers/subscriptions through its <see cref="Context{T}"/>.
+    /// </summary>
+    public Entity<T> New<T>(Func<Context<T>, T> init)
+        where T : class => EntityRegistry.Default.Create(init);
+
+    /// <summary>The process-wide entity registry behind <see cref="New{T}"/>.</summary>
+    public EntityRegistry Entities => EntityRegistry.Default;
 
     public GpuiApplication(Func<View> rootFactory)
     {

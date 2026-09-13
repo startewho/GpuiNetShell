@@ -205,6 +205,9 @@ pub struct GpuiNetShellApi {
     /// Closes `session`'s window. The managed host may keep the session alive
     /// until its view is dropped.
     pub close_window: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
+    /// Repaints the entity subtree identified by `entity_id` within `session`.
+    /// The managed host calls this after an entity's state changes.
+    pub notify_entity: Option<unsafe extern "C" fn(session_id: u64, entity_id: u64) -> i32>,
     pub _reserved: u64,
 }
 

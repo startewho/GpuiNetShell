@@ -48,6 +48,8 @@ enum Command {
     },
     /// Closes the window belonging to `session`.
     Close,
+    /// Repaints the retained entity subtree `entity_id` in `session`.
+    NotifyEntity { entity_id: u64 },
 }
 
 /// Per-session window options, set before the window opens.
@@ -156,6 +158,11 @@ pub fn open_window(parent_session: u64, flags: u32) -> i64 {
 /// Closes the window belonging to `session` from any thread.
 pub fn close_window(session_id: u64) -> i32 {
     send(session_id, Command::Close)
+}
+
+/// Repaints one entity subtree within `session` from any thread.
+pub fn notify_entity(session_id: u64, entity_id: u64) -> i32 {
+    send(session_id, Command::NotifyEntity { entity_id })
 }
 
 /// Applies a theme on the GPUI thread.
@@ -374,6 +381,9 @@ fn open_managed_window(
                         }
                         Command::Close => {
                             window.remove_window();
+                        }
+                        Command::NotifyEntity { entity_id } => {
+                            crate::components::entity_host::notify_entity(entity_id, window, cx);
                         }
                     });
                 });

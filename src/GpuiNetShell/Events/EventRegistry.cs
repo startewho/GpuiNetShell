@@ -97,6 +97,25 @@ public sealed class EventRegistry
         out Func<RenderContext, IReadOnlyList<string>, Element> renderer
     ) => _elementRenderers.TryGetValue(token, out renderer!);
 
+    /// <summary>
+    /// Registers an element renderer that outlives snapshot generations. An
+    /// entity-backed subtree is retained natively across frames, so its renderer
+    /// must survive the generation that first declared it; release it with
+    /// <see cref="ReleasePersistent"/>.
+    /// </summary>
+    public ulong RegisterPersistentElement(
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(renderer);
+        var token = _next++;
+        _elementRenderers[token] = renderer;
+        return token;
+    }
+
+    /// <summary>Releases a persistent element renderer.</summary>
+    public void ReleasePersistent(ulong token) => _elementRenderers.Remove(token);
+
     /// <summary>Runs the handler for <paramref name="token"/>; false when retired.</summary>
     public bool Dispatch(ulong token) => DispatchValue(token, EventValue.None);
 

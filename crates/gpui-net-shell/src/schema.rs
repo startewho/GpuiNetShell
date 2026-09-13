@@ -11,11 +11,11 @@
 //! behavior is a generic `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
-pub const ABI_VERSION: u32 = 7;
+pub const ABI_VERSION: u32 = 8;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C55;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C56;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -232,6 +232,11 @@ pub const COMPONENT_CONTEXT_MENU: u32 = 99;
 pub const COMPONENT_VIRTUAL_LIST: u32 = 100;
 #[allow(dead_code)]
 pub const COMPONENT_IMAGE: u32 = 101;
+/// A managed entity subtree: the node's data is the entity id and its
+/// `render_entity` callback builds the subtree. Retained natively by entity id
+/// so `notify_entity` can repaint only this subtree.
+#[allow(dead_code)]
+pub const COMPONENT_ENTITY_HOST: u32 = 102;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -311,7 +316,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C55);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C56);
     }
 
     #[test]

@@ -26,6 +26,7 @@ pub mod div;
 pub mod dropdown_button;
 pub mod dropdown_menu;
 pub mod editor;
+pub mod entity_host;
 pub mod form;
 pub mod group_box;
 pub mod hover_card;
@@ -135,6 +136,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     context_menu::register(registry);
     virtual_list::register(registry);
     image::register(registry);
+    entity_host::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -259,6 +261,7 @@ mod tests {
                 "ContextMenu",
                 "VirtualList",
                 "Image",
+                "EntityHost",
             ]
         );
     }
