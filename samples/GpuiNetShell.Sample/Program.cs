@@ -108,7 +108,8 @@ internal sealed class GalleryView : View
             .Scroll("gallery-content")
             .FlexGrow(1.0)
             .MinH(0)
-            .Add(ui.Div(_pages[_index].Render(ref ui)).P(24).WFull());
+            .P(24)
+            .Add(_pages[_index].Render(ref ui));
 
         return ui.HStack(ui.Div(sidebar).FlexShrink(0), content)
             .Gap(16)
