@@ -41,6 +41,30 @@ gallery = new GalleryView(application, initialPage);
 application.UseCustomTitlebar = true;
 application.AlwaysShowScrollbars = true;
 
+// Dev affordance: flip the AnimationPage pulse on, then off, to verify that a
+// looping keyframe animation stops when gated inactive.
+var pulseTest = args.FirstOrDefault(argument =>
+    argument.StartsWith("--pulse-test=", StringComparison.Ordinal)
+);
+if (pulseTest is not null)
+{
+    var parts = pulseTest["--pulse-test=".Length..].Split(',');
+    if (
+        parts.Length == 2
+        && int.TryParse(parts[0], out var onAt)
+        && int.TryParse(parts[1], out var offAt)
+    )
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(onAt);
+            GpuiNetShell.Entities.UiDispatcher.Post(() => AnimationPage.Current?.SetPulsing(true));
+            await Task.Delay(Math.Max(0, offAt - onAt));
+            GpuiNetShell.Entities.UiDispatcher.Post(() => AnimationPage.Current?.SetPulsing(false));
+        });
+    }
+}
+
 // A dev affordance for hunting retention leaks: cycle through the pages on a
 // timer, forcing a full GC and printing managed/working-set memory every N
 // switches. `--cycle-pages=150` sets the interval in milliseconds.

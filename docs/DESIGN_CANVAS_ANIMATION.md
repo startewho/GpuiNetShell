@@ -274,6 +274,13 @@ ui.Reveal("accordion", progress: 0..1)
 - 目标值仅在托管 `Render`（状态变化）时上传；native 缓存上一个采样值以支持中途反向/重定向
   （spring/transition 自带该语义）。
 - 支持 `max_fps`（可选）以降低自绘动画帧率。
+- **`Active(bool)` 门控**：`Motion`/`Reveal` 默认 active；设为 false 时直接采用目标值、
+  不请求任何帧。**无限/循环动画（如 `Keyframes().Loop()`）必须用 `Active` 门控**，否则
+  只要该窗口处于活动状态，就会每帧 `request_animation_frame` 并持续重绘。
+- **重绘范围**：`request_animation_frame` 通知的是“当前正在渲染的视图”。动画元素位于
+  页面实体子树内，因此通知的是该实体视图——每帧重建**整个页面子树**，而非仅动画元素。
+  对常驻循环动画，成本约为一个核；应尽量把长时动画放进更小的实体子树，或用 `Active`
+  在不需要时暂停。过渡/弹簧/`Presence`/`Reveal` 到达终态后会自动停止请求帧。
 
 ### 7.6 限制
 - GPUI 无通用元素 `transform`：`scale/rotate` 仅能在 Canvas 自绘中通过

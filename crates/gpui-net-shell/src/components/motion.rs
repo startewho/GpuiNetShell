@@ -51,6 +51,9 @@ enum MotionKind {
 #[derive(Clone)]
 struct MotionPolicy {
     kind: MotionKind,
+    /// When false, the animation is paused: targets are adopted immediately and
+    /// no frames are requested.
+    active: bool,
     duration_ms: f32,
     duration_token: Option<String>,
     easing: String,
@@ -68,6 +71,7 @@ impl Default for MotionPolicy {
     fn default() -> Self {
         Self {
             kind: MotionKind::Transition,
+            active: true,
             duration_ms: 200.0,
             duration_token: None,
             easing: "ease_out".to_string(),
@@ -86,6 +90,7 @@ impl Default for MotionPolicy {
 #[derive(Clone)]
 enum MotionOp {
     Kind(String),
+    Active(bool),
     Duration(f32),
     DurationToken(String),
     Easing(String),
@@ -244,76 +249,90 @@ impl ComponentMaterializer for MotionMaterializer {
         let targets = read_targets(&operations);
         let key = SharedString::from(id);
 
-        let sampled = request.with_window_app(|window, cx| -> Result<_, String> {
-            let tokens = cx.theme().motion_tokens();
-            let easing = parse_easing(&policy.easing, tokens);
-            let duration = resolve_duration(&policy, tokens);
-            Ok(match policy.kind {
-                MotionKind::Transition => {
-                    let transition = Transition::new(duration)
-                        .easing(easing.clone())
-                        .delay(SignedDuration::from(delay_duration(&policy)));
-                    MotionTargets {
-                        opacity: targets.opacity.map(|t| {
-                            sample_transition(&key, "opacity", t, &transition, window, cx)
-                        }),
-                        translate_x: targets
-                            .translate_x
-                            .map(|t| sample_transition(&key, "x", t, &transition, window, cx)),
-                        translate_y: targets
-                            .translate_y
-                            .map(|t| sample_transition(&key, "y", t, &transition, window, cx)),
-                        width: targets
-                            .width
-                            .map(|t| sample_transition(&key, "w", t, &transition, window, cx)),
-                        height: targets
-                            .height
-                            .map(|t| sample_transition(&key, "h", t, &transition, window, cx)),
+        let sampled = if !policy.active {
+            // Paused: adopt the targets (and keyframes hold at full opacity)
+            // without requesting any frames.
+            let hold = policy.kind == MotionKind::Keyframes;
+            MotionTargets {
+                opacity: if hold { Some(1.0) } else { targets.opacity },
+                translate_x: if hold { None } else { targets.translate_x },
+                translate_y: if hold { None } else { targets.translate_y },
+                width: if hold { None } else { targets.width },
+                height: if hold { None } else { targets.height },
+            }
+        } else {
+            request.with_window_app(|window, cx| -> Result<_, String> {
+                let tokens = cx.theme().motion_tokens();
+                let easing = parse_easing(&policy.easing, tokens);
+                let duration = resolve_duration(&policy, tokens);
+                Ok(match policy.kind {
+                    MotionKind::Transition => {
+                        let transition = Transition::new(duration)
+                            .easing(easing.clone())
+                            .delay(SignedDuration::from(delay_duration(&policy)));
+                        MotionTargets {
+                            opacity: targets.opacity.map(|t| {
+                                sample_transition(&key, "opacity", t, &transition, window, cx)
+                            }),
+                            translate_x: targets
+                                .translate_x
+                                .map(|t| sample_transition(&key, "x", t, &transition, window, cx)),
+                            translate_y: targets
+                                .translate_y
+                                .map(|t| sample_transition(&key, "y", t, &transition, window, cx)),
+                            width: targets
+                                .width
+                                .map(|t| sample_transition(&key, "w", t, &transition, window, cx)),
+                            height: targets
+                                .height
+                                .map(|t| sample_transition(&key, "h", t, &transition, window, cx)),
+                        }
                     }
-                }
-                MotionKind::Spring => {
-                    let spring = resolve_spring(&policy, tokens);
-                    MotionTargets {
-                        opacity: targets
-                            .opacity
-                            .map(|t| sample_spring(&key, "opacity", t, &spring, window, cx)),
-                        translate_x: targets
-                            .translate_x
-                            .map(|t| sample_spring(&key, "x", t, &spring, window, cx)),
-                        translate_y: targets
-                            .translate_y
-                            .map(|t| sample_spring(&key, "y", t, &spring, window, cx)),
-                        width: targets
-                            .width
-                            .map(|t| sample_spring(&key, "w", t, &spring, window, cx)),
-                        height: targets
-                            .height
-                            .map(|t| sample_spring(&key, "h", t, &spring, window, cx)),
+                    MotionKind::Spring => {
+                        let spring = resolve_spring(&policy, tokens);
+                        MotionTargets {
+                            opacity: targets
+                                .opacity
+                                .map(|t| sample_spring(&key, "opacity", t, &spring, window, cx)),
+                            translate_x: targets
+                                .translate_x
+                                .map(|t| sample_spring(&key, "x", t, &spring, window, cx)),
+                            translate_y: targets
+                                .translate_y
+                                .map(|t| sample_spring(&key, "y", t, &spring, window, cx)),
+                            width: targets
+                                .width
+                                .map(|t| sample_spring(&key, "w", t, &spring, window, cx)),
+                            height: targets
+                                .height
+                                .map(|t| sample_spring(&key, "h", t, &spring, window, cx)),
+                        }
                     }
-                }
-                MotionKind::Keyframes => {
-                    let frames = parse_keyframes(policy.keyframes.as_deref().unwrap_or(""))?;
-                    let timing = Timing::new(duration)
-                        .delay(SignedDuration::from(delay_duration(&policy)))
-                        .iterations(if policy.iterations <= 0.0 {
-                            IterationCount::Infinite
-                        } else {
-                            IterationCount::Finite(policy.iterations.max(1.0) as u64)
-                        })
-                        .direction(parse_direction(&policy.direction))
-                        .ease(easing);
-                    let value =
-                        animate_keyframes((key.clone(), "kf"), &frames, timing, window, cx).value;
-                    MotionTargets {
-                        opacity: Some(value),
-                        translate_x: None,
-                        translate_y: None,
-                        width: None,
-                        height: None,
+                    MotionKind::Keyframes => {
+                        let frames = parse_keyframes(policy.keyframes.as_deref().unwrap_or(""))?;
+                        let timing = Timing::new(duration)
+                            .delay(SignedDuration::from(delay_duration(&policy)))
+                            .iterations(if policy.iterations <= 0.0 {
+                                IterationCount::Infinite
+                            } else {
+                                IterationCount::Finite(policy.iterations.max(1.0) as u64)
+                            })
+                            .direction(parse_direction(&policy.direction))
+                            .ease(easing);
+                        let value =
+                            animate_keyframes((key.clone(), "kf"), &frames, timing, window, cx)
+                                .value;
+                        MotionTargets {
+                            opacity: Some(value),
+                            translate_x: None,
+                            translate_y: None,
+                            width: None,
+                            height: None,
+                        }
                     }
-                }
-            })
-        })?;
+                })
+            })?
+        };
 
         let children = request.take_children();
         let mut wrapper = div();
@@ -407,24 +426,32 @@ impl ComponentMaterializer for RevealMaterializer {
             .any(|op| matches!(op, MotionOp::Present(true)));
 
         let key = SharedString::from(id);
-        let progress = request.with_window_app(|window, cx| {
-            let tokens = cx.theme().motion_tokens();
-            let easing = parse_easing(&policy.easing, tokens);
-            let duration = resolve_duration(&policy, tokens);
-            let target = if open { 1.0_f32 } else { 0.0_f32 };
-            match policy.kind {
-                MotionKind::Spring => {
-                    let spring = resolve_spring(&policy, tokens);
-                    sample_spring(&key, "reveal", target, &spring, window, cx)
-                }
-                _ => {
-                    let transition = Transition::new(duration)
-                        .easing(easing)
-                        .delay(SignedDuration::from(delay_duration(&policy)));
-                    sample_transition(&key, "reveal", target, &transition, window, cx)
-                }
+        let progress = if !policy.active {
+            if open {
+                1.0_f32
+            } else {
+                0.0_f32
             }
-        });
+        } else {
+            request.with_window_app(|window, cx| {
+                let tokens = cx.theme().motion_tokens();
+                let easing = parse_easing(&policy.easing, tokens);
+                let duration = resolve_duration(&policy, tokens);
+                let target = if open { 1.0_f32 } else { 0.0_f32 };
+                match policy.kind {
+                    MotionKind::Spring => {
+                        let spring = resolve_spring(&policy, tokens);
+                        sample_spring(&key, "reveal", target, &spring, window, cx)
+                    }
+                    _ => {
+                        let transition = Transition::new(duration)
+                            .easing(easing)
+                            .delay(SignedDuration::from(delay_duration(&policy)));
+                        sample_transition(&key, "reveal", target, &transition, window, cx)
+                    }
+                }
+            })
+        };
         let children = request.take_children();
         let content = div().children(children).into_any_element();
         let reveal = MotionReveal::new(key, progress, content);
@@ -437,6 +464,7 @@ fn read_policy(operations: &[MotionOp]) -> MotionPolicy {
     for op in operations {
         match op {
             MotionOp::Kind(name) => policy.kind = parse_kind(name),
+            MotionOp::Active(value) => policy.active = *value,
             MotionOp::Duration(value) => policy.duration_ms = *value,
             MotionOp::DurationToken(name) => policy.duration_token = Some(name.clone()),
             MotionOp::Easing(name) => policy.easing = name.clone(),
@@ -571,6 +599,7 @@ fn motion_policy_methods() -> Vec<MethodDescriptor> {
             &["transition", "spring", "keyframes"],
             MotionOp::Kind,
         ),
+        boolean_method("active", MotionOp::Active),
         number_method("duration_ms", MotionOp::Duration),
         enum_method(
             "duration_token",

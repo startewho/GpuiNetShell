@@ -250,6 +250,17 @@ public sealed class MotionElement : Element
     internal MotionElement(RenderContext ui, int index)
         : base(ui, index) { }
 
+    /// <summary>
+    /// Pauses or resumes the animation. When paused, targets are adopted
+    /// immediately and no frames are requested; this is how a looping animation
+    /// is kept from burning frames while idle.
+    /// </summary>
+    public MotionElement Active(bool active = true)
+    {
+        Arena.AddMethodNumber(Index, "active", active ? 1 : 0);
+        return this;
+    }
+
     /// <summary>Animates opacity toward <paramref name="target"/> (0–1).</summary>
     public MotionElement Opacity(double target)
     {
@@ -343,6 +354,13 @@ public sealed class RevealElement : Element
 {
     internal RevealElement(RenderContext ui, int index)
         : base(ui, index) { }
+
+    /// <summary>Pauses or resumes the reveal animation.</summary>
+    public RevealElement Active(bool active = true)
+    {
+        Arena.AddMethodNumber(Index, "active", active ? 1 : 0);
+        return this;
+    }
 
     /// <summary>Adds the revealed content.</summary>
     public RevealElement Add(params Element[] children)

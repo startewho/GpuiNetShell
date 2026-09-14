@@ -334,7 +334,20 @@ dotnet run --project samples/GpuiNetShell.Sample -- --check
 验证（P6+P7）：`cargo test` **81**；managed **79**；`--check` = abi 8 / schema
 `0x6E65747368656C5C`；生成代码核对含 `RegisterMeasure`；`CanvasPage`/`AnimationPage` 冒烟无报错。
 
-> 全阶段完成（P1–P7）。schema 最终为 `0x6E65747368656C5C`，ABI 保持 `8`。
+> 全阶段完成（P1–P7）。schema 最终为 `0x6E65747368656C5D`，ABI 保持 `8`。
+
+### 追加修复 — 循环动画空闲时仍占用 GPU
+- 现象：`AnimationPage` 的 `Keyframes(...).Loop()` 在窗口活动时持续 ~1 个核（每帧
+  `request_animation_frame` → 重绘页面实体子树），空闲也占高位。
+- 原因：无限关键帧动画没有暂停；`request_animation_frame` 通知的是当前渲染视图（页面实体），
+  每帧重建整页子树。
+- 修复：新增 `Motion.Active(bool)`/`Reveal.Active(bool)`（native `MotionOp::Active`）——
+  false 时直接采用目标、不请求帧；`AnimationPage` 的关键帧脉冲改为按钮触发的 `.Active(state.Pulsing)`，
+  默认关闭。schema `…6C5C → …6C5D`，ABI 保持 `8`。
+- 实测：默认关闭后 `AnimationPage` 空闲 ~0.02s/s（与静态页一致）；`.Active(true)` 时为 ~1.0s/s，
+  证实循环确在持续请求帧。过渡/弹簧/`Presence`/`Reveal` 到达终态会自动停止。
+- 验证用开发开关：`--pulse-test=<onMs>,<offMs>` 在到点后经 `UiDispatcher` 调用
+  `AnimationPage.SetPulsing(...)`，用于区分 native 与托管行为（保留）。
 
 
 

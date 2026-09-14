@@ -17,7 +17,7 @@ public static class NativeProtocol
     public const uint AbiVersion = 8;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C5C;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C5D;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one

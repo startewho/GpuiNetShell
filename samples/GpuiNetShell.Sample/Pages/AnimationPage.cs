@@ -15,7 +15,22 @@ internal sealed partial class AnimationPage : GalleryPage<AnimationPage.State>
     internal sealed class State
     {
         public bool Open { get; set; } = true;
+        public bool Pulsing { get; set; }
     }
+
+    internal static AnimationPage? Current { get; private set; }
+
+    public AnimationPage() => Current = this;
+
+    /// <summary>Dev affordance: flip the pulse animation.</summary>
+    internal void SetPulsing(bool value) =>
+        Update(
+            (s, c) =>
+            {
+                s.Pulsing = value;
+                c.Notify();
+            }
+        );
 
     public override string Title => "Animation";
 
@@ -39,6 +54,17 @@ internal sealed partial class AnimationPage : GalleryPage<AnimationPage.State>
                         (s, c) =>
                         {
                             s.Open = !s.Open;
+                            c.Notify();
+                        }
+                    )
+                ),
+            ui.Button("animation-pulse")
+                .Label(state.Pulsing ? "Stop pulse" : "Start pulse")
+                .OnClick(() =>
+                    Update(
+                        (s, c) =>
+                        {
+                            s.Pulsing = !s.Pulsing;
                             c.Notify();
                         }
                     )
@@ -100,7 +126,7 @@ internal sealed partial class AnimationPage : GalleryPage<AnimationPage.State>
                         .Add(ui.Div(ui.Text("three")).P(8).Rounded(6).Bg("#dcfce7"))
                 )
                 .Gap(8),
-            Section(ref ui, "Keyframes", "A looping keyframe track drives opacity."),
+            Section(ref ui, "Keyframes", "A looping keyframe track drives opacity while enabled."),
             ui.Motion(
                     "pulse",
                     MotionSpec
@@ -113,6 +139,7 @@ internal sealed partial class AnimationPage : GalleryPage<AnimationPage.State>
                         )
                         .Loop()
                 )
+                .Active(state.Pulsing)
                 .Add(ui.Label("pulsing").TextSize(20))
         );
 }
