@@ -277,6 +277,7 @@ mod tests {
                 "HitRegion",
                 "Motion",
                 "Presence",
+                "Reveal",
             ]
         );
     }

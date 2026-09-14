@@ -290,6 +290,30 @@ dotnet run --project samples/GpuiNetShell.Sample -- --check
 > 说明：动画在 native 按帧采样，托管仅在状态变化时上传目标值；`reduce_motion` 时
 > gpui-base 直接取终值。位移用 relative 偏移，不影响布局。
 
+### P5 — spring / keyframes / stagger / Reveal + 主题 motion tokens（已完成）
+- 组件 id：新增 `Reveal = 112`（`Motion=110`、`Presence=111` 已在 P4）；schema
+  `…6C5A → …6C5B`，ABI 保持 `8`。
+- native `components/motion.rs`：
+  - `MotionKind`（transition/spring/keyframes）；`MotionPolicy` 统一读取 kind/duration/
+    duration_token/easing/delay/spring_*/keyframes/iterations/direction；
+  - `Motion` 按 kind 分别用 `transition` / `spring` / `animate_keyframes`（keyframes 的标量驱动 opacity）；
+  - `Reveal` 用 transition/spring 采样 0..1 progress，再套 `MotionReveal`（测量 + 裁剪）；
+  - 主题 tokens：`easing` 接受 `enter/exit/move`，`duration_token` 接受 `instant/fast/normal/slow`，
+    `spring_token` 接受 `control/move`，均由 `cx.theme().motion_tokens()` 解析；
+  - `Stagger` 通过 `delay_ms`（托管计算每个 index 的延迟）实现。
+- managed：`MotionSpec` 扩展（`Themed`/`Spring`/`Keyframes`/`WithDelay`/`Loop`/`Repeat`/
+  `WithDirection`）、`DurationToken`/`SpringToken`/`KeyframeDirection`/`Keyframe`；
+  新增 `RevealElement` 与 `RenderContext.Reveal`；`Easing` 增加 `Enter/Exit/Move`。
+- sample：`AnimationPage` 扩展为主题过渡、弹簧滑块、Reveal、stagger、循环 keyframes。
+- 测试：managed `MotionRecordsSpringsTokensKeyframesAndReveal`；native `keyframe_dsl_parses`、
+  `presence_declares_only_transition_methods`、catalog 顺序含 `Reveal`。
+- 验证：`cargo test` **81**；managed **78**；`--check` = abi 8 / schema `0x6E65747368656C5B`；
+  `AnimationPage` 冒烟无报错、内存平台（keyframes 循环持续动效下约 112MB）。
+
+> 说明：keyframes 的标量当前驱动 opacity；`Presence` 仅用 transition（spring presence 未做）。
+> P7 可选：图片/SVG 绘制与 `ICanvasView` 糖。
+
+
 
 
 

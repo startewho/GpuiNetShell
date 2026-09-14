@@ -990,10 +990,56 @@ public sealed unsafe class RenderContextTests
                     && descriptor.Ops[index].Code == NativeProtocol.OpMethod
                 );
 
-        // duration_ms + easing + opacity + translate_y + width
+        // kind + duration_ms + easing + opacity + translate_y + width
+        Assert.Equal(6, MethodCount(descriptor, 0));
+        // kind + present + duration_ms + easing + fade_from + fade_to + slide_from + slide_to
+        Assert.Equal(8, MethodCount(descriptor, 2));
+    }
+
+    [Fact]
+    public void MotionRecordsSpringsTokensKeyframesAndReveal()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Motion("spring", MotionSpec.Spring(SpringToken.Move))
+            .TranslateX(10)
+            .Add(ui.Label("a"));
+        ui.Motion(
+                "keys",
+                MotionSpec
+                    .Keyframes(
+                        TimeSpan.FromMilliseconds(1000),
+                        Easing.InOut,
+                        new Keyframe(0.0, 0.2),
+                        new Keyframe(1.0, 1.0)
+                    )
+                    .Loop()
+            )
+            .Add(ui.Label("b"));
+        ui.Reveal("reveal", true, MotionSpec.Themed(DurationToken.Normal, Easing.Enter))
+            .Add(ui.Label("c"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal(6u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentMotion, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentMotion, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentReveal, descriptor.Nodes[4].Component);
+
+        static int MethodCount(NativeArena descriptor, uint node) =>
+            Enumerable
+                .Range(0, (int)descriptor.OpsLen)
+                .Count(index =>
+                    descriptor.Ops[index].Node == node
+                    && descriptor.Ops[index].Code == NativeProtocol.OpMethod
+                );
+
+        // Spring: kind + duration_ms + easing + spring_token + translate_x
         Assert.Equal(5, MethodCount(descriptor, 0));
-        // present + duration_ms + easing + fade_from + fade_to + slide_from + slide_to
-        Assert.Equal(7, MethodCount(descriptor, 2));
+        // Keyframes: kind + duration_ms + easing + keyframes + iterations + direction
+        Assert.Equal(6, MethodCount(descriptor, 2));
+        // Reveal: open + kind + duration_token + easing
+        Assert.Equal(4, MethodCount(descriptor, 4));
     }
 
     private sealed class EntityState

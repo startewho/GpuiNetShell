@@ -1074,10 +1074,10 @@ public sealed class RenderContext
     public MotionElement Motion(string id, MotionSpec spec)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
+        ArgumentNullException.ThrowIfNull(spec);
         var index = _arena.AddNode(NativeProtocol.ComponentMotion);
         _arena.SetNodeData(index, id);
-        _arena.AddMethodNumber(index, "duration_ms", spec.DurationMs);
-        _arena.AddMethodEnum(index, "easing", MotionSpec.Wire(spec.Easing));
+        spec.AppendTo(_arena, index);
         return new MotionElement(this, index);
     }
 
@@ -1085,12 +1085,24 @@ public sealed class RenderContext
     public PresenceElement Presence(string id, bool present, MotionSpec spec)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
+        ArgumentNullException.ThrowIfNull(spec);
         var index = _arena.AddNode(NativeProtocol.ComponentPresence);
         _arena.SetNodeData(index, id);
         _arena.AddMethodNumber(index, "present", present ? 1 : 0);
-        _arena.AddMethodNumber(index, "duration_ms", spec.DurationMs);
-        _arena.AddMethodEnum(index, "easing", MotionSpec.Wire(spec.Easing));
+        spec.AppendTo(_arena, index);
         return new PresenceElement(this, index);
+    }
+
+    /// <summary>Declares a measured, clipped vertical reveal driven by animated progress.</summary>
+    public RevealElement Reveal(string id, bool open, MotionSpec spec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        ArgumentNullException.ThrowIfNull(spec);
+        var index = _arena.AddNode(NativeProtocol.ComponentReveal);
+        _arena.SetNodeData(index, id);
+        _arena.AddMethodNumber(index, "open", open ? 1 : 0);
+        spec.AppendTo(_arena, index);
+        return new RevealElement(this, index);
     }
 
     /// <summary>A column container.</summary>
