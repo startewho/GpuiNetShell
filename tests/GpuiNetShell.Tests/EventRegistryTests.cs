@@ -163,4 +163,66 @@ public sealed class EventRegistryTests
         Assert.False(registry.TryGetElement(first, out _));
         Assert.True(registry.TryGetElement(second, out _));
     }
+
+    [Fact]
+    public void ARepaintScopeRetiresThePreviousInvocationsHandlers()
+    {
+        var registry = new EventRegistry();
+        registry.BeginGeneration(1);
+
+        registry.BeginCallbackScope(42);
+        var firstHandler = registry.Register(() => { });
+        var firstElement = registry.RegisterElement((context, _) => context.Label("a"));
+        var firstRows = registry.RegisterRows(() => "a");
+        registry.EndCallbackScope();
+
+        registry.BeginCallbackScope(42);
+        var secondHandler = registry.Register(() => { });
+        var secondElement = registry.RegisterElement((context, _) => context.Label("b"));
+        registry.EndCallbackScope();
+
+        // The first invocation's handlers are gone; the second's are live.
+        Assert.False(registry.Dispatch(firstHandler));
+        Assert.False(registry.TryGetElement(firstElement, out _));
+        Assert.False(registry.TryGetRows(firstRows, out _));
+        Assert.True(registry.Dispatch(secondHandler));
+        Assert.True(registry.TryGetElement(secondElement, out _));
+    }
+
+    [Fact]
+    public void RepeatedRepaintsKeepTheHandlerTablesBounded()
+    {
+        var registry = new EventRegistry();
+        registry.BeginGeneration(1);
+
+        for (var i = 0; i < 5_000; i++)
+        {
+            registry.BeginCallbackScope(7);
+            registry.Register(() => { });
+            registry.RegisterElement((context, _) => context.Label("x"));
+            registry.RegisterRows(() => "x");
+            registry.EndCallbackScope();
+        }
+
+        Assert.Equal(1, registry.HandlerCount);
+        Assert.Equal(1, registry.ElementRendererCount);
+        Assert.Equal(1, registry.RowProviderCount);
+    }
+
+    [Fact]
+    public void ReplacingAnEntityViewRetiresItsRepaintScope()
+    {
+        var registry = new EventRegistry();
+        registry.BeginGeneration(1);
+
+        var first = registry.RegisterEntityView("view", (context, _) => context.Label("a"));
+        registry.BeginCallbackScope(first);
+        var handler = registry.Register(() => { });
+        registry.EndCallbackScope();
+
+        var second = registry.RegisterEntityView("view", (context, _) => context.Label("b"));
+
+        Assert.NotEqual(first, second);
+        Assert.False(registry.Dispatch(handler));
+    }
 }

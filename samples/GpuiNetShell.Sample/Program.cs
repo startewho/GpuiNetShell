@@ -35,9 +35,67 @@ if (
 }
 
 GpuiApplication? application = null;
-application = new GpuiApplication(() => new GalleryView(application!, initialPage));
+GalleryView? gallery = null;
+application = new GpuiApplication(() => gallery!);
+gallery = new GalleryView(application, initialPage);
 application.UseCustomTitlebar = true;
 application.AlwaysShowScrollbars = true;
+
+// A dev affordance for hunting retention leaks: cycle through the pages on a
+// timer, forcing a full GC and printing managed/working-set memory every N
+// switches. `--cycle-pages=150` sets the interval in milliseconds.
+var cycleArgument = args.FirstOrDefault(argument =>
+    argument.StartsWith("--cycle-pages", StringComparison.Ordinal)
+);
+if (cycleArgument is not null)
+{
+    var interval = 150;
+    var separator = cycleArgument.IndexOf('=');
+    if (
+        separator >= 0
+        && int.TryParse(cycleArgument[(separator + 1)..], out var parsed)
+        && parsed > 0
+    )
+    {
+        interval = parsed;
+    }
+    var cycleSetArgument = args.FirstOrDefault(argument =>
+        argument.StartsWith("--cycle-set=", StringComparison.Ordinal)
+    );
+    if (cycleSetArgument is not null)
+    {
+        var indices = cycleSetArgument["--cycle-set=".Length..]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => int.TryParse(value, out var parsed) ? parsed : -1)
+            .Where(value => value >= 0)
+            .ToArray();
+        gallery.SetCycleSet(indices);
+    }
+    var view = gallery;
+    _ = Task.Run(async () =>
+    {
+        var switches = 0;
+        while (true)
+        {
+            await Task.Delay(interval);
+            GpuiNetShell.Entities.UiDispatcher.Post(() =>
+            {
+                switches++;
+                view.CyclePage();
+            });
+            if (switches % 25 == 0)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                Console.WriteLine(
+                    $"[cycle {switches}] managed={GC.GetTotalMemory(true) / (1024 * 1024)}MB "
+                        + $"ws={Environment.WorkingSet / (1024 * 1024)}MB"
+                );
+            }
+        }
+    });
+}
 
 // A dev affordance for verifying multi-window deterministically: open N child
 // windows before the event loop starts. Every window is its own session.
@@ -131,6 +189,27 @@ internal sealed class GalleryView : View
         }
         _index = Math.Clamp(initialPage, 0, _pages.Count - 1);
     }
+
+    /// <summary>Dev affordance: advance to the next page and request a repaint.</summary>
+    internal void CyclePage()
+    {
+        if (_cycleSet is { Length: > 0 } set)
+        {
+            _cyclePosition = (_cyclePosition + 1) % set.Length;
+            _index = Math.Clamp(set[_cyclePosition], 0, _pages.Count - 1);
+        }
+        else
+        {
+            _index = (_index + 1) % _pages.Count;
+        }
+        Invalidate();
+    }
+
+    private int[]? _cycleSet;
+    private int _cyclePosition;
+
+    /// <summary>Dev affordance: restrict page cycling to specific page indices.</summary>
+    internal void SetCycleSet(int[] indices) => _cycleSet = indices;
 
     protected override Element Render(ref RenderContext ui)
     {

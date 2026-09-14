@@ -567,6 +567,10 @@ public sealed class GpuiApplication
                 () => Owner.InvalidateSession(SessionId)
             );
             context.BeginRender();
+            // Scope the handlers this callback registers: the native host
+            // replaces this subtree on the next invocation, so the previous
+            // invocation's handlers are dead once it starts.
+            _events.BeginCallbackScope(token);
             Element root;
             try
             {
@@ -575,6 +579,7 @@ public sealed class GpuiApplication
             finally
             {
                 context.EndRender();
+                _events.EndCallbackScope();
             }
             *outArena = _elementArena.Publish();
             *outRoot = (uint)root.Index;

@@ -88,13 +88,17 @@ impl ComponentMaterializer for EntityHostMaterializer {
         });
 
         // Retain a way to notify this entity later: managed `Context::notify`
-        // arrives as a command and repaints only this subtree.
+        // arrives as a command and repaints only this subtree. The weak handle
+        // avoids the reference cycle `entity_hosts -> notifier -> entity -> view
+        // -> ElementCallback -> HostContext -> entity_hosts`.
         if let Ok(numeric_id) = payload.entity_id.parse::<u64>() {
-            let handle = entity.clone();
+            let handle = entity.downgrade();
             request.host().register_entity_host(
                 numeric_id,
                 Rc::new(move |cx| {
-                    handle.update(cx, |_view, cx| cx.notify());
+                    if let Some(entity) = handle.upgrade() {
+                        entity.update(cx, |_view, cx| cx.notify());
+                    }
                 }),
             );
         }

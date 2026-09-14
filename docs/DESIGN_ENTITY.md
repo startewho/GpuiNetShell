@@ -245,8 +245,18 @@ entity id 反查状态并调用 `M`。未标注的页面走默认 `RenderState` 
 > 调用处于 layout/prepaint。因此 notify 走的不是再次 `use_keyed_state` 查表，而是
 > 渲染期间记下的 `EntityHosts` notifier。`ShellView::content` 每帧先清空该表，
 > 由本帧的 `EntityHost` materialize 重新登记，于是离开树的实体会被释放。
+> notifier 持 `WeakEntity`，避免
+> `entity_hosts → notifier → Entity → view → ElementCallback → HostContext → entity_hosts`
+> 的 `Rc` 环。
 
 ### 5.2 通知/事件的托管实现
+
+- **回调作用域**：`Session.OnRenderElement`（实体子树/行/单元格渲染）以回调 token
+  为键开一个作用域；期间 `Register`/`RegisterRows`/`RegisterElement` 登记的所有
+  token 都记入该作用域。同一回调下次被调用时，先释放上一次作用域的 token。原生在
+  这次调用后立即用新 arena 重建该子树，旧回调已无引用，所以这是安全的。否则每次
+  实体重绘都会把新 handler 追加进当前 generation，直到整窗快照退休才释放（交互多
+  时在单个 generation 内无界增长）。
 
 - `Context<T>` 由 `EntityRegistry`（托管，按 `EntityId`）持有：
   - `observers[entityId] = List<(targetEntityId, handler)>`

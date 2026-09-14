@@ -5,7 +5,11 @@ namespace GpuiNetShell.Sample.Pages;
 
 internal sealed class TablePage : GalleryPage
 {
-    private const int RowCount = 1000;
+    // The structural `Table` is not virtualized: every row and cell becomes a
+    // native layout/paint element, so its footprint grows ~linearly with rows
+    // (about 0.1 MB per row in a release build). Keep this demo small; the
+    // `DataTable` and `VirtualList` pages show large datasets virtualized.
+    private const int RowCount = 20;
 
     public override string Title => "Table";
 

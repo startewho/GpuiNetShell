@@ -24,6 +24,14 @@ public sealed class EventRegistry
     > _elementRenderers = [];
     private readonly Dictionary<ulong, List<ulong>> _generations = [];
 
+    // Tokens registered while rendering one element callback (an entity subtree
+    // or a row/cell). The native host replaces that subtree's handlers on the
+    // next render, so the previous invocation's tokens are retired then. Without
+    // this, every entity repaint would append handlers to the generation until
+    // it retired.
+    private readonly Dictionary<ulong, List<ulong>> _callbackScopes = [];
+    private readonly Stack<(ulong Key, List<ulong> Tokens)> _scopeStack = [];
+
     // An entity-backed subtree is retained natively, so its renderer is not
     // generation-scoped: it is keyed by entity id and replaced in place.
     private readonly Dictionary<ulong, ulong> _persistentElements = [];
@@ -78,7 +86,61 @@ public sealed class EventRegistry
         {
             tokens.Add(token);
         }
+        TrackScope(token);
         return token;
+    }
+
+    // -- Element-callback scope -------------------------------------------
+
+    /// <summary>
+    /// Starts a scope for one element-callback invocation, retiring the tokens
+    /// the previous invocation of the same callback registered. The native host
+    /// rebuilds that subtree from the new arena, so the old handlers are dead.
+    /// </summary>
+    public void BeginCallbackScope(ulong token)
+    {
+        ForgetCallbackScope(token);
+        _scopeStack.Push((token, []));
+    }
+
+    /// <summary>Ends the current element-callback scope.</summary>
+    public void EndCallbackScope()
+    {
+        if (_scopeStack.Count == 0)
+        {
+            return;
+        }
+        var (key, tokens) = _scopeStack.Pop();
+        _callbackScopes[key] = tokens;
+    }
+
+    /// <summary>Records <paramref name="token"/> in the active scope, if any.</summary>
+    private void TrackScope(ulong token)
+    {
+        if (_scopeStack.Count > 0)
+        {
+            _scopeStack.Peek().Tokens.Add(token);
+        }
+    }
+
+    /// <summary>Retires and forgets the tokens of the scope keyed by <paramref name="token"/>.</summary>
+    private void ForgetCallbackScope(ulong token)
+    {
+        if (_callbackScopes.Remove(token, out var tokens))
+        {
+            Release(tokens);
+        }
+    }
+
+    /// <summary>Removes tokens from every callback table.</summary>
+    private void Release(IEnumerable<ulong> tokens)
+    {
+        foreach (var token in tokens)
+        {
+            _handlers.Remove(token);
+            _rowProviders.Remove(token);
+            _elementRenderers.Remove(token);
+        }
     }
 
     /// <summary>
@@ -94,6 +156,7 @@ public sealed class EventRegistry
         {
             tokens.Add(token);
         }
+        TrackScope(token);
         return token;
     }
 
@@ -116,6 +179,7 @@ public sealed class EventRegistry
         {
             tokens.Add(token);
         }
+        TrackScope(token);
         return token;
     }
 
@@ -140,6 +204,7 @@ public sealed class EventRegistry
         if (_persistentElements.TryGetValue(entityId, out var previous))
         {
             _elementRenderers.Remove(previous);
+            ForgetCallbackScope(previous);
         }
         var token = _next++;
         _elementRenderers[token] = renderer;
@@ -153,6 +218,7 @@ public sealed class EventRegistry
         if (_persistentElements.Remove(entityId, out var token))
         {
             _elementRenderers.Remove(token);
+            ForgetCallbackScope(token);
         }
     }
 
@@ -172,6 +238,7 @@ public sealed class EventRegistry
         if (_entityViews.TryGetValue(key, out var previous))
         {
             _elementRenderers.Remove(previous);
+            ForgetCallbackScope(previous);
         }
         var token = _next++;
         _elementRenderers[token] = renderer;
@@ -184,6 +251,15 @@ public sealed class EventRegistry
 
     /// <summary>Whether an entity subtree is present in the current generation.</summary>
     public bool RendersEntity(ulong entityId) => _renderedEntities.Contains(entityId);
+
+    /// <summary>Live handler count (test/diagnostics).</summary>
+    internal int HandlerCount => _handlers.Count;
+
+    /// <summary>Live row-provider count (test/diagnostics).</summary>
+    internal int RowProviderCount => _rowProviders.Count;
+
+    /// <summary>Live element-renderer count (test/diagnostics).</summary>
+    internal int ElementRendererCount => _elementRenderers.Count;
 
     /// <summary>Runs the handler for <paramref name="token"/>; false when retired.</summary>
     public bool Dispatch(ulong token) => DispatchValue(token, EventValue.None);
@@ -212,6 +288,8 @@ public sealed class EventRegistry
                 _handlers.Remove(token);
                 _rowProviders.Remove(token);
                 _elementRenderers.Remove(token);
+                // A generation-scoped token may also have keyed a callback scope.
+                ForgetCallbackScope(token);
             }
         }
     }
@@ -224,6 +302,8 @@ public sealed class EventRegistry
         _generations.Clear();
         _persistentElements.Clear();
         _entityViews.Clear();
+        _callbackScopes.Clear();
+        _scopeStack.Clear();
         _renderedEntities.Clear();
         _next = 1;
         _generation = 0;

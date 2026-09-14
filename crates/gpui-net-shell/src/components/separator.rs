@@ -5,8 +5,11 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, Hsla, IntoElement as _, Refineable as _, Styled as _};
-use gpui_component::{separator::Separator, try_parse_color};
+use gpui::{
+    canvas, fill, point, px, size, AnyElement, App, Axis, Bounds, Hsla, IntoElement, Pixels,
+    Refineable as _, Styled, Window,
+};
+use gpui_component::{separator::Separator, try_parse_color, ActiveTheme as _};
 
 use crate::registry::{
     ArgumentDescriptor, ArgumentSchema, ComponentArgument, ComponentDescriptor,
@@ -63,12 +66,91 @@ impl SeparatorMaterializer {
 
 impl ComponentMaterializer for SeparatorMaterializer {
     fn materialize(&self, mut request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
+        let payload = request
+            .payload()
+            .downcast_ref::<SeparatorPayload>()
+            .ok_or_else(|| "Separator received an incompatible payload".to_string())?
+            .to_owned();
         let operations = request
             .methods()
-            .filter_map(|method| method.payload().downcast_ref::<SeparatorOp>());
-        let mut element = Self::component(request.payload(), operations)?;
+            .filter_map(|method| method.payload().downcast_ref::<SeparatorOp>().cloned())
+            .collect::<Vec<_>>();
+        let dashed = matches!(
+            payload,
+            SeparatorPayload::HorizontalDashed | SeparatorPayload::VerticalDashed
+        );
+        let labelled = operations
+            .iter()
+            .any(|operation| matches!(operation, SeparatorOp::Label(_)));
+        let axis = match payload {
+            SeparatorPayload::Horizontal | SeparatorPayload::HorizontalDashed => Axis::Horizontal,
+            SeparatorPayload::Vertical | SeparatorPayload::VerticalDashed => Axis::Vertical,
+        };
+
+        // GPUI rasterizes a dashed path into a retained path cache (~30 MB the
+        // first time any dashed separator is painted). Draw dashes as quads
+        // instead, which is free. Labelled dashed separators keep the component
+        // so the label still overlays the line.
+        if dashed && !labelled {
+            let color = operations
+                .iter()
+                .rev()
+                .find_map(|operation| match operation {
+                    SeparatorOp::Color(color) => Some(*color),
+                    _ => None,
+                })
+                .unwrap_or_else(|| request.with_window_app(|_, cx| cx.theme().border));
+            let mut element = dashed_line(axis, color);
+            element.style().refine(&request.take_style());
+            return Ok(element.into_any_element());
+        }
+
+        let mut element = Self::component(request.payload(), operations.iter())?;
         element.style().refine(&request.take_style());
         Ok(element.into_any_element())
+    }
+}
+
+/// A dashed line drawn from quads: 4px dashes with 2px gaps, 1px thick.
+fn dashed_line(axis: Axis, color: Hsla) -> impl Styled + IntoElement {
+    let paint = move |bounds: Bounds<Pixels>, _: (), window: &mut Window, _: &mut App| {
+        let dash = px(4.0);
+        let gap = px(2.0);
+        let thickness = px(1.0);
+        let step = dash + gap;
+        match axis {
+            Axis::Horizontal => {
+                let y = bounds.origin.y;
+                let end = bounds.origin.x + bounds.size.width;
+                let mut x = bounds.origin.x;
+                while x < end {
+                    let length = dash.min(end - x);
+                    window.paint_quad(fill(
+                        Bounds::new(point(x, y), size(length, thickness)),
+                        color,
+                    ));
+                    x += step;
+                }
+            }
+            Axis::Vertical => {
+                let x = bounds.origin.x;
+                let end = bounds.origin.y + bounds.size.height;
+                let mut y = bounds.origin.y;
+                while y < end {
+                    let length = dash.min(end - y);
+                    window.paint_quad(fill(
+                        Bounds::new(point(x, y), size(thickness, length)),
+                        color,
+                    ));
+                    y += step;
+                }
+            }
+        }
+    };
+    let element = canvas(move |_, _, _| {}, paint);
+    match axis {
+        Axis::Horizontal => element.w_full().h(px(1.0)),
+        Axis::Vertical => element.w(px(1.0)).h_full(),
     }
 }
 
