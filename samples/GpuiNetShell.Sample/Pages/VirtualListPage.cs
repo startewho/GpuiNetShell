@@ -1,9 +1,10 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class VirtualListPage : GalleryPage
+internal sealed class VirtualListPage : GalleryPage<VirtualListPage.State>
 {
     private const int VerticalCount = 100_000;
     private const int HorizontalCount = 1_000;
@@ -18,17 +19,20 @@ internal sealed class VirtualListPage : GalleryPage
         index => 80 + (index % 5) * 28
     );
 
-    private int _verticalSelected = -1;
-    private int _horizontalSelected = -1;
-    private int _verticalScrollIndex;
-    private long _verticalScrollToken = 1;
-    private int _horizontalScrollIndex;
-    private long _horizontalScrollToken = 1;
-    private string _status = "(no row action yet)";
+    internal sealed class State
+    {
+        public int VerticalSelected { get; set; } = -1;
+        public int HorizontalSelected { get; set; } = -1;
+        public int VerticalScrollIndex { get; set; }
+        public long VerticalScrollToken { get; set; } = 1;
+        public int HorizontalScrollIndex { get; set; }
+        public long HorizontalScrollToken { get; set; } = 1;
+        public string Status { get; set; } = "(no row action yet)";
+    }
 
     public override string Title => "Virtual List";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         ui.VStack(
                 Section(
                     ref ui,
@@ -36,16 +40,16 @@ internal sealed class VirtualListPage : GalleryPage
                     "Virtualized vertical/horizontal lists with varying sizes, jump commands, selection, and a row right-click menu."
                 ),
                 ui.HStack(
-                        ui.Button("v-top").Label("Top").OnClick(() => JumpVertical(0)),
-                        ui
-                            .Button("v-mid")
+                        ui.Button("v-top")
+                            .Label("Top")
+                            .OnClick(() => JumpVertical(0)),
+                        ui.Button("v-mid")
                             .Label("Go to 50,000")
                             .OnClick(() => JumpVertical(50_000)),
-                        ui
-                            .Button("v-bottom")
+                        ui.Button("v-bottom")
                             .Label("Bottom")
                             .OnClick(() => JumpVertical(VerticalCount - 1)),
-                        ui.Label($"selected row: {_verticalSelected}")
+                        ui.Label($"selected row: {state.VerticalSelected}")
                     )
                     .Gap(8)
                     .ItemsCenter(),
@@ -55,26 +59,38 @@ internal sealed class VirtualListPage : GalleryPage
                     .WFull()
                     .Flex1()
                     .MinH(0)
-                    .ScrollTo(_verticalScrollIndex, _verticalScrollToken)
+                    .ScrollTo(state.VerticalScrollIndex, state.VerticalScrollToken)
                     .OnSelect(index =>
-                    {
-                        _verticalSelected = index;
-                        Invalidate();
-                    })
+                        Update(
+                            (s, c) =>
+                            {
+                                s.VerticalSelected = index;
+                                c.Notify();
+                            }
+                        )
+                    )
                     .RowMenu(
                         ui.ContextMenuItem("Select this row")
                             .OnSelect(row =>
-                            {
-                                _verticalSelected = row;
-                                Invalidate();
-                            }),
+                                Update(
+                                    (s, c) =>
+                                    {
+                                        s.VerticalSelected = row;
+                                        c.Notify();
+                                    }
+                                )
+                            ),
                         ui.ContextMenuSeparator(),
                         ui.ContextMenuItem("Delete row")
                             .OnSelect(row =>
-                            {
-                                _status = $"delete row {row}";
-                                Invalidate();
-                            })
+                                Update(
+                                    (s, c) =>
+                                    {
+                                        s.Status = $"delete row {row}";
+                                        c.Notify();
+                                    }
+                                )
+                            )
                     )
                     .RenderItem(
                         (ctx, index) =>
@@ -96,7 +112,7 @@ internal sealed class VirtualListPage : GalleryPage
                                 .P(6)
                                 .ItemsStart()
                                 .Bg(
-                                    index == _verticalSelected
+                                    index == state.VerticalSelected
                                         ? "blue-100"
                                         : index % 2 == 0
                                             ? "gray-100"
@@ -107,12 +123,13 @@ internal sealed class VirtualListPage : GalleryPage
                                 .Rounded(4)
                     ),
                 ui.HStack(
-                        ui.Button("h-first").Label("First").OnClick(() => JumpHorizontal(0)),
-                        ui
-                            .Button("h-last")
+                        ui.Button("h-first")
+                            .Label("First")
+                            .OnClick(() => JumpHorizontal(0)),
+                        ui.Button("h-last")
                             .Label("Last")
                             .OnClick(() => JumpHorizontal(HorizontalCount - 1)),
-                        ui.Label($"selected column: {_horizontalSelected}")
+                        ui.Label($"selected column: {state.HorizontalSelected}")
                     )
                     .Gap(8)
                     .ItemsCenter(),
@@ -121,12 +138,16 @@ internal sealed class VirtualListPage : GalleryPage
                     .Horizontal()
                     .Flex1()
                     .MinH(0)
-                    .ScrollTo(_horizontalScrollIndex, _horizontalScrollToken)
+                    .ScrollTo(state.HorizontalScrollIndex, state.HorizontalScrollToken)
                     .OnSelect(index =>
-                    {
-                        _horizontalSelected = index;
-                        Invalidate();
-                    })
+                        Update(
+                            (s, c) =>
+                            {
+                                s.HorizontalSelected = index;
+                                c.Notify();
+                            }
+                        )
+                    )
                     .RenderItem(
                         (ctx, index) =>
                             ctx
@@ -147,7 +168,7 @@ internal sealed class VirtualListPage : GalleryPage
                                 .P(6)
                                 .ItemsStart()
                                 .Bg(
-                                    index == _horizontalSelected
+                                    index == state.HorizontalSelected
                                         ? "amber-500"
                                         : index % 2 == 0
                                             ? "blue-500"
@@ -156,26 +177,31 @@ internal sealed class VirtualListPage : GalleryPage
                                 .Rounded(8)
                                 .ItemsEnd()
                     ),
-                ui.Label($"Last row action: {_status}")
+                ui.Label($"Last row action: {state.Status}")
             )
             .Gap(12)
             .Flex1()
             .MinH(0);
 
+    private void JumpVertical(int index) =>
+        Update(
+            (s, c) =>
+            {
+                s.VerticalScrollIndex = index;
+                s.VerticalScrollToken++;
+                c.Notify();
+            }
+        );
 
-    private void JumpVertical(int index)
-    {
-        _verticalScrollIndex = index;
-        _verticalScrollToken++;
-        Invalidate();
-    }
-
-    private void JumpHorizontal(int index)
-    {
-        _horizontalScrollIndex = index;
-        _horizontalScrollToken++;
-        Invalidate();
-    }
+    private void JumpHorizontal(int index) =>
+        Update(
+            (s, c) =>
+            {
+                s.HorizontalScrollIndex = index;
+                s.HorizontalScrollToken++;
+                c.Notify();
+            }
+        );
 
     private static string BuildSizes(int count, Func<int, int> size)
     {

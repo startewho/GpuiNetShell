@@ -67,7 +67,10 @@ impl ComponentMaterializer for EntityHostMaterializer {
                     .map(|EntityHostOp::Render(argument)| argument.clone())
             })
             .ok_or_else(|| "EntityHost requires a render_entity callback".to_string())
-            .and_then(|argument| request.resolve_element_callback(&argument))?;
+            .and_then(|argument| request.resolve_element_callback(&argument))?
+            // Entity subtrees repaint only through an explicit managed notify;
+            // a callback inside one must not force a full window rebuild.
+            .without_invalidate();
 
         if request.children_len() != 0 {
             return Err("EntityHost does not accept children".to_string());
@@ -97,7 +100,11 @@ impl ComponentMaterializer for EntityHostMaterializer {
         }
 
         let style = request.take_style();
-        let mut wrapper = div().size_full().child(entity);
+        // A flex column so the entity subtree's own `flex_1`/`min_h(0)` (for
+        // example a `VirtualList` that fills the remaining page height) has a
+        // flex context to grow in. A plain block wrapper would collapse such a
+        // child to zero height.
+        let mut wrapper = div().size_full().flex().flex_col().child(entity);
         wrapper.style().refine(&style);
         Ok(wrapper.into_any_element())
     }

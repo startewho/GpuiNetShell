@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class MenuBarPage : GalleryPage
+internal sealed class MenuBarPage : GalleryPage<MenuBarPage.State>
 {
-    private string _last = "(none)";
+    internal sealed class State
+    {
+        public string Last { get; set; } = "(none)";
+    }
 
     public override string Title => "MenuBar";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "MenuBar",
@@ -29,12 +33,11 @@ internal sealed class MenuBarPage : GalleryPage
                             ui.MenuItem("Redo").OnSelect(() => Choose("Redo"))
                         )
                 ),
-            ui.Label($"Last command: {_last}")
+            ui.Label($"Last command: {state.Last}")
         );
 
     private void Choose(string command)
     {
-        _last = command;
-        Invalidate();
+        Update((s, c) => { s.Last = command; c.Notify(); });
     }
 }

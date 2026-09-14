@@ -40,6 +40,13 @@ are the managed equivalents of `cx.notify()`: both request a native re-render.
 `Notify()` is refused during `Render`, exactly as gpui refuses a self-notify
 while rendering.
 
+A managed `Entity<T>` renders as a retained native `EntityHost` subtree via
+`ui.Child(entity, render)`. Event callbacks inside such a subtree do **not**
+force a full repaint; only an explicit `Context.Notify()` repaints that subtree
+through the native `notify_entity` ingress. The sample gallery uses this for
+every stateful page (`GalleryPage<TState>`), so an interaction rebuilds one page
+subtree instead of the whole window.
+
 The overlay host (`src/root.rs`) wraps the content view and paints one sheet, a
 dialog stack, and a notification stack over it; the managed `GpuiApplication`
 drives them with `OpenDialog`, `OpenSheet`, `CloseDialog`, `CloseSheet`, and

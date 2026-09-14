@@ -1,24 +1,27 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class OtpInputPage : GalleryPage
+internal sealed class OtpInputPage : GalleryPage<OtpInputPage.State>
 {
-    private string _code = "";
+    internal sealed class State
+    {
+        public string Code { get; set; } = "";
+    }
 
     public override string Title => "OtpInput";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "OtpInput",
             "A retained fixed-length one-time-password field.",
             ui.OtpInput("code").Length(6).Groups(2).OnChange(code =>
             {
-                _code = code;
-                Invalidate();
+                Update((s, c) => { s.Code = code; c.Notify(); });
             }),
-            ui.Label($"Code: {_code}")
+            ui.Label($"Code: {state.Code}")
         );
 }

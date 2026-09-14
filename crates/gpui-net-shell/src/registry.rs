@@ -380,6 +380,14 @@ impl ElementCallback {
         let factory = NodeFactory::new(&self.registry, Rc::new(snapshot), &self.host);
         factory.build(root, window, cx)
     }
+
+    /// Returns a copy that never requests a full repaint when a managed callback
+    /// fires. An entity subtree repaints only through `notify_entity`, so its
+    /// callbacks are driven by an explicit `Context::notify` on the managed side.
+    pub fn without_invalidate(mut self) -> Self {
+        self.host = self.host.without_invalidate();
+        self
+    }
 }
 
 /// A materialized ordinary child, carrying the name of the component it came

@@ -1,26 +1,36 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class RatingPage : GalleryPage
+internal sealed class RatingPage : GalleryPage<RatingPage.State>
 {
-    private int _rating = 3;
+    internal sealed class State
+    {
+        public int Rating { get; set; } = 3;
+    }
 
     public override string Title => "Rating";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Rating",
             "Interactive star ratings; the clicked value is reported as a number.",
-            ui.Rating("quality").Max(5).Value(_rating).OnChange(value =>
-            {
-                _rating = value;
-                Invalidate();
-            }),
+            ui.Rating("quality")
+                .Max(5)
+                .Value(state.Rating)
+                .OnChange(value =>
+                {
+                    Update((s, c) =>
+                    {
+                        s.Rating = value;
+                        c.Notify();
+                    });
+                }),
             ui.Rating("color").Max(5).Value(4).Color("orange-500"),
             ui.Rating("small").Max(5).Value(2).Size(ControlSize.Small),
-            ui.Label($"Rating: {_rating}/5")
+            ui.Label($"Rating: {state.Rating}/5")
         );
 }

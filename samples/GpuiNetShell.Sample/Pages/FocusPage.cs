@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class FocusPage : GalleryPage
+internal sealed class FocusPage : GalleryPage<FocusPage.State>
 {
-    private string _status = "(none)";
+    internal sealed class State
+    {
+        public string Status { get; set; } = "(none)";
+    }
 
     public override string Title => "Focus";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Focus",
@@ -23,12 +27,15 @@ internal sealed class FocusPage : GalleryPage
                 .H(96)
                 .OnFocus(() => Set("Textarea gained focus"))
                 .OnBlur(() => Set("Textarea lost focus")),
-            ui.Label($"Last focus event: {_status}")
+            ui.Label($"Last focus event: {state.Status}")
         );
 
-    private void Set(string status)
-    {
-        _status = status;
-        Invalidate();
-    }
+    private void Set(string status) =>
+        Update(
+            (s, c) =>
+            {
+                s.Status = status;
+                c.Notify();
+            }
+        );
 }

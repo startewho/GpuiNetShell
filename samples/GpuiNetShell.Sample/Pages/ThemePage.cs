@@ -1,9 +1,10 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ThemePage : GalleryPage
+internal sealed class ThemePage : GalleryPage<ThemePage.State>
 {
     private static readonly Dictionary<string, string> CustomPalette = new()
     {
@@ -24,12 +25,15 @@ internal sealed class ThemePage : GalleryPage
         [ThemeColors.TitleBarBorder] = "#30363d",
     };
 
-    private ThemeMode _mode = ThemeMode.Light;
-    private bool _custom;
+    internal sealed class State
+    {
+        public ThemeMode Mode { get; set; } = ThemeMode.Light;
+        public bool Custom { get; set; }
+    }
 
     public override string Title => "Theme";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Theme",
@@ -51,14 +55,19 @@ internal sealed class ThemePage : GalleryPage
                 )
                 .Gap(12)
                 .ItemsCenter(),
-            ui.Label($"Mode: {_mode}, custom palette: {_custom}")
+            ui.Label($"Mode: {state.Mode}, custom palette: {state.Custom}")
         );
 
     private void Apply(ThemeMode mode, bool custom)
     {
-        _mode = mode;
-        _custom = custom;
-        Invalidate();
         Application.SetTheme(mode, custom ? CustomPalette : null);
+        Update(
+            (s, c) =>
+            {
+                s.Mode = mode;
+                s.Custom = custom;
+                c.Notify();
+            }
+        );
     }
 }

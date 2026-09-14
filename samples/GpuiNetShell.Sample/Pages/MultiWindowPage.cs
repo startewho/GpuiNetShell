@@ -1,4 +1,5 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
@@ -8,20 +9,23 @@ namespace GpuiNetShell.Sample.Pages;
 /// independent session with its own view, state, and title-bar mode: a window
 /// can inherit the primary window's custom title bar or use the system one.
 /// </summary>
-internal sealed class MultiWindowPage : GalleryPage
+internal sealed class MultiWindowPage : GalleryPage<MultiWindowPage.State>
 {
-    private readonly List<(WindowHandle Handle, string Title, bool Custom)> _windows = [];
-    private int _opened;
-    private string _status = "No windows opened yet.";
+    internal sealed class State
+    {
+        public List<(WindowHandle Handle, string Title, bool Custom)> Windows { get; } = [];
+        public int Opened { get; set; }
+        public string Status { get; set; } = "No windows opened yet.";
+    }
 
     public override string Title => "Multi-Window";
 
-    public override Element Render(ref RenderContext ui)
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx)
     {
-        var rows = new List<Element>(_windows.Count);
-        for (var i = 0; i < _windows.Count; i++)
+        var rows = new List<Element>(state.Windows.Count);
+        for (var i = 0; i < state.Windows.Count; i++)
         {
-            var (handle, title, custom) = _windows[i];
+            var (handle, title, custom) = state.Windows[i];
             var index = i;
             rows.Add(
                 ui.HStack(
@@ -37,20 +41,28 @@ internal sealed class MultiWindowPage : GalleryPage
                         ui.Button($"invalidate-{index}")
                             .Label("Invalidate")
                             .OnClick(() =>
-                            {
-                                _windows[index].Handle.Invalidate();
-                                Invalidate();
-                            }),
+                                Update(
+                                    (s, c) =>
+                                    {
+                                        s.Windows[index].Handle.Invalidate();
+                                        c.Notify();
+                                    }
+                                )
+                            ),
                         ui.Button($"close-{index}")
                             .Label("Close")
                             .Danger()
                             .OnClick(() =>
-                            {
-                                _windows[index].Handle.Close();
-                                _status = $"Closed {_windows[index].Title}.";
-                                _windows.RemoveAt(index);
-                                Invalidate();
-                            })
+                                Update(
+                                    (s, c) =>
+                                    {
+                                        s.Windows[index].Handle.Close();
+                                        s.Status = $"Closed {s.Windows[index].Title}.";
+                                        s.Windows.RemoveAt(index);
+                                        c.Notify();
+                                    }
+                                )
+                            )
                     )
                     .Gap(8)
                     .ItemsCenter()
@@ -77,29 +89,32 @@ internal sealed class MultiWindowPage : GalleryPage
                         ui.Button("open-system")
                             .Label("Open with system")
                             .OnClick(() => OpenWindow(false)),
-                        ui.Label($"opened: {_opened}")
+                        ui.Label($"opened: {state.Opened}")
                     )
                     .Gap(8)
                     .ItemsCenter(),
-                ui.Label(_status).TextSize(12).TextColor("gray-500"),
+                ui.Label(state.Status).TextSize(12).TextColor("gray-500"),
                 ui.Div(ui.VStack(rows.ToArray()).Gap(8)).WFull()
             )
             .Gap(16)
             .WFull();
     }
 
-    private void OpenWindow(bool? useCustomTitlebar)
-    {
-        _opened++;
-        var ordinal = _opened;
-        var custom = useCustomTitlebar ?? Application.UseCustomTitlebar;
-        var mode = custom ? "custom" : "system";
-        var title = $"Child window {ordinal} ({mode})";
-        WindowHandle? handle = null;
-        var view = new SecondaryWindowView(Application, ordinal, title, () => handle?.Close());
-        handle = Application.OpenWindow(() => view, new WindowOptions(useCustomTitlebar));
-        _windows.Add((handle, title, custom));
-        _status = $"Opened {title}.";
-        Invalidate();
-    }
+    private void OpenWindow(bool? useCustomTitlebar) =>
+        Update(
+            (s, c) =>
+            {
+                s.Opened++;
+                var ordinal = s.Opened;
+                var custom = useCustomTitlebar ?? Application.UseCustomTitlebar;
+                var mode = custom ? "custom" : "system";
+                var title = $"Child window {ordinal} ({mode})";
+                WindowHandle? handle = null;
+                var view = new SecondaryWindowView(Application, ordinal, title, () => handle?.Close());
+                handle = Application.OpenWindow(() => view, new WindowOptions(useCustomTitlebar));
+                s.Windows.Add((handle, title, custom));
+                s.Status = $"Opened {title}.";
+                c.Notify();
+            }
+        );
 }

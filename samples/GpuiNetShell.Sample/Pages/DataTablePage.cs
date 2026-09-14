@@ -1,23 +1,27 @@
 using System.Globalization;
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
 [GpuiCallbacks]
-internal sealed partial class DataTablePage : GalleryPage
+internal sealed partial class DataTablePage : GalleryPage<DataTablePage.State>
 {
     private static readonly string[] Roles = ["Engineer", "Designer", "Manager", "Analyst", "Support"];
     private static readonly string[] Teams = ["Platform", "Growth", "Infra", "Design", "Data"];
     private static readonly string[] Statuses = ["Active", "Away", "Offline"];
 
-    private readonly List<Person> _rows = CreateRows(200_000);
+    private static readonly List<Person> Rows = CreateRows(200_000);
 
-    private string _status = "(no row action yet)";
+    internal sealed class State
+    {
+        public string Status { get; set; } = "(no row action yet)";
+    }
 
     public override string Title => "DataTable";
 
-    public override Element Render(ref RenderContext ui)
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx)
     {
         // The source generator registered `RenderRowCell` and produced
         // `RenderCellToken`; the table asks managed code for one row index at a
@@ -26,8 +30,8 @@ internal sealed partial class DataTablePage : GalleryPage
         return Page(
             ref ui,
             "DataTable",
-            $"The {_rows.Count} row objects stay in C#; the native table asks for one row index at a time.",
-            ui.DataTable("people", _rows.Count)
+            $"The {Rows.Count} row objects stay in C#; the native table asks for one row index at a time.",
+            ui.DataTable("people", Rows.Count)
                 .Columns("Name", "Role", "Team", "Status", "Score")
                 .Stripe()
                 .Bordered()
@@ -36,19 +40,27 @@ internal sealed partial class DataTablePage : GalleryPage
                 .RowMenu(
                     ui.ContextMenuItem("Copy name")
                         .OnSelect(row =>
-                        {
-                            _status = $"copy {_rows[row].Name}";
-                            Invalidate();
-                        }),
+                            Update(
+                                (s, c) =>
+                                {
+                                    s.Status = $"copy {Rows[row].Name}";
+                                    c.Notify();
+                                }
+                            )
+                        ),
                     ui.ContextMenuSeparator(),
                     ui.ContextMenuItem("Delete row")
                         .OnSelect(row =>
-                        {
-                            _status = $"delete {_rows[row].Name}";
-                            Invalidate();
-                        })
+                            Update(
+                                (s, c) =>
+                                {
+                                    s.Status = $"delete {Rows[row].Name}";
+                                    c.Notify();
+                                }
+                            )
+                        )
                 ),
-            ui.Label($"Last row action: {_status}")
+            ui.Label($"Last row action: {state.Status}")
         );
     }
 
@@ -57,7 +69,7 @@ internal sealed partial class DataTablePage : GalleryPage
     {
         var row = int.Parse(arguments[0], CultureInfo.InvariantCulture);
         var column = arguments[1];
-        var person = _rows[row];
+        var person = Rows[row];
         return column switch
         {
             "Status" => ui.Tag()

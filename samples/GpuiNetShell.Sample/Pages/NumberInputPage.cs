@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class NumberInputPage : GalleryPage
+internal sealed class NumberInputPage : GalleryPage<NumberInputPage.State>
 {
-    private string _value = "";
+    internal sealed class State
+    {
+        public string Value { get; set; } = "";
+    }
 
     public override string Title => "NumberInput";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "NumberInput",
@@ -18,9 +22,8 @@ internal sealed class NumberInputPage : GalleryPage
                 .Placeholder("0")
                 .OnChange(value =>
                 {
-                    _value = value;
-                    Invalidate();
+                    Update((s, c) => { s.Value = value; c.Notify(); });
                 }),
-            ui.Label($"Value: {_value}")
+            ui.Label($"Value: {state.Value}")
         );
 }

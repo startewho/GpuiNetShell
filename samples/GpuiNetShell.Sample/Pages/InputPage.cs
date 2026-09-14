@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class InputPage : GalleryPage
+internal sealed class InputPage : GalleryPage<InputPage.State>
 {
-    private string _value = "";
+    internal sealed class State
+    {
+        public string Value { get; set; } = "";
+    }
 
     public override string Title => "Input";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Input",
@@ -18,10 +22,9 @@ internal sealed class InputPage : GalleryPage
                 .Placeholder("Enter your name…")
                 .OnChange(value =>
                 {
-                    _value = value;
-                    Invalidate();
+                    Update((s, c) => { s.Value = value; c.Notify(); });
                 }),
-            ui.Label($"Value: {_value}"),
+            ui.Label($"Value: {state.Value}"),
             ui.Input("disabled").Placeholder("Disabled").Disabled()
         );
 }

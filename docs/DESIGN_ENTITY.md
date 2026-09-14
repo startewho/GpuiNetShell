@@ -158,6 +158,11 @@ ui.Child(counter, (state, ui, cx) =>        // 渲染实体化子视图
   2. 触发所有 `Observe` 订阅者（同步、按注册顺序）；
   3. 请求该子树重渲染（若该实体当前被渲染在某窗口里）。
 - 映射到 ABI：复用现有 `invalidate` 但**带实体定位**（见 §5 ABI 变更）。
+- **实体子树内不自动重绘**：原生 `EntityHost` 的 element callback 以
+  `without_invalidate` 构建（`HostContext.invalidate` 设为 no-op），因此实体子树里的
+  控件回调不会强制整窗重建；只有显式 `Context.Notify()` 会通过 `notify_entity`
+  重绘该子树。这是「手动触发、只重绘局部」的关键。非实体（旧 `View`）路径保持
+  回调后整窗 `refresh` 的兼容行为。
 
 ### 4.4 关注（observe / subscribe / emit）
 
@@ -257,9 +262,12 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 
 ## 7. 兼容与迁移
 
-- 旧 `View` + `Render` + `Invalidate()` 不变，现有 60+ 页无需改。
+- 旧 `View` + `Render` + `Invalidate()` 不变，未实体化的视图照常工作。
 - 新能力**增量**：`App.New<T>` / `ui.Child(...)` / `Context<T>`。
 - 源生成器（`GpuiCallbacks`）可后续扩展，为实体视图生成 token 属性——本轮不强制。
+- **Sample 迁移**：所有带状态的 gallery 页改为 `GalleryPage<TState>`（状态存实体、
+  内容经 `ui.Child`、事件用 `Update((s, c) => { ...; c.Notify(); })`）。纯静态页没有
+  可触发的更新，不实体化以免多一层 `EntityHost`。`SecondaryWindowView` 亦同理实体化。
 
 ---
 

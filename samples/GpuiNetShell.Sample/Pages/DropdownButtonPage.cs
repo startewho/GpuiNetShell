@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class DropdownButtonPage : GalleryPage
+internal sealed class DropdownButtonPage : GalleryPage<DropdownButtonPage.State>
 {
-    private string _last = "(none)";
+    internal sealed class State
+    {
+        public string Last { get; set; } = "(none)";
+    }
 
     public override string Title => "DropdownButton";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "DropdownButton",
@@ -24,12 +28,13 @@ internal sealed class DropdownButtonPage : GalleryPage
                 )
                 .Gap(12)
                 .ItemsCenter(),
-            ui.Label($"Last action: {_last}")
+            ui.Label($"Last action: {state.Last}")
         );
 
-    private void Choose(string action)
-    {
-        _last = action;
-        Invalidate();
-    }
+    private void Choose(string action) =>
+        Update((s, c) =>
+        {
+            s.Last = action;
+            c.Notify();
+        });
 }

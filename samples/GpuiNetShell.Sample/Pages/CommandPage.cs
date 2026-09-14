@@ -1,16 +1,20 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class CommandPage : GalleryPage
+internal sealed class CommandPage : GalleryPage<CommandPage.State>
 {
-    private string _query = "";
-    private string _selected = "";
+    internal sealed class State
+    {
+        public string Query { get; set; } = "";
+        public string Selected { get; set; } = "";
+    }
 
     public override string Title => "Command";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Command",
@@ -22,15 +26,23 @@ internal sealed class CommandPage : GalleryPage
                 .Placeholder("Type a command…")
                 .MaxHeight(320)
                 .OnQuery(query =>
-                {
-                    _query = query;
-                    Invalidate();
-                })
+                    Update(
+                        (s, c) =>
+                        {
+                            s.Query = query;
+                            c.Notify();
+                        }
+                    )
+                )
                 .OnSelect(path =>
-                {
-                    _selected = path;
-                    Invalidate();
-                })
+                    Update(
+                        (s, c) =>
+                        {
+                            s.Selected = path;
+                            c.Notify();
+                        }
+                    )
+                )
                 .Add(
                     ui.CommandGroup("General")
                         .Add(
@@ -42,6 +54,6 @@ internal sealed class CommandPage : GalleryPage
                     ui.CommandGroup("Danger")
                         .Add(ui.CommandItem("Delete").Disabled())
                 ),
-            ui.Label($"Query: {_query}   Selected: {_selected}")
+            ui.Label($"Query: {state.Query}   Selected: {state.Selected}")
         );
 }

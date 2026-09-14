@@ -1,24 +1,31 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ColorPickerPage : GalleryPage
+internal sealed class ColorPickerPage : GalleryPage<ColorPickerPage.State>
 {
-    private string _color = "";
+    internal sealed class State
+    {
+        public string Color { get; set; } = "";
+    }
 
     public override string Title => "ColorPicker";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "ColorPicker",
             "A retained color picker reporting the committed color as hex.",
             ui.ColorPicker("accent").Label("Accent color").OnChange(hex =>
             {
-                _color = hex;
-                Invalidate();
+                Update((s, c) =>
+                {
+                    s.Color = hex;
+                    c.Notify();
+                });
             }),
-            ui.Label($"Color: {_color}")
+            ui.Label($"Color: {state.Color}")
         );
 }

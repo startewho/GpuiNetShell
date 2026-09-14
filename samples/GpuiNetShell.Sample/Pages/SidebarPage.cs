@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class SidebarPage : GalleryPage
+internal sealed class SidebarPage : GalleryPage<SidebarPage.State>
 {
-    private string _selected = "Home";
+    internal sealed class State
+    {
+        public string Selected { get; set; } = "Home";
+    }
 
     public override string Title => "Sidebar";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Sidebar",
@@ -24,20 +28,20 @@ internal sealed class SidebarPage : GalleryPage
                                 .Add(
                                     ui.SidebarMenuItem("Home")
                                         .Icon(SidebarIcon.Home)
-                                        .Selected(_selected == "Home")
+                                        .Selected(state.Selected == "Home")
                                         .OnClick(() => Choose("Home")),
                                     ui.SidebarMenuItem("Components")
                                         .Icon(SidebarIcon.Components)
-                                        .Selected(_selected == "Components")
+                                        .Selected(state.Selected == "Components")
                                         .OnClick(() => Choose("Components")),
                                     ui.SidebarMenuItem("Settings")
                                         .Icon(SidebarIcon.Settings)
-                                        .Selected(_selected == "Settings")
+                                        .Selected(state.Selected == "Settings")
                                         .OnClick(() => Choose("Settings"))
                                 )
                         )
                         .H(280),
-                    ui.Div(ui.Label($"Selected: {_selected}"))
+                    ui.Div(ui.Label($"Selected: {state.Selected}"))
                         .P(16)
                         .Rounded(8)
                         .Border(1)
@@ -49,7 +53,10 @@ internal sealed class SidebarPage : GalleryPage
 
     private void Choose(string name)
     {
-        _selected = name;
-        Invalidate();
+        Update((s, c) =>
+        {
+            s.Selected = name;
+            c.Notify();
+        });
     }
 }

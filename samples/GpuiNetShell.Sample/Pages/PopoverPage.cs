@@ -1,26 +1,29 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class PopoverPage : GalleryPage
+internal sealed class PopoverPage : GalleryPage<PopoverPage.State>
 {
-    private bool _open;
+    internal sealed class State
+    {
+        public bool Open { get; set; }
+    }
 
     public override string Title => "Popover";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Popover",
             "A button-triggered popover with a styled content surface.",
             ui.Popover("popover", "Show details")
-                .Open(_open)
+                .Open(state.Open)
                 .OverlayClosable()
                 .OnOpenChange(open =>
                 {
-                    _open = open;
-                    Invalidate();
+                    Update((s, c) => { s.Open = open; c.Notify(); });
                 })
                 .Content(
                     ui.VStack(
@@ -30,6 +33,6 @@ internal sealed class PopoverPage : GalleryPage
                         .Gap(4)
                         .P(8)
                 ),
-            ui.Label($"Open: {_open}")
+            ui.Label($"Open: {state.Open}")
         );
 }

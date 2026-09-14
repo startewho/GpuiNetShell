@@ -1,26 +1,33 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class TabBarPage : GalleryPage
+internal sealed class TabBarPage : GalleryPage<TabBarPage.State>
 {
-    private int _index;
+    internal sealed class State
+    {
+        public int Index { get; set; }
+    }
 
     public override string Title => "TabBar";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "TabBar",
             "A typed tab list accepting only Tab children.",
             ui.TabBar("tabs")
-                .SelectedIndex(_index)
+                .SelectedIndex(state.Index)
                 .Variant(TabVariantKind.Pill)
                 .OnChange(index =>
                 {
-                    _index = index;
-                    Invalidate();
+                    Update((s, c) =>
+                    {
+                        s.Index = index;
+                        c.Notify();
+                    });
                 })
                 .Add(
                     ui.Tab().Label("Overview"),
@@ -28,6 +35,6 @@ internal sealed class TabBarPage : GalleryPage
                     ui.Tab().Label("Settings"),
                     ui.Tab().Label("Archived").Disabled()
                 ),
-            ui.Label($"Selected tab index: {_index}")
+            ui.Label($"Selected tab index: {state.Index}")
         );
 }

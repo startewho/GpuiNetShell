@@ -48,4 +48,12 @@ impl HostContext {
             hosts.insert(entity_id, notifier);
         }
     }
+
+    /// A copy that never requests a full repaint. An entity subtree repaints
+    /// only through `notify_entity`, so its callbacks must not force a window
+    /// rebuild.
+    pub fn without_invalidate(mut self) -> Self {
+        self.invalidate = Rc::new(|_| {});
+        self
+    }
 }

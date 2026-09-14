@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class RadioPage : GalleryPage
+internal sealed class RadioPage : GalleryPage<RadioPage.State>
 {
-    private int _index = 1;
+    internal sealed class State
+    {
+        public int Index { get; set; } = 1;
+    }
 
     public override string Title => "Radio";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Radio",
@@ -17,31 +21,40 @@ internal sealed class RadioPage : GalleryPage
             ui.HStack(
                     ui.Radio("light")
                         .Label("Light")
-                        .Checked(_index == 0)
+                        .Checked(state.Index == 0)
                         .OnChange(_ =>
                         {
-                            _index = 0;
-                            Invalidate();
+                            Update((s, c) =>
+                            {
+                                s.Index = 0;
+                                c.Notify();
+                            });
                         }),
                     ui.Radio("dark")
                         .Label("Dark")
-                        .Checked(_index == 1)
+                        .Checked(state.Index == 1)
                         .OnChange(_ =>
                         {
-                            _index = 1;
-                            Invalidate();
+                            Update((s, c) =>
+                            {
+                                s.Index = 1;
+                                c.Notify();
+                            });
                         }),
                     ui.Radio("system")
                         .Label("System")
-                        .Checked(_index == 2)
+                        .Checked(state.Index == 2)
                         .OnChange(_ =>
                         {
-                            _index = 2;
-                            Invalidate();
+                            Update((s, c) =>
+                            {
+                                s.Index = 2;
+                                c.Notify();
+                            });
                         })
                 )
                 .Gap(16)
                 .ItemsCenter(),
-            ui.Label($"Selected option: {_index}")
+            ui.Label($"Selected option: {state.Index}")
         );
 }

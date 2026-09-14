@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class NativeMenuPage : GalleryPage
+internal sealed class NativeMenuPage : GalleryPage<NativeMenuPage.State>
 {
-    private string _status = "(none)";
+    internal sealed class State
+    {
+        public string Status { get; set; } = "(none)";
+    }
 
     public override string Title => "Native Menu";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Native Menu",
@@ -19,19 +23,17 @@ internal sealed class NativeMenuPage : GalleryPage
                     ui.NativeMenuItem("New")
                         .OnSelect(() =>
                         {
-                            _status = "new";
-                            Invalidate();
+                            Update((s, c) => { s.Status = "new"; c.Notify(); });
                         }),
                     ui.NativeMenuItem("Open")
                         .OnSelect(() =>
                         {
-                            _status = "open";
-                            Invalidate();
+                            Update((s, c) => { s.Status = "open"; c.Notify(); });
                         }),
                     ui.NativeMenuSeparator(),
                     ui.NativeMenuItem("Disabled").Disabled(),
                     ui.NativeMenuItem("Checked").Checked()
                 ),
-            ui.Label($"Last selection: {_status}")
+            ui.Label($"Last selection: {state.Status}")
         );
 }

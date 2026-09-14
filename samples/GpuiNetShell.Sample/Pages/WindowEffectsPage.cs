@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class WindowEffectsPage : GalleryPage
+internal sealed class WindowEffectsPage : GalleryPage<WindowEffectsPage.State>
 {
-    private string _status = "(none)";
+    internal sealed class State
+    {
+        public string Status { get; set; } = "(none)";
+    }
 
     public override string Title => "Window Effects";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Window Effects",
@@ -24,35 +28,15 @@ internal sealed class WindowEffectsPage : GalleryPage
                                 )
                                 .Gap(4)
                         )
-                        .OnOk(() =>
-                        {
-                            _status = "dialog ok";
-                            Invalidate();
-                        })
-                        .OnCancel(() =>
-                        {
-                            _status = "dialog cancel";
-                            Invalidate();
-                        })
-                        .OnClose(() =>
-                        {
-                            _status = "dialog closed";
-                            Invalidate();
-                        }),
+                        .OnOk(() => SetStatus("dialog ok"))
+                        .OnCancel(() => SetStatus("dialog cancel"))
+                        .OnClose(() => SetStatus("dialog closed")),
                     ui.AlertDialog("alert", "Open Alert")
                         .Title("Delete file?")
                         .Description("This action cannot be undone.")
                         .ShowCancel()
-                        .OnOk(() =>
-                        {
-                            _status = "alert ok";
-                            Invalidate();
-                        })
-                        .OnCancel(() =>
-                        {
-                            _status = "alert cancel";
-                            Invalidate();
-                        }),
+                        .OnOk(() => SetStatus("alert ok"))
+                        .OnCancel(() => SetStatus("alert cancel")),
                     ui.Sheet("sheet", "Open Sheet")
                         .Title("Sheet")
                         .Placement("right")
@@ -63,22 +47,23 @@ internal sealed class WindowEffectsPage : GalleryPage
                                 )
                                 .Gap(4)
                         )
-                        .OnClose(() =>
-                        {
-                            _status = "sheet closed";
-                            Invalidate();
-                        }),
+                        .OnClose(() => SetStatus("sheet closed")),
                     ui.Notification("note", "Notify")
                         .Title("Saved")
                         .Message("Your changes were saved.")
                         .Type("success")
-                        .OnClose(() =>
-                        {
-                            _status = "notification closed";
-                            Invalidate();
-                        })
+                        .OnClose(() => SetStatus("notification closed"))
                 )
                 .Gap(12),
-            ui.Label($"Last effect: {_status}")
+            ui.Label($"Last effect: {state.Status}")
+        );
+
+    private void SetStatus(string status) =>
+        Update(
+            (s, c) =>
+            {
+                s.Status = status;
+                c.Notify();
+            }
         );
 }

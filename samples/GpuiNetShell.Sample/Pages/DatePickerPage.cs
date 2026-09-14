@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class DatePickerPage : GalleryPage
+internal sealed class DatePickerPage : GalleryPage<DatePickerPage.State>
 {
-    private string _date = "";
+    internal sealed class State
+    {
+        public string Date { get; set; } = "";
+    }
 
     public override string Title => "DatePicker";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "DatePicker",
@@ -17,13 +21,16 @@ internal sealed class DatePickerPage : GalleryPage
             ui.HStack(
                     ui.DatePicker("due").Placeholder("Pick a due date").OnChange(date =>
                     {
-                        _date = date;
-                        Invalidate();
+                        Update((s, c) =>
+                        {
+                            s.Date = date;
+                            c.Notify();
+                        });
                     }),
                     ui.DatePicker("locked").Placeholder("Disabled").Disabled()
                 )
                 .Gap(12)
                 .ItemsCenter(),
-            ui.Label($"Chosen date: {_date}")
+            ui.Label($"Chosen date: {state.Date}")
         );
 }

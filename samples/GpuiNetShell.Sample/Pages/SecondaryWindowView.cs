@@ -1,4 +1,5 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
@@ -10,11 +11,16 @@ namespace GpuiNetShell.Sample.Pages;
 /// </summary>
 internal sealed class SecondaryWindowView : View
 {
+    private sealed class CounterState
+    {
+        public int Count { get; set; }
+    }
+
     private readonly GpuiApplication _application;
     private readonly int _ordinal;
     private readonly string _title;
     private readonly Action _close;
-    private int _count;
+    private Entity<CounterState>? _state;
 
     public SecondaryWindowView(
         GpuiApplication application,
@@ -29,29 +35,47 @@ internal sealed class SecondaryWindowView : View
         _close = close;
     }
 
-    protected override Element Render(ref RenderContext ui) =>
-        ui.VStack(
-                ui.Label($"Window #{_ordinal}").TextSize(22).FontSemibold(),
-                ui.Text(
-                    "This is a separate native window with its own session. "
-                        + "Its state is independent of the main window."
-                ),
-                ui.Div(ui.Label($"Title: {_title}").TextSize(12).TextColor("gray-500")),
-                ui.HStack(
-                        ui.Button("secondary-increment")
-                            .Label($"Clicked {_count} times")
-                            .Primary()
-                            .OnClick(() =>
-                            {
-                                _count++;
-                                Invalidate();
-                            }),
-                        ui.Button("secondary-close").Label("Close this window").OnClick(_close)
-                    )
-                    .Gap(8)
-                    .ItemsCenter()
+    protected override Element Render(ref RenderContext ui)
+    {
+        var state = _state ??= _application.New<CounterState>(_ => new CounterState());
+        return ui
+            .Child(
+                state,
+                (s, ctx, _) =>
+                    ctx
+                        .VStack(
+                            ctx.Label($"Window #{_ordinal}").TextSize(22).FontSemibold(),
+                            ctx.Text(
+                                "This is a separate native window with its own session. "
+                                    + "Its state is independent of the main window."
+                            ),
+                            ctx.Div(
+                                ctx.Label($"Title: {_title}").TextSize(12).TextColor("gray-500")
+                            ),
+                            ctx
+                                .HStack(
+                                    ctx.Button("secondary-increment")
+                                        .Label($"Clicked {s.Count} times")
+                                        .Primary()
+                                        .OnClick(() =>
+                                            state.Update(
+                                                (st, c) =>
+                                                {
+                                                    st.Count++;
+                                                    c.Notify();
+                                                }
+                                            )
+                                        ),
+                                    ctx.Button("secondary-close")
+                                        .Label("Close this window")
+                                        .OnClick(_close)
+                                )
+                                .Gap(8)
+                                .ItemsCenter()
+                        )
+                        .Gap(16)
             )
-            .Gap(16)
             .P(24)
             .Full();
+    }
 }

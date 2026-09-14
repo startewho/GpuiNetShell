@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ButtonPage : GalleryPage
+internal sealed class ButtonPage : GalleryPage<ButtonPage.State>
 {
-    private int _count;
+    internal sealed class State
+    {
+        public int Count { get; set; }
+    }
 
     public override string Title => "Button";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Button",
@@ -34,11 +38,15 @@ internal sealed class ButtonPage : GalleryPage
                 .Gap(8)
                 .ItemsCenter(),
             ui.Button("counter")
-                .Label($"Clicked {_count} times")
+                .Label($"Clicked {state.Count} times")
                 .OnClick(() =>
-                {
-                    _count++;
-                    Invalidate();
-                })
+                    Update(
+                        (s, c) =>
+                        {
+                            s.Count++;
+                            c.Notify();
+                        }
+                    )
+                )
         );
 }

@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class TextareaPage : GalleryPage
+internal sealed class TextareaPage : GalleryPage<TextareaPage.State>
 {
-    private string _value = "";
+    internal sealed class State
+    {
+        public string Value { get; set; } = "";
+    }
 
     public override string Title => "Textarea";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Textarea",
@@ -18,9 +22,12 @@ internal sealed class TextareaPage : GalleryPage
                 .Placeholder("Write a note…")
                 .OnChange(value =>
                 {
-                    _value = value;
-                    Invalidate();
+                    Update((s, c) =>
+                    {
+                        s.Value = value;
+                        c.Notify();
+                    });
                 }),
-            ui.Label($"Length: {_value.Length} characters")
+            ui.Label($"Length: {state.Value.Length} characters")
         );
 }

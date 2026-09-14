@@ -1,15 +1,19 @@
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ContextMenuPage : GalleryPage
+internal sealed class ContextMenuPage : GalleryPage<ContextMenuPage.State>
 {
-    private string _status = "(none)";
+    internal sealed class State
+    {
+        public string Status { get; set; } = "(none)";
+    }
 
     public override string Title => "Context Menu";
 
-    public override Element Render(ref RenderContext ui) =>
+    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Context Menu",
@@ -24,21 +28,22 @@ internal sealed class ContextMenuPage : GalleryPage
                 )
                 .Items(
                     ui.ContextMenuItem("Copy")
-                        .OnSelect(() =>
-                        {
-                            _status = "copy";
-                            Invalidate();
-                        }),
+                        .OnSelect(() => SetStatus("copy")),
                     ui.ContextMenuItem("Paste")
-                        .OnSelect(() =>
-                        {
-                            _status = "paste";
-                            Invalidate();
-                        }),
+                        .OnSelect(() => SetStatus("paste")),
                     ui.ContextMenuSeparator(),
                     ui.ContextMenuItem("Disabled").Disabled(),
                     ui.ContextMenuItem("Checked").Checked()
                 ),
-            ui.Label($"Last action: {_status}")
+            ui.Label($"Last action: {state.Status}")
+        );
+
+    private void SetStatus(string status) =>
+        Update(
+            (s, c) =>
+            {
+                s.Status = status;
+                c.Notify();
+            }
         );
 }
