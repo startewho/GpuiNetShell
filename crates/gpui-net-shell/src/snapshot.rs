@@ -17,10 +17,10 @@ use crate::style::StyleArg;
 /// A decoded operation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    /// A no-argument style method, by name.
-    NullaryStyle(String),
-    /// A style method taking one argument.
-    ParamStyle(String, StyleArg),
+    /// A no-argument style method, by opcode into [`crate::style`].
+    NullaryStyle(u16),
+    /// A style method taking one argument, by opcode into [`crate::style`].
+    ParamStyle(u16, StyleArg),
     /// A component behavior method with its arguments, in declaration order.
     Method(String, Vec<StyleArg>),
     /// An event binding by name and callback token.
@@ -184,85 +184,97 @@ impl Drop for RenderSnapshotInner {
 }
 
 fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
-    let name = read_word(utf8, record.a)?;
-    if name.is_empty() {
-        return Err(STATUS_INVALID_ARGUMENT);
-    }
-
     match record.code {
         OP_NULLARY_STYLE => {
             if record.flags != ARG_NONE || record.b != 0 {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
-            Ok(Op::NullaryStyle(name))
+            Ok(Op::NullaryStyle(style_code(record)?))
         }
-        OP_PARAM_STYLE => Ok(Op::ParamStyle(name, read_arg(record, utf8)?)),
-        OP_METHOD => match record.flags {
-            ARG_NONE => {
-                if record.b != 0 || record.c != 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+        OP_PARAM_STYLE => Ok(Op::ParamStyle(style_code(record)?, read_arg(record, utf8)?)),
+        OP_METHOD => {
+            let name = read_name(record, utf8)?;
+            match record.flags {
+                ARG_NONE => {
+                    if record.b != 0 || record.c != 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    Ok(Op::Method(name, Vec::new()))
                 }
-                Ok(Op::Method(name, Vec::new()))
-            }
-            ARG_NUMBER => {
-                if record.c != 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+                ARG_NUMBER => {
+                    if record.c != 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    Ok(Op::Method(name, vec![StyleArg::Number(number(record.b)?)]))
                 }
-                Ok(Op::Method(name, vec![StyleArg::Number(number(record.b)?)]))
-            }
-            ARG_STRING => {
-                if record.c != 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+                ARG_STRING => {
+                    if record.c != 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    Ok(Op::Method(
+                        name,
+                        vec![StyleArg::String(read_word(utf8, record.b)?)],
+                    ))
                 }
-                Ok(Op::Method(
-                    name,
-                    vec![StyleArg::String(read_word(utf8, record.b)?)],
-                ))
-            }
-            ARG_ENUM => {
-                if record.c != 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+                ARG_ENUM => {
+                    if record.c != 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    Ok(Op::Method(
+                        name,
+                        vec![StyleArg::Enum(read_word(utf8, record.b)?)],
+                    ))
                 }
-                Ok(Op::Method(
-                    name,
-                    vec![StyleArg::Enum(read_word(utf8, record.b)?)],
-                ))
-            }
-            ARG_ELEMENT => {
-                if record.c != 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+                ARG_ELEMENT => {
+                    if record.c != 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    let node = u32::try_from(record.b).map_err(|_| STATUS_INVALID_ARGUMENT)?;
+                    Ok(Op::Method(name, vec![StyleArg::Element(node)]))
                 }
-                let node = u32::try_from(record.b).map_err(|_| STATUS_INVALID_ARGUMENT)?;
-                Ok(Op::Method(name, vec![StyleArg::Element(node)]))
-            }
-            ARG_STRING_CALLBACK => {
-                if record.c == 0 {
-                    return Err(STATUS_INVALID_ARGUMENT);
+                ARG_STRING_CALLBACK => {
+                    if record.c == 0 {
+                        return Err(STATUS_INVALID_ARGUMENT);
+                    }
+                    Ok(Op::Method(
+                        name,
+                        vec![
+                            StyleArg::String(read_word(utf8, record.b)?),
+                            StyleArg::Callback(record.c),
+                        ],
+                    ))
                 }
-                Ok(Op::Method(
-                    name,
-                    vec![
-                        StyleArg::String(read_word(utf8, record.b)?),
-                        StyleArg::Callback(record.c),
-                    ],
-                ))
+                _ => Err(STATUS_INVALID_ARGUMENT),
             }
-            _ => Err(STATUS_INVALID_ARGUMENT),
-        },
+        }
         OP_CALLBACK => {
             if record.flags != ARG_NONE || record.b == 0 {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
-            Ok(Op::Callback(name, record.b))
+            Ok(Op::Callback(read_name(record, utf8)?, record.b))
         }
         OP_SLOT => {
             if record.flags != ARG_NUMBER {
                 return Err(STATUS_INVALID_ARGUMENT);
             }
-            Ok(Op::Slot(name, record.b as u32))
+            Ok(Op::Slot(read_name(record, utf8)?, record.b as u32))
         }
         _ => Err(STATUS_INVALID_ARGUMENT),
     }
+}
+
+/// Narrows a style operation's `a` word to the `u16` opcode it carries.
+fn style_code(record: &crate::abi::GpuiNetOp) -> Result<u16, i32> {
+    u16::try_from(record.a).map_err(|_| STATUS_INVALID_ARGUMENT)
+}
+
+/// Reads a non-empty method name out of an operation's `a` word.
+fn read_name(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<String, i32> {
+    let name = read_word(utf8, record.a)?;
+    if name.is_empty() {
+        return Err(STATUS_INVALID_ARGUMENT);
+    }
+    Ok(name)
 }
 
 fn read_arg(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<StyleArg, i32> {
@@ -393,9 +405,9 @@ mod tests {
         let id = string_word("save", &mut utf8);
         let label_name = string_word("label", &mut utf8);
         let label_value = string_word("Save", &mut utf8);
-        let nullary = string_word("items_center", &mut utf8);
         let click = string_word("on_click", &mut utf8);
         let bytes = utf8.into_bytes();
+        let center = crate::style::nullary_index("items_center").unwrap() as u64;
 
         let arena = RawArena {
             nodes: vec![GpuiNetNode {
@@ -417,7 +429,7 @@ mod tests {
                     node: 0,
                     code: OP_NULLARY_STYLE,
                     flags: ARG_NONE,
-                    a: nullary,
+                    a: center,
                     b: 0,
                     c: 0,
                 },
@@ -440,7 +452,7 @@ mod tests {
             snapshot.nodes[0].ops,
             vec![
                 Op::Method("label".into(), vec![StyleArg::String("Save".into())]),
-                Op::NullaryStyle("items_center".into()),
+                Op::NullaryStyle(crate::style::nullary_index("items_center").unwrap()),
                 Op::Callback("on_click".into(), 7),
             ]
         );
@@ -450,8 +462,8 @@ mod tests {
     fn decodes_numeric_methods_and_param_styles() {
         let mut utf8 = String::new();
         let size = string_word("size", &mut utf8);
-        let padding = string_word("p", &mut utf8);
         let bytes = utf8.into_bytes();
+        let padding = crate::style::param_index("p").unwrap() as u64;
 
         let arena = RawArena {
             nodes: vec![GpuiNetNode {
@@ -485,7 +497,7 @@ mod tests {
             snapshot.nodes[0].ops,
             vec![
                 Op::Method("size".into(), vec![StyleArg::Number(2.0)]),
-                Op::ParamStyle("p".into(), StyleArg::Number(12.0)),
+                Op::ParamStyle(crate::style::param_index("p").unwrap(), StyleArg::Number(12.0)),
             ]
         );
     }

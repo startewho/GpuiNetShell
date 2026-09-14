@@ -6,9 +6,9 @@
 //! the C ABI.
 //!
 //! The shape follows `gpui-shell`: [`snapshot`] decodes the description,
-//! [`style`] resolves reflected style method names, and [`materialize`]
-//! dispatches one component at a time. The wire vocabulary in [`schema`] is
-//! mirrored in `src/GpuiNetShell/Interop/NativeProtocol.cs`.
+//! [`style`] resolves style opcodes to direct GPUI style calls, and
+//! [`materialize`] dispatches one component at a time. The wire vocabulary in
+//! [`schema`] is mirrored in `src/GpuiNetShell/Interop/NativeProtocol.cs`.
 
 mod abi;
 mod components;

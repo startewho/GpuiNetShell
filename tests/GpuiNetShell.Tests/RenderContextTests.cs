@@ -53,10 +53,9 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[1].Code);
         Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[2].Code);
 
-        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("flex", DecodePacked(descriptor.Ops[0].A, utf8));
-        Assert.Equal("flex_col", DecodePacked(descriptor.Ops[1].A, utf8));
-        Assert.Equal("gap", DecodePacked(descriptor.Ops[2].A, utf8));
+        Assert.Equal(NullaryCode("flex"), descriptor.Ops[0].A);
+        Assert.Equal(NullaryCode("flex_col"), descriptor.Ops[1].A);
+        Assert.Equal(ParamCode("gap"), descriptor.Ops[2].A);
         Assert.Equal(8.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[2].B));
     }
 
@@ -71,16 +70,22 @@ public sealed unsafe class RenderContextTests
         var descriptor = arena.Publish();
         Assert.Equal(3u, descriptor.OpsLen);
         Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[0].Code);
+        Assert.Equal(ParamCode("p"), descriptor.Ops[0].A);
         Assert.Equal(12.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[0].B));
         Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
+        Assert.Equal(ParamCode("bg"), descriptor.Ops[1].A);
         Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[2].Code);
+        Assert.Equal(NullaryCode("size_full"), descriptor.Ops[2].A);
 
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("p", DecodePacked(descriptor.Ops[0].A, utf8));
-        Assert.Equal("bg", DecodePacked(descriptor.Ops[1].A, utf8));
         Assert.Equal("#112233", DecodePacked(descriptor.Ops[1].B, utf8));
-        Assert.Equal("size_full", DecodePacked(descriptor.Ops[2].A, utf8));
     }
+
+    private static ulong NullaryCode(string name) =>
+        (ulong)Array.IndexOf(StyleOps.Nullary, name);
+
+    private static ulong ParamCode(string name) =>
+        (ulong)Array.IndexOf(StyleOps.Param, name);
 
     [Fact]
     public void LabelBadgeAndProgressRecordTheirIdentitiesAndMethods()
@@ -677,7 +682,7 @@ public sealed unsafe class RenderContextTests
         var descriptor = arena.Publish();
         Assert.Equal(3u, descriptor.OpsLen);
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("w", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal(ParamCode("w"), descriptor.Ops[0].A);
         Assert.Equal("100%", DecodePacked(descriptor.Ops[0].B, utf8));
         Assert.Equal("20px", DecodePacked(descriptor.Ops[1].B, utf8));
         Assert.Equal("auto", DecodePacked(descriptor.Ops[2].B, utf8));
@@ -721,11 +726,11 @@ public sealed unsafe class RenderContextTests
         var descriptor = arena.Publish();
         Assert.Equal(3u, descriptor.OpsLen);
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("w", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal(ParamCode("w"), descriptor.Ops[0].A);
         Assert.Equal(200.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[0].B));
-        Assert.Equal("h", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal(ParamCode("h"), descriptor.Ops[1].A);
         Assert.Equal("50%", DecodePacked(descriptor.Ops[1].B, utf8));
-        Assert.Equal("min_h", DecodePacked(descriptor.Ops[2].A, utf8));
+        Assert.Equal(ParamCode("min_h"), descriptor.Ops[2].A);
         Assert.Equal("auto", DecodePacked(descriptor.Ops[2].B, utf8));
     }
 

@@ -95,24 +95,30 @@ every value it keeps.
 
 ## Styling
 
-Styling is not enumerated in the ABI. A node carries style *method calls* — a
-GPUI method name plus an optional argument — and
-`crates/gpui-net-shell/src/style.rs` folds them into one `StyleRefinement`,
-exactly as `gpui-shell` does:
+Styling is a **closed opcode vocabulary**, not runtime reflection. A node
+carries style *calls* — a `u16` opcode plus an optional argument — and
+`crates/gpui-net-shell/src/style.rs` folds them into one `StyleRefinement`:
 
-- **No-argument methods** (`items_center`, `size_full`, `rounded_md`, `text_sm`,
-  …) come from GPUI's inspector reflection
-  (`gpui_base::styled_ext_reflection_methods` and
-  `gpui::styled_reflection::methods`). Adding an upstream style needs no change
-  here. This is why the native crate enables `gpui-base/inspector`.
+- **No-argument methods** (`items_center`, `size_full`, `flex_col`, `font_bold`,
+  …) are declared in the `style_vocabulary!` macro as `(name, |style|
+  style.method())` entries. The index is the wire opcode and each entry is a
+  direct call.
 - **Methods that take an argument** (`p`, `gap`, `w`, `bg`, `text_color`, …) are
-  bound by hand in `apply_param`, because reflection reaches no-argument methods
-  only.
+  listed by the same macro and bound by hand in `apply_param`, because their
+  argument type differs per method.
+
+The order of both lists is the ABI vocabulary, mirrored by name in
+`src/GpuiNetShell/Interop/StyleOps.cs`. The managed `RenderArena` maps a style
+name to its opcode before publishing, so the arena carries no style strings;
+`style.rs` has a `the_managed_vocabulary_matches` test that parses the managed
+file and fails if either list drifts. Because nothing reflects over GPUI, the
+native crate does **not** enable `gpui-base/inspector`, and the linker can drop
+the style methods the vocabulary does not name.
 
 `materialize::resolve_ops` applies the calls in order while it accumulates the
 node's behavior. The managed `StyleExtensions` surface (`Style`, `StyleColor`,
 and typed sugar) only names methods; it has no knowledge of how they are
-applied.
+applied. A name outside the vocabulary is dropped, exactly as a typo was before.
 
 ## Components and behavior
 
@@ -262,10 +268,11 @@ unwind across the C boundary.
 
 ## Extending the surface
 
-- A new **style** needs no native change at all: add sugar in
-  `StyleExtensions` for a name the reflected table already knows, or add a
-  name to `PARAM_STYLES` and one arm in `apply_param` for a method that takes
-  an argument.
+- A new **style** is one entry in the `style_vocabulary!` macro in `style.rs`
+  (the nullary list for a `fn(self) -> Self` method, the param list plus one arm
+  in `apply_param` otherwise), the matching name appended to `StyleOps.cs`, and
+  the managed sugar in `StyleExtensions`. Append only: the index is the wire
+  opcode, and `SCHEMA_HASH` must be bumped when the vocabulary changes.
 - A new **component method** is a `MethodDescriptor` on that component's
   descriptor plus one arm in its materializer; the managed side only names the
   method.

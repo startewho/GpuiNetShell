@@ -66,29 +66,44 @@ internal sealed unsafe class RenderArena : IDisposable
             }
         );
 
-    /// <summary>Records a no-argument style method by name.</summary>
+    /// <summary>Records a no-argument style method by opcode.</summary>
     internal void AddNullaryStyle(int node, string method)
-        => AddOp(node, NativeProtocol.OpNullaryStyle, NativeProtocol.ArgNone, PackString(method));
+    {
+        if (StyleOps.TryNullary(method, out var code))
+        {
+            AddOp(node, NativeProtocol.OpNullaryStyle, NativeProtocol.ArgNone, code);
+        }
+    }
 
     /// <summary>Records a style method taking a pixel/number argument.</summary>
     internal void AddParamStyle(int node, string method, double value)
-        => AddOp(
-            node,
-            NativeProtocol.OpParamStyle,
-            NativeProtocol.ArgNumber,
-            PackString(method),
-            BitConverter.SingleToUInt32Bits((float)value)
-        );
+    {
+        if (StyleOps.TryParam(method, out var code))
+        {
+            AddOp(
+                node,
+                NativeProtocol.OpParamStyle,
+                NativeProtocol.ArgNumber,
+                code,
+                BitConverter.SingleToUInt32Bits((float)value)
+            );
+        }
+    }
 
-    /// <summary>Records a style method taking a string (or color) argument.</summary>
+    /// <summary>Records a style method taking a string (or color/length) argument.</summary>
     internal void AddParamStyleString(int node, string method, string value)
-        => AddOp(
-            node,
-            NativeProtocol.OpParamStyle,
-            NativeProtocol.ArgString,
-            PackString(method),
-            PackString(value)
-        );
+    {
+        if (StyleOps.TryParam(method, out var code))
+        {
+            AddOp(
+                node,
+                NativeProtocol.OpParamStyle,
+                NativeProtocol.ArgString,
+                code,
+                PackString(value)
+            );
+        }
+    }
 
     /// <summary>Records a component behavior method by name.</summary>
     internal void AddMethod(int node, string method)

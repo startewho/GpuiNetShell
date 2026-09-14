@@ -59,12 +59,34 @@ public sealed unsafe class RenderArenaTests
 
         Assert.Equal(NativeProtocol.OpNullaryStyle, descriptor.Ops[0].Code);
         Assert.Equal(NativeProtocol.ArgNone, descriptor.Ops[0].Flags);
+        Assert.Equal(NullaryCode("items_center"), descriptor.Ops[0].A);
         Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[1].Code);
         Assert.Equal(NativeProtocol.ArgNumber, descriptor.Ops[1].Flags);
+        Assert.Equal(ParamCode("p"), descriptor.Ops[1].A);
         Assert.Equal(12.0f, BitConverter.UInt32BitsToSingle((uint)descriptor.Ops[1].B));
         Assert.Equal(NativeProtocol.OpParamStyle, descriptor.Ops[2].Code);
         Assert.Equal(NativeProtocol.ArgString, descriptor.Ops[2].Flags);
+        Assert.Equal(ParamCode("bg"), descriptor.Ops[2].A);
     }
+
+    [Fact]
+    public void AnUnknownStyleNameIsDropped()
+    {
+        using var arena = new RenderArena();
+        var node = arena.AddNode(NativeProtocol.ComponentDiv);
+        arena.AddNullaryStyle(node, "not_a_style_at_all");
+        arena.AddParamStyle(node, "not_a_style_either", 3);
+
+        var descriptor = arena.Publish();
+
+        Assert.Equal(0u, descriptor.OpsLen);
+    }
+
+    private static ulong NullaryCode(string name) =>
+        (ulong)Array.IndexOf(StyleOps.Nullary, name);
+
+    private static ulong ParamCode(string name) =>
+        (ulong)Array.IndexOf(StyleOps.Param, name);
 
     [Fact]
     public void ResetClearsTheArena()

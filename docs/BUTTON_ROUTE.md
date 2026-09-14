@@ -52,7 +52,7 @@ success the host acknowledges with `render_completed(session, generation, 0)`.
 
 - `resolve_ops(node)` makes one pass:
   - `NullaryStyle`/`ParamStyle` fold into a `StyleRefinement` through
-    `style::apply_nullary_name` / `style::apply_param`;
+    `style::apply_nullary` / `style::apply_param`, by style opcode;
   - `Method` splits into shell behavior (`disabled`, `selected`) and the
     recorded component methods, in order;
   - `Callback` sets the `on_click` token.
@@ -100,8 +100,8 @@ it; when that snapshot is dropped (two generations later), the native
   constructor payloads.
 - Rust `registry::tests` — descriptor registration and lookup.
 - Rust `components::button::tests` — constructor/method payload recording.
-- Rust `style::tests` — the reflection table, parameter binding, and color
-  parsing.
+- Rust `style::tests` — the closed vocabulary and its managed mirror, parameter
+  binding, and color parsing.
 - C# `RenderArenaTests` / `RenderContextTests` — arena encoding and the Button
   op sequence.
 - C# `EventRegistryTests` — token registration, dispatch, and reset.

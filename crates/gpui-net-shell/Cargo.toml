@@ -13,10 +13,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 gpui = { workspace = true }
 gpui_platform = { workspace = true }
-# `inspector` exposes GPUI's reflected style-method table. It is what lets the
-# native host resolve `items_center`, `size_full` and the rest by name, exactly
-# as gpui-shell does, instead of enumerating every style as an operation code.
-gpui-base = { workspace = true, features = ["inspector"] }
+# `gpui-base` supplies the base-layer infrastructure the host builds on
+# (motion, resizable, scroll, virtual lists, `StyledExt`). Styling itself is a
+# closed opcode vocabulary resolved to direct GPUI calls in `style.rs`, so the
+# reflection-only `inspector` feature is deliberately not enabled.
+gpui-base = { workspace = true }
 gpui-component = { workspace = true }
 gpui-kit-assets = { workspace = true }
 # A managed thread can ask the GPUI thread to re-render; the ingress channel

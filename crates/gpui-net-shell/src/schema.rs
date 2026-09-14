@@ -5,17 +5,18 @@
 //! value both sides must agree on for a managed/native pair to run; a test in
 //! each language pins its literal.
 //!
-//! The operation set mirrors `gpui-shell`'s `SpecOp`. Styling is not enumerated
-//! per property: a style call carries a GPUI method name and an argument that
-//! the native host resolves against GPUI's reflected style table. Component
-//! behavior is a generic `Method`, and event bindings are a generic `Callback`.
+//! The operation set mirrors `gpui-shell`'s `SpecOp`. Styling is a closed
+//! vocabulary: a style call carries a `u16` opcode indexing [`crate::style`]'s
+//! declared method lists, which the native host maps to direct GPUI style
+//! calls. There is no runtime reflection. Component behavior is a generic
+//! `Method`, and event bindings are a generic `Callback`.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
 pub const ABI_VERSION: u32 = 8;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C5D;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C60;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -270,16 +271,19 @@ pub const COMPONENT_PAINT_IMAGE: u32 = 113;
 // Operations
 // ---------------------------------------------------------------------------
 //
-// Every operation's `a` word carries the packed UTF-8 range of a method name.
-// `flags` classifies the argument carried in `b`:
+// A style operation's `a` word is a `u16` style opcode (see `style.rs`).
+// A component method, callback, or slot operation's `a` word is the packed
+// UTF-8 range of its name. `flags` classifies the argument carried in `b`:
 //
 // * [`ARG_NONE`]: no argument, `b == 0`;
 // * [`ARG_NUMBER`]: the low 32 bits of `b` are an IEEE-754 `f32`;
 // * [`ARG_STRING`]: `b` is the packed UTF-8 range of the argument.
 
-/// A no-argument style method (`items_center`, `size_full`, …).
+/// A no-argument style method (`items_center`, `size_full`, …); `a` is the
+/// [`crate::style::nullary_index`] of the name.
 pub const OP_NULLARY_STYLE: u16 = 1;
-/// A style method taking one argument (`p`, `gap`, `bg`, …).
+/// A style method taking one argument (`p`, `gap`, `bg`, …); `a` is the
+/// [`crate::style::param_index`] of the name.
 pub const OP_PARAM_STYLE: u16 = 2;
 /// A component behavior method (`disabled`, `label`, `primary`, …).
 pub const OP_METHOD: u16 = 3;
@@ -344,7 +348,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C5D);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C60);
     }
 
     #[test]

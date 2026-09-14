@@ -1,27 +1,27 @@
-//! The styling engine behind a style call, ported from `gpui-shell`.
+//! The styling engine behind a style call.
 //!
-//! The managed host sends a *method name* and an argument; this module answers
-//! one question for any name: is it a style method, and how is it applied to a
-//! [`StyleRefinement`]?
+//! The managed host sends a *style opcode* and, for a parametric style, one
+//! argument; this module answers one question for any code: which GPUI style
+//! method is it, and how is it applied to a [`StyleRefinement`]?
 //!
-//! There are two halves, for different reasons:
+//! The vocabulary is **closed and declared here**, not reflected out of GPUI.
+//! A previous revision enabled `gpui-base/inspector` and resolved method names
+//! against a proc-macro-generated reflection table; that table forced every
+//! `Styled` method to be retained and boxed every refinement through
+//! `Box<dyn Any>` on each call. The two lists below are the whole surface the
+//! managed `StyleExtensions` can emit, so each opcode is one direct call.
 //!
-//! * **No-argument methods** are reflected out of GPUI
-//!   (`gpui_base::styled_ext_reflection_methods` and
-//!   `gpui::styled_reflection::methods`), so `flex_col`, `items_center`,
-//!   `size_full`, `rounded_md`, `text_sm`, and hundreds more are available with
-//!   no maintenance and without a fixed enum of style operations.
-//! * **Methods that take arguments** cannot be reflected and are bound by hand
-//!   in [`apply_param`].
+//! * [`NULLARY`] lists the `fn(self) -> Self` methods (`flex_col`,
+//!   `items_center`, `size_full`, …). The index is the opcode and the entry is
+//!   the direct call.
+//! * [`PARAM`] lists the methods that take one argument (`p`, `gap`, `bg`, …).
+//!   The index is the opcode; [`apply_param`] binds each name to its call by
+//!   hand because the argument type differs per method.
 //!
-//! A style name that is neither reflected nor bound is a no-op here; the
-//! managed surface only emits names it knows, and a typo is visible at the call
-//! site rather than silently accepted.
+//! The order of both lists is the wire vocabulary, mirrored in
+//! `src/GpuiNetShell/Interop/StyleOps.cs`. `the_managed_vocabulary_matches`
+//! keeps the two in step.
 
-use std::collections::HashMap;
-use std::sync::OnceLock;
-
-use gpui::inspector_reflection::FunctionReflection;
 use gpui::{
     px, relative, rems, rgba, AbsoluteLength, DefiniteLength, FontWeight, Hsla, Length,
     StyleRefinement, Styled, TextAlign, TextOverflow,
@@ -90,183 +90,187 @@ impl StyleArg {
     }
 }
 
-/// Style methods that take one argument, bound by hand.
-const PARAM_STYLES: &[&str] = &[
-    "w",
-    "h",
-    "size",
-    "min_w",
-    "min_h",
-    "min_size",
-    "max_w",
-    "max_h",
-    "max_size",
-    "p",
-    "px",
-    "py",
-    "pt",
-    "pb",
-    "pl",
-    "pr",
-    "m",
-    "mx",
-    "my",
-    "mt",
-    "mb",
-    "ml",
-    "mr",
-    "inset",
-    "top",
-    "bottom",
-    "left",
-    "right",
-    "gap",
-    "gap_x",
-    "gap_y",
-    "flex_grow",
-    "flex_shrink",
-    "flex_basis",
-    "bg",
-    "text_color",
-    "text_bg",
-    "text_size",
-    "font_family",
-    "font_weight",
-    "line_height",
-    "opacity",
-    "border",
-    "border_t",
-    "border_b",
-    "border_l",
-    "border_r",
-    "border_x",
-    "border_y",
-    "border_color",
-    "rounded",
-    "rounded_t",
-    "rounded_b",
-    "rounded_l",
-    "rounded_r",
-    "rounded_tl",
-    "rounded_tr",
-    "rounded_bl",
-    "rounded_br",
-    // Grid and self placement.
-    "aspect_ratio",
-    "col_start",
-    "col_end",
-    "col_span",
-    "row_start",
-    "row_end",
-    "row_span",
-    "grid_cols",
-    "grid_cols_min_content",
-    "grid_cols_max_content",
-    "grid_rows",
-    "grid_rows_min_content",
-    "grid_rows_max_content",
-    // Text detail.
-    "line_clamp",
-    "text_align",
-    "text_overflow",
-    "text_decoration_color",
-    "scrollbar_width",
-];
-
 type NullaryFn = fn(StyleRefinement) -> StyleRefinement;
 
-/// No-argument style methods reflection does not reach. `gpui-base` generates
-/// its font-weight helpers with a macro, which the reflection pass skips.
-const EXTRA_NULLARY: &[(&str, NullaryFn)] = &[
-    ("font_thin", |style| style.font_thin()),
-    ("font_extralight", |style| style.font_extralight()),
-    ("font_light", |style| style.font_light()),
-    ("font_normal", |style| style.font_normal()),
-    ("font_medium", |style| style.font_medium()),
-    ("font_semibold", |style| style.font_semibold()),
-    ("font_bold", |style| style.font_bold()),
-    ("font_extrabold", |style| style.font_extrabold()),
-    ("font_black", |style| style.font_black()),
-];
+/// Declares the closed style vocabulary. Both arrays are indexed by opcode, and
+/// the order is the wire contract mirrored in `StyleOps.cs`.
+///
+/// Reads the lists from the doc comment below rather than reflection: the
+/// surface is small, explicit, and each entry is a direct method call.
+macro_rules! style_vocabulary {
+    (
+        nullary { $($nullary:ident),* $(,)? }
+        param { $($param:ident),* $(,)? }
+    ) => {
+        /// No-argument style methods, index == opcode.
+        const NULLARY: &[(&str, NullaryFn)] =
+            &[ $( (stringify!($nullary), |style| style.$nullary()) ),* ];
 
-struct StyleTable {
-    nullary: Vec<FunctionReflection<StyleRefinement>>,
-    by_name: HashMap<&'static str, u16>,
+        /// Parametric style method names, index == opcode.
+        const PARAM: &[&str] = &[ $( stringify!($param) ),* ];
+    };
 }
 
-fn table() -> &'static StyleTable {
-    static TABLE: OnceLock<StyleTable> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let nullary: Vec<_> = [
-            gpui_base::styled_ext_reflection_methods::<StyleRefinement>(),
-            gpui::styled_reflection::methods::<StyleRefinement>(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        let mut by_name = HashMap::with_capacity(nullary.len() + EXTRA_NULLARY.len());
-        for (index, method) in nullary.iter().enumerate() {
-            by_name.entry(method.name).or_insert(index as u16);
-        }
-        for (offset, (name, _)) in EXTRA_NULLARY.iter().enumerate() {
-            by_name
-                .entry(*name)
-                .or_insert((nullary.len() + offset) as u16);
-        }
-
-        StyleTable { nullary, by_name }
-    })
-}
-
-/// The reflected no-argument style names, for diagnostics and tests.
-#[cfg(test)]
-pub fn nullary_count() -> usize {
-    table().nullary.len() + EXTRA_NULLARY.len()
-}
-
-/// Index of a no-argument style method, if `name` is one.
-pub fn nullary_index(name: &str) -> Option<u16> {
-    table().by_name.get(name).copied()
-}
-
-/// Whether `name` is a style method that takes one argument.
-pub fn param_style_name(name: &str) -> Option<&'static str> {
-    PARAM_STYLES
-        .iter()
-        .copied()
-        .find(|candidate| *candidate == name)
-}
-
-/// Applies a no-argument style method by index. An out-of-range index is inert.
-pub fn apply_nullary(index: u16, refinement: StyleRefinement) -> StyleRefinement {
-    let table = table();
-    if let Some(method) = table.nullary.get(index as usize) {
-        return method.invoke(refinement);
+style_vocabulary! {
+    // Every no-argument method the managed `StyleExtensions` emits. Order is
+    // the opcode; append, never reorder.
+    nullary {
+        flex,
+        flex_col,
+        flex_row,
+        flex_1,
+        w_full,
+        h_full,
+        size_full,
+        items_center,
+        items_start,
+        items_end,
+        justify_center,
+        justify_between,
+        justify_end,
+        font_semibold,
+        font_medium,
+        font_bold,
+        relative,
+        absolute,
     }
-    match EXTRA_NULLARY.get(index as usize - table.nullary.len()) {
+    // Every parametric method the managed surface can emit; `font_family` is
+    // carried for completeness even though no builder exposes it yet.
+    param {
+        w,
+        h,
+        size,
+        min_w,
+        min_h,
+        min_size,
+        max_w,
+        max_h,
+        max_size,
+        p,
+        px,
+        py,
+        pt,
+        pb,
+        pl,
+        pr,
+        m,
+        mx,
+        my,
+        mt,
+        mb,
+        ml,
+        mr,
+        inset,
+        top,
+        bottom,
+        left,
+        right,
+        gap,
+        gap_x,
+        gap_y,
+        flex_grow,
+        flex_shrink,
+        flex_basis,
+        bg,
+        text_color,
+        text_bg,
+        text_size,
+        font_family,
+        font_weight,
+        line_height,
+        opacity,
+        border,
+        border_t,
+        border_b,
+        border_l,
+        border_r,
+        border_x,
+        border_y,
+        border_color,
+        rounded,
+        rounded_t,
+        rounded_b,
+        rounded_l,
+        rounded_r,
+        rounded_tl,
+        rounded_tr,
+        rounded_bl,
+        rounded_br,
+        aspect_ratio,
+        col_start,
+        col_end,
+        col_span,
+        row_start,
+        row_end,
+        row_span,
+        grid_cols,
+        grid_cols_min_content,
+        grid_cols_max_content,
+        grid_rows,
+        grid_rows_min_content,
+        grid_rows_max_content,
+        line_clamp,
+        text_align,
+        text_overflow,
+        text_decoration_color,
+        scrollbar_width,
+    }
+}
+
+/// The no-argument method names, in opcode order.
+#[cfg(test)]
+pub fn nullary_names() -> Vec<&'static str> {
+    NULLARY.iter().map(|(name, _)| *name).collect()
+}
+
+/// The parametric method names, in opcode order.
+#[cfg(test)]
+pub fn param_names() -> Vec<&'static str> {
+    PARAM.to_vec()
+}
+
+/// The opcode of a no-argument style method, if `name` is one.
+///
+/// Used by tests and kept as the readable half of the vocabulary; the wire
+/// itself carries the opcode.
+#[allow(dead_code)]
+pub fn nullary_index(name: &str) -> Option<u16> {
+    NULLARY
+        .iter()
+        .position(|(candidate, _)| *candidate == name)
+        .map(|index| index as u16)
+}
+
+/// The opcode of a parametric style method, if `name` is one.
+#[allow(dead_code)]
+pub fn param_index(name: &str) -> Option<u16> {
+    PARAM
+        .iter()
+        .position(|candidate| *candidate == name)
+        .map(|index| index as u16)
+}
+
+/// The name of a parametric style opcode, for diagnostics.
+pub fn param_name(code: u16) -> Option<&'static str> {
+    PARAM.get(code as usize).copied()
+}
+
+/// Applies a no-argument style opcode by direct call. An out-of-range opcode is
+/// inert.
+pub fn apply_nullary(code: u16, refinement: StyleRefinement) -> StyleRefinement {
+    match NULLARY.get(code as usize) {
         Some((_, apply)) => apply(refinement),
         None => refinement,
     }
 }
 
-/// Applies a no-argument style method by name, or returns `None` when unknown.
-pub fn apply_nullary_name(name: &str, refinement: StyleRefinement) -> Option<StyleRefinement> {
-    let index = nullary_index(name)?;
-    Some(apply_nullary(index, refinement))
-}
-
 /// Applies a style method that takes one argument.
 pub fn apply_param(
-    name: &str,
+    code: u16,
     arg: &StyleArg,
     refinement: StyleRefinement,
 ) -> Result<StyleRefinement, String> {
-    // A name that is neither reflected nor hand-bound is an error, not a silent
-    // no-op; the `PARAM_STYLES` table is what makes that check total.
-    if param_style_name(name).is_none() {
-        return Err(format!("unknown style method `{name}`"));
-    }
+    let name = param_name(code).ok_or_else(|| format!("unknown style opcode {code}"))?;
 
     macro_rules! length {
         () => {
@@ -544,34 +548,101 @@ mod tests {
     use super::*;
     use gpui::{Fill, Hsla};
 
+    /// The exact vocabulary, pinned so an accidental reorder is a reviewable
+    /// diff rather than a silent wire break. The managed mirror is
+    /// `src/GpuiNetShell/Interop/StyleOps.cs`.
     #[test]
-    fn the_reflection_table_is_populated() {
-        // Guards the `inspector` feature: without it this table is empty and
-        // every no-argument style silently stops working.
-        assert!(
-            nullary_count() > 100,
-            "expected hundreds of reflected style methods, got {}",
-            nullary_count()
+    fn the_vocabulary_is_closed_and_pinned() {
+        assert_eq!(
+            nullary_names(),
+            vec![
+                "flex",
+                "flex_col",
+                "flex_row",
+                "flex_1",
+                "w_full",
+                "h_full",
+                "size_full",
+                "items_center",
+                "items_start",
+                "items_end",
+                "justify_center",
+                "justify_between",
+                "justify_end",
+                "font_semibold",
+                "font_medium",
+                "font_bold",
+                "relative",
+                "absolute",
+            ]
+        );
+        assert_eq!(param_names().len(), 77);
+    }
+
+    /// The managed `StyleOps` arrays must list the same names in the same
+    /// order, or a style would silently map to the wrong opcode.
+    #[test]
+    fn the_managed_vocabulary_matches() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../src/GpuiNetShell/Interop/StyleOps.cs"
+        );
+        let source = std::fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("read managed StyleOps from {path}: {error}"));
+        assert_eq!(
+            array_literals(&source, "Nullary"),
+            nullary_names(),
+            "Nullary in StyleOps.cs drifted from style.rs"
+        );
+        assert_eq!(
+            array_literals(&source, "Param"),
+            param_names(),
+            "Param in StyleOps.cs drifted from style.rs"
         );
     }
 
+    /// Reads the quoted entries of the managed `static readonly string[] Name = [ … ];`.
+    fn array_literals(source: &str, name: &str) -> Vec<String> {
+        let declaration = format!("string[] {name}");
+        let anchor = source
+            .find(&declaration)
+            .unwrap_or_else(|| panic!("StyleOps.cs has no `{declaration}`"))
+            + declaration.len();
+        let start = source[anchor..]
+            .find('[')
+            .unwrap_or_else(|| panic!("StyleOps.cs `{name}` has no array literal"))
+            + anchor
+            + 1;
+        let end = source[start..]
+            .find(']')
+            .unwrap_or_else(|| panic!("StyleOps.cs `{name}` array is unterminated"))
+            + start;
+        let body = &source[start..end];
+        body.split(',')
+            .map(|entry| entry.trim().trim_matches('"'))
+            .filter(|entry| !entry.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
     #[test]
-    fn a_nullary_name_is_applied_through_reflection() {
-        let styled = apply_nullary_name("items_center", StyleRefinement::default())
-            .expect("items_center is reflected");
+    fn a_nullary_opcode_applies_its_method_directly() {
+        let code = nullary_index("items_center").expect("items_center is in the vocabulary");
+        let styled = apply_nullary(code, StyleRefinement::default());
         assert_eq!(styled.align_items, Some(gpui::AlignItems::Center));
     }
 
     #[test]
-    fn an_unknown_nullary_name_is_none() {
-        assert!(apply_nullary_name("not_a_style_at_all", StyleRefinement::default()).is_none());
+    fn layout_nullary_names_are_in_the_vocabulary() {
+        for name in ["flex_row", "flex_col", "w_full", "h_full", "size_full"] {
+            assert!(nullary_index(name).is_some(), "`{name}` is missing");
+        }
     }
 
     #[test]
-    fn layout_nullary_names_are_reflected() {
-        for name in ["flex_row", "flex_col", "w_full", "h_full", "size_full"] {
-            assert!(nullary_index(name).is_some(), "`{name}` is not reflected");
-        }
+    fn an_out_of_range_nullary_opcode_is_inert() {
+        let styled = apply_nullary(u16::MAX, StyleRefinement::default());
+        assert_eq!(styled, StyleRefinement::default());
     }
 
     #[test]
@@ -595,30 +666,36 @@ mod tests {
             "line_clamp",
             "scrollbar_width",
         ] {
+            let code = param_index(name).unwrap_or_else(|| panic!("`{name}` is missing"));
             assert!(
-                apply_param(name, &Number(2.0), default()).is_ok(),
+                apply_param(code, &Number(2.0), default()).is_ok(),
                 "`{name}` did not apply"
             );
         }
-        assert!(apply_param("text_align", &String("center".into()), default()).is_ok());
-        assert!(apply_param("text_overflow", &String("…".into()), default()).is_ok());
+        assert!(apply_param(param_index("text_align").unwrap(), &String("center".into()), default()).is_ok());
+        assert!(apply_param(param_index("text_overflow").unwrap(), &String("…".into()), default()).is_ok());
         assert!(apply_param(
-            "text_decoration_color",
+            param_index("text_decoration_color").unwrap(),
             &String("#ff0000".into()),
             default()
         )
         .is_ok());
-        assert!(apply_param("text_align", &String("middle".into()), default()).is_err());
-        assert!(apply_param("col_span", &Number(1.5), default()).is_err());
+        assert!(apply_param(param_index("text_align").unwrap(), &String("middle".into()), default()).is_err());
+        assert!(apply_param(param_index("col_span").unwrap(), &Number(1.5), default()).is_err());
     }
 
     #[test]
     fn a_bare_number_is_pixels_and_a_percent_string_is_relative() {
-        let padded = apply_param("p", &StyleArg::Number(12.), StyleRefinement::default()).unwrap();
+        let padded = apply_param(
+            param_index("p").unwrap(),
+            &StyleArg::Number(12.),
+            StyleRefinement::default(),
+        )
+        .unwrap();
         assert_eq!(padded.padding.top, Some(px(12.).into()));
 
         let wide = apply_param(
-            "w",
+            param_index("w").unwrap(),
             &StyleArg::String("50%".into()),
             StyleRefinement::default(),
         )
@@ -629,7 +706,7 @@ mod tests {
     #[test]
     fn bg_sets_a_background_from_a_hex_literal() {
         let styled = apply_param(
-            "bg",
+            param_index("bg").unwrap(),
             &StyleArg::String("#ff0000".into()),
             StyleRefinement::default(),
         )
@@ -642,7 +719,7 @@ mod tests {
     #[test]
     fn font_weight_rejects_out_of_range_values() {
         assert!(apply_param(
-            "font_weight",
+            param_index("font_weight").unwrap(),
             &StyleArg::Number(99.),
             StyleRefinement::default()
         )
@@ -650,9 +727,9 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_parametric_name_is_an_error() {
+    fn an_unknown_parametric_opcode_is_an_error() {
         assert!(apply_param(
-            "not_a_style",
+            u16::MAX,
             &StyleArg::Number(1.),
             StyleRefinement::default()
         )
@@ -660,11 +737,11 @@ mod tests {
     }
 
     #[test]
-    fn param_styles_are_disjoint_from_reflection() {
-        for name in PARAM_STYLES {
+    fn the_two_vocabularies_are_disjoint() {
+        for name in nullary_names() {
             assert!(
-                nullary_index(name).is_none(),
-                "`{name}` is both reflected and hand-bound"
+                param_index(name).is_none(),
+                "`{name}` is both nullary and parametric"
             );
         }
     }

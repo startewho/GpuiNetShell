@@ -12,3 +12,4 @@ target/
 *.d.ts
 *.pubxml
 *.txt
+/.promt

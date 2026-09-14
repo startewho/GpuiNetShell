@@ -25,6 +25,16 @@ gpui-kit-assets = { path = "external/gpui-kit/crates/assets", version = "0.6.1" 
 codegen-units = 16
 debug = "limited"
 
+# The shipped host is a large cdylib wrapping all of GPUI and the component
+# catalog. LTO plus one codegen unit lets the linker drop the paths the C ABI
+# never reaches (now including the style reflection machinery, which is gone),
+# and `strip` keeps the installed DLL to code and data.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+debug = false
+
 [profile.dev.package]
 gpui-pre = { opt-level = 3 }
 gpui-pre-macros = { opt-level = 3 }

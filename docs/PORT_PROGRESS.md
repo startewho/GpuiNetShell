@@ -122,10 +122,12 @@
 
 ## 样式（gpui style）覆盖
 
-- **无参样式**：由反射覆盖（`gpui_base::styled_ext_reflection_methods` + `gpui::styled_reflection::methods`
-  + 手写的字重补充），`flex_row`/`flex_col`/`w_full`/`h_full`/`size_full`/`items_center`/
-  `rounded_md`/`text_sm` 等数百个自动可用。
-- **带参样式**：手工绑定于 `style.rs::apply_param`。本次补齐缺失项：
+- **无参样式**：由 `style.rs` 的 `style_vocabulary!` 声明为封闭的 `(名字, 直接调用)` 表，
+  按 `u16` opcode 映射；`StyleOps.cs` 镜像同一顺序，`style.rs` 的
+  `the_managed_vocabulary_matches` 测试防止漂移。不再启用 `gpui-base/inspector`，
+  也移除了反射表与 `Box<dyn Any>`。当前覆盖 `flex_row`/`flex_col`/`w_full`/`h_full`/
+  `size_full`/`items_center`/`font_bold` 等 18 个无参样式；新增样式需追加到两张表并 bump `SCHEMA_HASH`。
+- **带参样式**：手工绑定于 `style.rs::apply_param`（同样按 opcode 索引）。已覆盖：
   `aspect_ratio`、`col_start`/`col_end`/`col_span`、`row_start`/`row_end`/`row_span`、
   `grid_cols`/`grid_cols_min_content`/`grid_cols_max_content`、`grid_rows`/`grid_rows_min_content`/
   `grid_rows_max_content`、`line_clamp`、`scrollbar_width`、`text_align`、`text_overflow`、

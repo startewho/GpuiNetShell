@@ -21,16 +21,18 @@ GpuiNetShell managed runtime  (RenderArena, EventRegistry, GpuiApplication)
 gpui-net-shell native host  (Rust)
         ├─ app host: gpui::Application, window, event loop
         ├─ snapshot decode -> owned description
-        ├─ style.rs: reflected GPUI style table
+        ├─ style.rs: closed style vocabulary resolved to direct GPUI calls
         └─ materialize.rs -> ComponentRegistry descriptors -> materializer
 ```
 
 The split mirrors `gpui-shell`: a description is published only when state
 moves, and clean repaints replay the retained snapshot in Rust without entering
-managed code. Styling is not enumerated over the ABI: the managed side sends
-GPUI style method names (`items_center`, `size_full`, `p`, `gap`, `bg`, …) and
-Rust resolves them against GPUI's reflected style table, exactly as `gpui-shell`
-does.
+managed code. Styling is a **closed opcode vocabulary**, not runtime
+reflection: the managed side sends a `u16` opcode for each style call
+(`items_center`, `size_full`, `p`, `gap`, `bg`, …) and Rust maps it to a direct
+GPUI style-method call. The vocabulary is declared once in `style.rs` and
+mirrored in `StyleOps.cs`; a test keeps the two in step, and the native crate
+no longer enables `gpui-base/inspector`.
 
 Each published render is a frozen `RenderSnapshot` that owns its generation.
 The native `ShellView` keeps the current and previous snapshots; when one is
@@ -84,7 +86,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/schema.rs                  wire vocabulary (mirrored in C#)
   src/abi.rs                     C layouts and the API table
   src/snapshot.rs                arena decode + RenderSnapshot
-  src/style.rs                   reflected GPUI style table (shell-style)
+  src/style.rs                   closed style vocabulary; direct GPUI calls
   src/registry.rs                ComponentRegistry / Descriptor / Materializer
   src/components/                Div, Text, Button, Label, Badge, Progress, Combobox, Radio, Tabs, Scroll, Scrollbar, Resizable, Popover
   src/context.rs                 HostContext: session, callbacks, invalidate

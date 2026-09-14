@@ -2,9 +2,9 @@ namespace GpuiNetShell.Elements;
 
 /// <summary>
 /// The shared style surface. Every method records a GPUI style method name and
-/// its argument; the native host resolves the name against GPUI's reflected
-/// style table, so a new style needs no native operation code and no change to
-/// the C ABI.
+/// its argument; the native host maps the name to a direct GPUI style call
+/// through the closed opcode vocabulary in <c>StyleOps</c>. A new style is one
+/// entry there and one native arm, with no change to the C ABI.
 /// </summary>
 /// <remarks>
 /// Names are the GPUI/Rust spelling (`items_center`, `size_full`, `p`, `gap`),

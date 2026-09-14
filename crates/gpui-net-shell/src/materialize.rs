@@ -14,7 +14,7 @@ use crate::registry::{
     FrozenComponentRegistry, MaterializeRequest, NodeFactory, RecordedComponentMethod,
 };
 use crate::snapshot::{Node, Op, RenderSnapshot};
-use crate::style::{apply_nullary_name, apply_param, StyleArg};
+use crate::style::{apply_nullary, apply_param, StyleArg};
 
 /// Behavior collected from a node's ops, applied when the component is built.
 #[derive(Default)]
@@ -237,13 +237,11 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
 
     for op in &node.ops {
         match op {
-            Op::NullaryStyle(name) => {
-                if let Some(next) = apply_nullary_name(name, refinement.clone()) {
-                    refinement = next;
-                }
+            Op::NullaryStyle(code) => {
+                refinement = apply_nullary(*code, refinement);
             }
-            Op::ParamStyle(name, arg) => {
-                if let Ok(next) = apply_param(name, arg, refinement.clone()) {
+            Op::ParamStyle(code, arg) => {
+                if let Ok(next) = apply_param(*code, arg, refinement.clone()) {
                     refinement = next;
                 }
             }
@@ -353,8 +351,11 @@ mod tests {
                 COMPONENT_DIV,
                 "",
                 vec![
-                    Op::NullaryStyle("items_center".into()),
-                    Op::ParamStyle("p".into(), StyleArg::Number(16.0)),
+                    Op::NullaryStyle(crate::style::nullary_index("items_center").unwrap()),
+                    Op::ParamStyle(
+                        crate::style::param_index("p").unwrap(),
+                        StyleArg::Number(16.0),
+                    ),
                 ],
             ),
             descriptor,
