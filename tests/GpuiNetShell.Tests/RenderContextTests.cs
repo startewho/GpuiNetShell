@@ -1042,6 +1042,31 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(4, MethodCount(descriptor, 4));
     }
 
+    [Fact]
+    public void CanvasRecordsImageAndMeasure()
+    {
+        using var arena = new RenderArena();
+        var events = new EventRegistry();
+        var ui = new RenderContext(arena, events, () => { });
+        var measure = ui.RegisterMeasure((width, height) => $"{width}\t{height}");
+
+        ui.Canvas("c")
+            .Measure(measure)
+            .Add(ui.PaintImage(0.0, 0.0, 1.0, 0.5, "icons/check.svg").Tint("#ffffff"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentCanvas, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintImage, descriptor.Nodes[1].Component);
+
+        var canvasCallbacks = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Where(index =>
+                descriptor.Ops[index].Node == 0
+                && descriptor.Ops[index].Code == NativeProtocol.OpCallback
+            );
+        Assert.Contains(canvasCallbacks, index => descriptor.Ops[index].B == measure);
+    }
+
     private sealed class EntityState
     {
         public int Count { get; set; }

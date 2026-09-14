@@ -1,6 +1,6 @@
 # 设计方案：原生绘制（Canvas）、动画系统、可点击自定义 View 与 prepaint 回调
 
-> 状态：**待审阅**。审阅通过 §12 决策点后再进入执行（分阶段见 §11）。
+> 状态：**P1–P7 已实现**（详见 [`PLAN_CANVAS_ANIMATION.md`](PLAN_CANVAS_ANIMATION.md)）。
 > 目标：把 GPUI 的原生绘制能力与 gpui-kit 的 motion 动画系统暴露给 C#，
 > 并提供「自定义 View + 可控命中区域 + prepaint/paint 阶段回调」的统一写法，
 > 且不破坏现有 Element / component / ABI 语义。

@@ -38,6 +38,17 @@ public sealed class CanvasElement : Element
         return this;
     }
 
+    /// <summary>
+    /// Runs <paramref name="token"/> at layout time with the available space and
+    /// uses the size it returns; the callback returns a <c>Text</c> node whose
+    /// data is <c>"width\theight"</c>.
+    /// </summary>
+    public CanvasElement Measure(ulong token)
+    {
+        Arena.AddCallback(Index, "measure", token);
+        return this;
+    }
+
     /// <summary>Appends paint primitives and hit regions.</summary>
     public CanvasElement Add(params Element[] children)
     {

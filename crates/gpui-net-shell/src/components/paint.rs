@@ -12,9 +12,9 @@
 use std::sync::Arc;
 
 use gpui::{
-    linear_color_stop, linear_gradient, point, px, size, transparent_black, AnyElement, Background,
-    BorderStyle, Bounds, BoxShadow, Corners, CursorStyle, Edges, Hsla, IntoElement as _,
-    PathBuilder, Pixels, Point, Window,
+    linear_color_stop, linear_gradient, point, px, size, transparent_black, AnyElement, App,
+    Background, BorderStyle, Bounds, BoxShadow, Corners, CursorStyle, Edges, Hsla,
+    IntoElement as _, PathBuilder, Pixels, Point, SharedString, TransformationMatrix, Window,
 };
 use gpui_component::try_parse_color;
 
@@ -120,11 +120,19 @@ pub(crate) enum PaintCommand {
         inset: bool,
         radius: f32,
     },
+    Image {
+        x: Coord,
+        y: Coord,
+        w: Coord,
+        h: Coord,
+        source: String,
+        tint: Hsla,
+    },
 }
 
 impl PaintCommand {
     /// Paints this command into `window`, resolving lengths against `bounds`.
-    pub(crate) fn paint(&self, bounds: Bounds<Pixels>, window: &mut Window) {
+    pub(crate) fn paint(&self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut App) {
         let (origin, extent) = (bounds.origin, bounds.size);
         match self {
             Self::Rect {
@@ -263,6 +271,30 @@ impl PaintCommand {
                 } else {
                     window.paint_drop_shadows(rect, radii, &[shadow]);
                 }
+            }
+            Self::Image {
+                x,
+                y,
+                w,
+                h,
+                source,
+                tint,
+            } => {
+                let rect = Bounds::new(
+                    point(
+                        x.resolve(origin.x, extent.width),
+                        y.resolve(origin.y, extent.height),
+                    ),
+                    size(w.extent(extent.width), h.extent(extent.height)),
+                );
+                let _ = window.paint_svg(
+                    rect,
+                    SharedString::from(source.clone()),
+                    None,
+                    TransformationMatrix::unit(),
+                    *tint,
+                    cx,
+                );
             }
         }
     }
@@ -735,6 +767,29 @@ impl ComponentMaterializer for PaintShadowMaterializer {
     }
 }
 
+struct PaintImageMaterializer;
+
+impl ComponentMaterializer for PaintImageMaterializer {
+    fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
+        let raw = args(&request, 5)?;
+        let mut tint = None;
+        for op in ops(&request) {
+            if let PaintOp::Color(color) = op {
+                tint = Some(color);
+            }
+        }
+        let command = PaintCommand::Image {
+            x: coord_arg(&raw[0])?,
+            y: coord_arg(&raw[1])?,
+            w: coord_arg(&raw[2])?,
+            h: coord_arg(&raw[3])?,
+            source: raw[4].clone(),
+            tint: tint.unwrap_or_else(gpui::white),
+        };
+        Ok(Carrier::new(command).into_any_element())
+    }
+}
+
 /// A clickable region declared on a [`crate::components::canvas::CanvasElement`].
 ///
 /// The canvas inserts a hitbox for it during prepaint; the region itself paints
@@ -1088,6 +1143,28 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
     register_gradient(registry);
     register_shadow(registry);
     register_hit_region(registry);
+}
+
+/// Registers `PaintImage`. Kept separate so it takes the last component id
+/// without shifting the earlier paint primitives.
+pub(super) fn register_image(registry: &mut ComponentRegistry) {
+    registry
+        .register(
+            ComponentDescriptor::new("PaintImage", Arc::new(PaintImageMaterializer))
+                .with_constructors(vec![constructor(
+                    "PaintImage",
+                    vec![
+                        length_arg("x"),
+                        length_arg("y"),
+                        length_arg("w"),
+                        length_arg("h"),
+                        length_arg("source"),
+                    ],
+                )])
+                .with_methods(vec![color_method("tint", PaintOp::Color, "Tints the SVG.")])
+                .with_documentation("An SVG painted on a Canvas."),
+        )
+        .expect("the PaintImage descriptor is valid");
 }
 
 #[cfg(test)]

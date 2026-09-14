@@ -6,8 +6,8 @@ namespace GpuiNetShell.Sample.Pages;
 
 /// <summary>
 /// Demonstrates native painting and hit regions: a gradient/plot drawn from a
-/// per-frame prepaint callback, and two clickable halves whose clicks update the
-/// page's entity state.
+/// per-frame prepaint callback, an SVG paint, a measured custom gauge view, and
+/// clickable halves whose clicks update the page's entity state.
 /// </summary>
 [GpuiCallbacks]
 internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
@@ -17,6 +17,8 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
         public int Clicks { get; set; }
         public string Last { get; set; } = "(none)";
     }
+
+    private readonly GaugeView _gauge = new();
 
     public override string Title => "Canvas";
 
@@ -31,7 +33,7 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
         Page(
             ref ui,
             "Canvas",
-            "Native GPUI painting plus clickable regions. The plot is drawn from the prepaint callback (bounds-aware); click a half to count.",
+            "Native GPUI painting and hit regions: gradient plot, SVG, a measured custom view, and clicks.",
             ui.Label($"clicks: {state.Clicks}   last: {state.Last}"),
             ui.Canvas("paint-demo")
                 .WFull()
@@ -82,7 +84,13 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
                                 }
                             )
                         )
-                )
+                ),
+            Section(
+                ref ui,
+                "Measured custom view",
+                "A canvas measured at layout time; the gauge is painted by an ICanvasView."
+            ),
+            ui.Canvas("gauge").WFull().Rounded(10).Measure(MeasureToken).Prepaint(GaugeToken)
         );
 
     // The prepaint callback runs each frame with the canvas bounds and returns
@@ -104,6 +112,37 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
                     )
                     .Stroke(2.5)
                     .Color("#fbbf24"),
-                ui.PaintLine(0.5, 0.0, 0.5, 1.0).Stroke(1).Color("#ffffff33")
+                ui.PaintLine(0.5, 0.0, 0.5, 1.0).Stroke(1).Color("#ffffff33"),
+                ui.PaintImage(0.78, 0.12, 0.14, 0.4, "icons/check.svg").Tint("#ffffff")
             );
+
+    // A measured canvas: the callback receives the available space and returns
+    // "width\theight".
+    [GpuiCallback("Measure")]
+    private string MeasureGauge(double availableWidth, double availableHeight) =>
+        $"{availableWidth}\t120";
+
+    [GpuiCallback("Gauge")]
+    private Element RenderGauge(RenderContext ui, IReadOnlyList<string> bounds)
+    {
+        _gauge.Value = Math.Clamp(Entity.Read().Clicks / 10.0, 0.0, 1.0);
+        var painter = ui.Painter("gauge-draw");
+        _gauge.Paint(painter, CanvasBounds.Parse(bounds));
+        return painter.Build();
+    }
+
+    /// <summary>A reusable custom view that paints a progress bar.</summary>
+    private sealed class GaugeView : ICanvasView
+    {
+        public double Value { get; set; }
+
+        public void Paint(CanvasPainter painter, CanvasBounds bounds)
+        {
+            painter
+                .Gradient(0.0, 0.0, 1.0, 1.0, 90, "#0f172a", "#1e293b", radius: 10)
+                .Rect(0.05, 0.55, 0.9, 0.2, stroke: 1, color: "#334155", radius: 6)
+                .Rect(0.05, 0.55, 0.9 * Value, 0.2, fill: "#22c55e", radius: 6)
+                .Line(0.05, 0.25, 0.95, 0.25, stroke: 1, color: "#ffffff22", dashOn: 4, dashOff: 4);
+        }
+    }
 }

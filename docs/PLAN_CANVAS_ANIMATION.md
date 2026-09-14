@@ -313,6 +313,30 @@ dotnet run --project samples/GpuiNetShell.Sample -- --check
 > 说明：keyframes 的标量当前驱动 opacity；`Presence` 仅用 transition（spring presence 未做）。
 > P7 可选：图片/SVG 绘制与 `ICanvasView` 糖。
 
+### P6 — 源生成器 Paint/Measure kind + 文档（已完成）
+- 生成器新增 `CallbackKind.Measure`：`string M(double, double)` → `ui.RegisterMeasure(M)`；
+  `Element M(RenderContext, IReadOnlyList<string>)`（`Paint`/`Prepaint` 语义）复用 `RegisterElement`。
+- managed `RenderContext.RegisterMeasure(Func<double,double,string>)`（内部经 `RegisterElement`
+  返回 `Text("w\th")`）；`CanvasElement.Measure(token)`。
+- native `ElementCallback::decode`（只解码不物化）；`Canvas` 的 `measure` 方法在
+  `request_layout` 用 `window.request_measured_layout` 调托管测量并解析返回的 `"w\th"`。
+- 文档：`GpuiCallbacks.cs` 签名列表；README 增补。
+
+### P7 — PaintImage（SVG）+ CanvasPainter / ICanvasView（已完成）
+- 组件 id：`PaintImage = 113`；schema `…6C5B → …6C5C`，ABI 保持 `8`。
+- native：`PaintCommand::Image` → `window.paint_svg`（`TransformationMatrix::unit()`，可 tint）；
+  `PaintCommand::paint` 增加 `cx` 参数；`PaintImage` materializer + `register_image`
+  （在 motion 之后注册以保持既有 id）。
+- managed：`PaintImageElement`/`RenderContext.PaintImage`；`CanvasPainter` + `CanvasBounds` +
+  `ICanvasView`（`RenderContext.Painter(id)`）。
+- sample：`CanvasPage` 增加 SVG 绘制、`Measure`（120 高）与 `GaugeView` 自定义视图。
+
+验证（P6+P7）：`cargo test` **81**；managed **79**；`--check` = abi 8 / schema
+`0x6E65747368656C5C`；生成代码核对含 `RegisterMeasure`；`CanvasPage`/`AnimationPage` 冒烟无报错。
+
+> 全阶段完成（P1–P7）。schema 最终为 `0x6E65747368656C5C`，ABI 保持 `8`。
+
+
 
 
 

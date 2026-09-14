@@ -1070,6 +1070,24 @@ public sealed class RenderContext
     private static string Joined(params string[] parts) =>
         string.Join(NativeProtocol.ConstructorArgSeparator, parts);
 
+    /// <summary>Declares an SVG painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintImageElement PaintImage(
+        PaintLength x,
+        PaintLength y,
+        PaintLength w,
+        PaintLength h,
+        string source
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(source);
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintImage);
+        _arena.SetNodeData(index, Joined(x.Wire, y.Wire, w.Wire, h.Wire, source));
+        return new PaintImageElement(this, index);
+    }
+
+    /// <summary>Starts a <see cref="CanvasPainter"/> over a new canvas.</summary>
+    public CanvasPainter Painter(string id) => new(this, Canvas(id));
+
     /// <summary>Declares an animated container whose targets are uploaded each render.</summary>
     public MotionElement Motion(string id, MotionSpec spec)
     {
@@ -1104,6 +1122,35 @@ public sealed class RenderContext
         spec.AppendTo(_arena, index);
         return new RevealElement(this, index);
     }
+
+    /// <summary>
+    /// Registers a canvas measure callback and returns its token. The callback
+    /// receives the available width and height and returns the desired size as
+    /// <c>"width\theight"</c>; pair it with <see cref="CanvasElement.Measure"/>.
+    /// </summary>
+    public ulong RegisterMeasure(Func<double, double, string> measure)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        return _events.RegisterElement(
+            (context, arguments) =>
+            {
+                var width = ParseLength(arguments, 0);
+                var height = ParseLength(arguments, 1);
+                return context.Text(measure(width, height));
+            }
+        );
+    }
+
+    private static double ParseLength(IReadOnlyList<string> arguments, int index) =>
+        arguments.Count > index
+        && double.TryParse(
+            arguments[index],
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var value
+        )
+            ? value
+            : 0;
 
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();

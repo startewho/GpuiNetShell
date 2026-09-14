@@ -144,6 +144,15 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
             return CallbackKind.Rows;
         }
         if (
+            returnType == "string"
+            && method.Parameters.Length == 2
+            && method.Parameters[0].Type.SpecialType == SpecialType.System_Double
+            && method.Parameters[1].Type.SpecialType == SpecialType.System_Double
+        )
+        {
+            return CallbackKind.Measure;
+        }
+        if (
             returnType == "GpuiNetShell.Elements.Element"
             && method.Parameters.Length == 3
             && method.Parameters[1].Type.ToDisplayString() == "GpuiNetShell.Rendering.RenderContext"
@@ -254,6 +263,7 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
                 $"ui.RegisterCallback(value => {method.MethodName}(value.String ?? string.Empty))",
             CallbackKind.Rows => $"ui.RegisterRows({method.MethodName})",
             CallbackKind.Element => $"ui.RegisterElement({method.MethodName})",
+            CallbackKind.Measure => $"ui.RegisterMeasure({method.MethodName})",
             CallbackKind.EntityView =>
                 $"ui.RegisterEntityView<{method.StateType}>({Literal(key)}, {method.MethodName})",
             _ => "0",
@@ -284,6 +294,8 @@ internal enum CallbackKind
     ActionString,
     Rows,
     Element,
+    /// <summary>A canvas measure: <c>string M(double availableWidth, double availableHeight)</c>.</summary>
+    Measure,
     /// <summary>An entity-view renderer: <c>Element M(TState, RenderContext, Context&lt;TState&gt;)</c>.</summary>
     EntityView,
 }

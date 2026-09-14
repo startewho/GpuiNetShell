@@ -51,6 +51,18 @@ source generator emits a `PageToken` and registers it with
 `ui.RegisterEntityView`, which `GalleryPage<TState>.Render` renders through
 `ui.Child(Entity, token)`.
 
+Native drawing and animation are first-class too. `ui.Canvas(id)` paints
+through GPUI's low-level API: `PaintRect`/`PaintLine`/`PaintPath` (a compact
+path DSL)/`PaintGradient`/`PaintShadow`/`PaintImage` are declarative paint
+commands replayed from the retained snapshot, and `Canvas.Prepaint(token)` lets
+managed code draw per frame against the canvas bounds. `HitRegion`s make a canvas
+clickable/hoverable (cursor, blocking, scroll), and `Canvas.Measure(token)`
+sizes it at layout time. `ui.Motion`/`ui.Presence`/`ui.Reveal` bind gpui-kit's
+motion system (`transition`/`spring`/`keyframes`) to managed targets; native
+interpolates and requests frames, so managed code is not involved per frame.
+`[GpuiCallback]` also infers a `Measure` kind
+(`string M(double, double)` → `ui.RegisterMeasure`).
+
 The overlay host (`src/root.rs`) wraps the content view and paints one sheet, a
 dialog stack, and a notification stack over it; the managed `GpuiApplication`
 drives them with `OpenDialog`, `OpenSheet`, `CloseDialog`, `CloseSheet`, and

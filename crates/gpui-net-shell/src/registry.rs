@@ -346,13 +346,10 @@ pub struct ElementCallback {
 }
 
 impl ElementCallback {
-    /// Renders the subtree for `arguments`, one callback argument per entry.
-    pub fn build(
-        &self,
-        arguments: &[String],
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Result<AnyElement, String> {
+    /// Renders the subtree for `arguments` and returns the decoded snapshot,
+    /// without materializing it. Used for measurement and for Canvas paint
+    /// commands, which interpret the nodes themselves.
+    pub fn decode(&self, arguments: &[String]) -> Result<Snapshot, String> {
         let Some(render) = self.host.callbacks.render_element else {
             return Err("the host has no render_element callback".into());
         };
@@ -375,8 +372,19 @@ impl ElementCallback {
         if status != crate::schema::STATUS_OK {
             return Err(format!("element callback failed with status {status}"));
         }
-        let snapshot = Snapshot::decode(&arena, root)
-            .map_err(|code| format!("element snapshot decode failed with status {code}"))?;
+        Snapshot::decode(&arena, root)
+            .map_err(|code| format!("element snapshot decode failed with status {code}"))
+    }
+
+    /// Renders the subtree for `arguments`, one callback argument per entry.
+    pub fn build(
+        &self,
+        arguments: &[String],
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<AnyElement, String> {
+        let snapshot = self.decode(arguments)?;
+        let root = snapshot.root;
         let factory = NodeFactory::new(&self.registry, Rc::new(snapshot), &self.host);
         factory.build(root, window, cx)
     }

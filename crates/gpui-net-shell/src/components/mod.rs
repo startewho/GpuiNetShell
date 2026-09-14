@@ -143,6 +143,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     canvas::register(registry);
     paint::register(registry);
     motion::register(registry);
+    paint::register_image(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -278,6 +279,7 @@ mod tests {
                 "Motion",
                 "Presence",
                 "Reveal",
+                "PaintImage",
             ]
         );
     }

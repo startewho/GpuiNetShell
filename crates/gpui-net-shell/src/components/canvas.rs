@@ -11,10 +11,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use gpui::{
-    point, size, AnyElement, App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId,
-    Hitbox, HitboxBehavior, HitboxId, InspectorElementId, IntoElement, LayoutId, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Refineable as _, ScrollDelta, ScrollWheelEvent,
-    SharedString, Style, StyleRefinement, Window,
+    point, size, AnyElement, App, AvailableSpace, Bounds, DispatchPhase, Element, ElementId,
+    GlobalElementId, Hitbox, HitboxBehavior, HitboxId, InspectorElementId, IntoElement, LayoutId,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Refineable as _, ScrollDelta,
+    ScrollWheelEvent, SharedString, Style, StyleRefinement, Window,
 };
 
 use crate::components::paint::{HitRegionSpec, PaintCommand};
@@ -27,12 +27,13 @@ use crate::registry::{
 use crate::typed_child::take_typed;
 
 /// Child component names a `Canvas` accepts.
-const CANVAS_CHILDREN: [&str; 6] = [
+const CANVAS_CHILDREN: [&str; 7] = [
     "PaintRect",
     "PaintLine",
     "PaintPath",
     "PaintGradient",
     "PaintShadow",
+    "PaintImage",
     "HitRegion",
 ];
 
@@ -45,6 +46,7 @@ struct CanvasPayload {
 enum CanvasOp {
     Clip,
     Prepaint(ComponentArgument),
+    Measure(ComponentArgument),
 }
 
 /// Per-frame state for click synthesis.
@@ -74,6 +76,7 @@ pub(crate) struct CanvasElement {
     commands: Vec<PaintCommand>,
     regions: Vec<HitRegionSpec>,
     prepaint_callback: Option<ElementCallback>,
+    measure_callback: Option<ElementCallback>,
     clip: bool,
     style: StyleRefinement,
     host: HostContext,
@@ -108,7 +111,13 @@ impl Element for CanvasElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.refine(&self.style);
-        let layout_id = window.request_layout(style.clone(), [], cx);
+        let layout_id = if let Some(measure) = self.measure_callback.clone() {
+            window.request_measured_layout(style.clone(), move |_known, available, _window, _cx| {
+                canvas_measure(&measure, available)
+            })
+        } else {
+            window.request_layout(style.clone(), [], cx)
+        };
         (layout_id, style)
     }
 
@@ -178,16 +187,16 @@ impl Element for CanvasElement {
     ) {
         let clip = self.clip;
         let commands = &prepaint.commands;
-        style.paint(bounds, window, cx, |window, _cx| {
-            let draw = |window: &mut Window| {
+        style.paint(bounds, window, cx, |window, cx| {
+            let draw = |window: &mut Window, cx: &mut App| {
                 for command in commands {
-                    command.paint(bounds, window);
+                    command.paint(bounds, window, cx);
                 }
             };
             if clip {
-                window.paint_layer(bounds, draw);
+                window.paint_layer(bounds, |window| draw(window, cx));
             } else {
-                draw(window);
+                draw(window, cx);
             }
         });
 
@@ -334,6 +343,37 @@ fn region_bounds(region: &HitRegionSpec, bounds: Bounds<Pixels>) -> Bounds<Pixel
     )
 }
 
+/// Asks the managed measure callback for a size, given the available space.
+/// The callback returns a `Text` node whose data is `"width\theight"`.
+fn canvas_measure(
+    callback: &ElementCallback,
+    available: gpui::Size<AvailableSpace>,
+) -> gpui::Size<Pixels> {
+    let definite = |space: AvailableSpace| match space {
+        AvailableSpace::Definite(pixels) => f32::from(pixels),
+        _ => 0.0,
+    };
+    let arguments = [
+        definite(available.width).to_string(),
+        definite(available.height).to_string(),
+    ];
+    callback
+        .decode(&arguments)
+        .ok()
+        .and_then(|snapshot| {
+            let node = snapshot.nodes.get(snapshot.root as usize)?;
+            parse_measure(&node.data)
+        })
+        .unwrap_or_else(|| size(gpui::px(0.0), gpui::px(0.0)))
+}
+
+fn parse_measure(data: &str) -> Option<gpui::Size<Pixels>> {
+    let mut parts = data.split('\t');
+    let width = parts.next()?.trim().parse::<f32>().ok()?;
+    let height = parts.next()?.trim().parse::<f32>().ok()?;
+    Some(size(gpui::px(width), gpui::px(height)))
+}
+
 /// Invokes a managed `invoke`-style callback with a string payload.
 fn invoke(host: &HostContext, token: u64, payload: &str) {
     if let Some(callback) = host.callbacks.invoke {
@@ -364,11 +404,15 @@ impl ComponentMaterializer for CanvasMaterializer {
             .clone();
         let mut clip = false;
         let mut prepaint_callback = None;
+        let mut measure_callback = None;
         for method in request.methods() {
             match method.payload().downcast_ref::<CanvasOp>() {
                 Some(CanvasOp::Clip) => clip = true,
                 Some(CanvasOp::Prepaint(argument)) => {
                     prepaint_callback = Some(request.resolve_element_callback(argument)?);
+                }
+                Some(CanvasOp::Measure(argument)) => {
+                    measure_callback = Some(request.resolve_element_callback(argument)?);
                 }
                 None => {}
             }
@@ -397,6 +441,7 @@ impl ComponentMaterializer for CanvasMaterializer {
             commands,
             regions,
             prepaint_callback,
+            measure_callback,
             clip,
             style,
             host,
@@ -440,6 +485,23 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     .with_documentation(
                         "Runs each prepaint with the canvas bounds and returns paint commands \
                          and hit regions.",
+                    ),
+                    MethodDescriptor::new(
+                        "measure",
+                        vec![ArgumentDescriptor::new(
+                            "callback",
+                            ArgumentSchema::Callback,
+                        )],
+                        |arguments| match arguments {
+                            [argument @ ComponentArgument::Callback(_)] => {
+                                Ok(ComponentPayload::new(CanvasOp::Measure(argument.clone())))
+                            }
+                            _ => Err("Canvas.measure(callback) expects a callback".into()),
+                        },
+                    )
+                    .with_documentation(
+                        "Measures the canvas at layout time; the callback returns a `Text` node \
+                         whose data is `width\\theight`.",
                     ),
                 ])
                 .with_documentation(

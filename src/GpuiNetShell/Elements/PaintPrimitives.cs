@@ -168,3 +168,17 @@ public sealed class PaintShadowElement : PaintElement
         return this;
     }
 }
+
+/// <summary>An SVG painted on a canvas.</summary>
+public sealed class PaintImageElement : PaintElement
+{
+    internal PaintImageElement(RenderContext ui, int index)
+        : base(ui, index) { }
+
+    /// <summary>Tints the SVG.</summary>
+    public PaintImageElement Tint(string color)
+    {
+        Arena.AddMethodString(Index, "tint", color);
+        return this;
+    }
+}
