@@ -22,6 +22,9 @@ public sealed class GpuiCallbacksAttribute : Attribute { }
 /// <item><c>void M(bool|double|string)</c> — typed action.</item>
 /// <item><c>string M()</c> — row-snapshot provider.</item>
 /// <item><c>Element M(RenderContext, IReadOnlyList&lt;string&gt;)</c> — element renderer.</item>
+/// <item><c>Element M(TState, RenderContext, Context&lt;TState&gt;)</c> — entity view;
+/// register with <c>RegisterEntityView</c> and render through
+/// <c>ui.Child(entity, token)</c>.</item>
 /// </list>
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false)]

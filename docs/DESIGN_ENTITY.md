@@ -198,6 +198,32 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 
 三者可混用：Props 传不可变数据，Entity 传可变共享状态，委托传一次性动作。
 
+### 4.6 源生成器整合：实体视图 token
+
+`[GpuiCallback]` 支持第四种签名——**实体视图**：
+
+```csharp
+[GpuiCallbacks]
+internal sealed partial class ButtonPage : GalleryPage<ButtonPage.State>
+{
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);   // 生成器方法
+        return PageToken;                     // 生成的 token 属性
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) => ...;
+}
+```
+
+生成器识别 `Element M(TState, RenderContext, Context<TState>)`，产出 `PageToken` 并在
+`RegisterGeneratedCallbacks` 中调用 `ui.RegisterEntityView<TState>("<ns>.<Class>.<Method>", M)`。
+base `GalleryPage<TState>.Render` 再 `ui.Child(Entity, RegisterPageCallbacks(ref ui))`。
+`RegisterEntityView` 按名字键做**持久**注册（跨 generation、同键替换），渲染时从原生传入的
+entity id 反查状态并调用 `M`。未标注的页面走默认 `RenderState` 路径（同样经
+`RegisterEntityView`，键为类型全名），二者兼容。
+
 ---
 
 ## 5. 与原生/ABI 的衔接
@@ -281,10 +307,11 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 | P4 | 原生实体子树：`COMPONENT_ENTITY_HOST` + `render_entity` + `notify_entity`（ABI bump） | 实体级局部重渲染 | ✅ |
 | P5 | Sample：`EntityPage`（计数器 + 列表选择 + 父子同步）+ 文档 | 可运行示例 | ✅ |
 | P6 | （可选）`cx.Spawn` / 全局状态 | 后台结果回 UI 线程；`GlobalStore` | ✅ |
+| P7 | 源生成器：为实体视图生成 token（`[GpuiCallback]` 实体视图签名 + `RegisterEntityView`） | `PageToken` 自动注册 | ✅ |
 
 每阶段：`cargo test/fmt/clippy` + `dotnet build/test` + `--check` + 冒烟。
 
-> 实测：`cargo test` 74 通过、`dotnet test` 68 通过（3 个需 manifest 的 native 测试跳过）、
+> 实测：`cargo test` 74 通过、`dotnet test` 70 通过（3 个需 manifest 的 native 测试跳过）、
 > `dotnet run -- --check` 报 abi 8 / schema `0x6E65747368656C56`。
 
 ---
@@ -293,7 +320,8 @@ parentCtx.Emit(new ItemPicked(id));      // 或 cx.Entity 内部 emit
 
 > 已按下列选择落地：范围做到 P6（含后台 `Spawn` 与全局状态）；命名用 `New<T>` /
 > `Child(entity, render)` / `Context<T>`；父子默认「共享 Entity + 回调」；
-> 实体状态严格 GPUI 单线程；接受 ABI 8 / schema `…6C56`；本轮不整合源生成器。
+> 实体状态严格 GPUI 单线程；接受 ABI 8 / schema `…6C56`；**源生成器整合**：P7 已实现，
+> `[GpuiCallback]` 实体视图签名生成 `PageToken`（见 §4.6）。
 
 1. **范围**：先做纯托管 P1–P3（不改 ABI），还是直接到 P4（真·实体级局部重渲染）？
 2. **API 命名**：`App.New<T>` / `ui.Child(entity, render)` / `Context<T>` 是否符合你的偏好？是否要更贴近 GPUI 的 `cx.new`/`entity.update` 英文命名？

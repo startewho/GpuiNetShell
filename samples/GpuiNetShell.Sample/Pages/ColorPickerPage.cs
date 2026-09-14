@@ -4,7 +4,8 @@ using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ColorPickerPage : GalleryPage<ColorPickerPage.State>
+[GpuiCallbacks]
+internal sealed partial class ColorPickerPage : GalleryPage<ColorPickerPage.State>
 {
     internal sealed class State
     {
@@ -13,7 +14,14 @@ internal sealed class ColorPickerPage : GalleryPage<ColorPickerPage.State>
 
     public override string Title => "ColorPicker";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "ColorPicker",

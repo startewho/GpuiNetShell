@@ -4,7 +4,8 @@ using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class VirtualListPage : GalleryPage<VirtualListPage.State>
+[GpuiCallbacks]
+internal sealed partial class VirtualListPage : GalleryPage<VirtualListPage.State>
 {
     private const int VerticalCount = 100_000;
     private const int HorizontalCount = 1_000;
@@ -32,7 +33,14 @@ internal sealed class VirtualListPage : GalleryPage<VirtualListPage.State>
 
     public override string Title => "Virtual List";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) =>
         ui.VStack(
                 Section(
                     ref ui,

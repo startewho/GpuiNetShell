@@ -70,7 +70,11 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
             {
                 continue;
             }
-            methods.Add(new CallbackMethod(method.Name, name + "Token", kind.Value));
+            string stateType =
+                kind == CallbackKind.EntityView
+                    ? method.Parameters[0].Type.ToDisplayString()
+                    : string.Empty;
+            methods.Add(new CallbackMethod(method.Name, name + "Token", kind.Value, stateType));
         }
 
         string accessibility = type.DeclaredAccessibility switch
@@ -141,6 +145,15 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
         }
         if (
             returnType == "GpuiNetShell.Elements.Element"
+            && method.Parameters.Length == 3
+            && method.Parameters[1].Type.ToDisplayString() == "GpuiNetShell.Rendering.RenderContext"
+            && IsContextOf(method.Parameters[2].Type, method.Parameters[0].Type)
+        )
+        {
+            return CallbackKind.EntityView;
+        }
+        if (
+            returnType == "GpuiNetShell.Elements.Element"
             && method.Parameters.Length == 2
             && method.Parameters[1].Type.ToDisplayString()
                 == "System.Collections.Generic.IReadOnlyList<string>"
@@ -149,6 +162,26 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
             return CallbackKind.Element;
         }
         return null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="type"/> is <c>Context&lt;T&gt;</c> instantiated
+    /// with the same state type as the entity view's first parameter.
+    /// </summary>
+    private static bool IsContextOf(ITypeSymbol type, ITypeSymbol state)
+    {
+        if (type is not INamedTypeSymbol named || named.TypeArguments.Length != 1)
+        {
+            return false;
+        }
+        if (
+            named.Name != "Context"
+            || named.ContainingNamespace.ToDisplayString() != "GpuiNetShell.Entities"
+        )
+        {
+            return false;
+        }
+        return SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], state);
     }
 
     private static void Emit(SourceProductionContext context, CallbackClass model)
@@ -193,7 +226,7 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
                 .Append("        ")
                 .Append(method.TokenName)
                 .Append(" = ")
-                .Append(Registration(method))
+                .Append(Registration(method, Key(model, method)))
                 .AppendLine(";");
         }
         builder.AppendLine("    }");
@@ -209,7 +242,7 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
         );
     }
 
-    private static string Registration(CallbackMethod method) =>
+    private static string Registration(CallbackMethod method, string key) =>
         method.Kind switch
         {
             CallbackKind.Action => $"ui.RegisterCallback({method.MethodName})",
@@ -221,8 +254,21 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
                 $"ui.RegisterCallback(value => {method.MethodName}(value.String ?? string.Empty))",
             CallbackKind.Rows => $"ui.RegisterRows({method.MethodName})",
             CallbackKind.Element => $"ui.RegisterElement({method.MethodName})",
+            CallbackKind.EntityView =>
+                $"ui.RegisterEntityView<{method.StateType}>({Literal(key)}, {method.MethodName})",
             _ => "0",
         };
+
+    /// <summary>A stable, session-unique key for one entity-view method.</summary>
+    private static string Key(CallbackClass model, CallbackMethod method) =>
+        (model.Namespace.Length == 0 ? string.Empty : model.Namespace + ".")
+        + model.ClassName
+        + "."
+        + method.MethodName;
+
+    /// <summary>A C# string literal for <paramref name="value"/>.</summary>
+    private static string Literal(string value) =>
+        "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     private static string HintName(CallbackClass model) =>
         model.Namespace.Length == 0
@@ -238,12 +284,15 @@ internal enum CallbackKind
     ActionString,
     Rows,
     Element,
+    /// <summary>An entity-view renderer: <c>Element M(TState, RenderContext, Context&lt;TState&gt;)</c>.</summary>
+    EntityView,
 }
 
 internal readonly record struct CallbackMethod(
     string MethodName,
     string TokenName,
-    CallbackKind Kind
+    CallbackKind Kind,
+    string StateType
 );
 
 internal readonly record struct CallbackClass(

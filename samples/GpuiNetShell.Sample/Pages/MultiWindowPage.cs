@@ -9,7 +9,8 @@ namespace GpuiNetShell.Sample.Pages;
 /// independent session with its own view, state, and title-bar mode: a window
 /// can inherit the primary window's custom title bar or use the system one.
 /// </summary>
-internal sealed class MultiWindowPage : GalleryPage<MultiWindowPage.State>
+[GpuiCallbacks]
+internal sealed partial class MultiWindowPage : GalleryPage<MultiWindowPage.State>
 {
     internal sealed class State
     {
@@ -20,7 +21,14 @@ internal sealed class MultiWindowPage : GalleryPage<MultiWindowPage.State>
 
     public override string Title => "Multi-Window";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx)
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx)
     {
         var rows = new List<Element>(state.Windows.Count);
         for (var i = 0; i < state.Windows.Count; i++)

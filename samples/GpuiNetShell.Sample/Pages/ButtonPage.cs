@@ -4,7 +4,8 @@ using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class ButtonPage : GalleryPage<ButtonPage.State>
+[GpuiCallbacks]
+internal sealed partial class ButtonPage : GalleryPage<ButtonPage.State>
 {
     internal sealed class State
     {
@@ -13,7 +14,16 @@ internal sealed class ButtonPage : GalleryPage<ButtonPage.State>
 
     public override string Title => "Button";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
+    // The source generator produced `PageToken` and registered `RenderPage` as
+    // this page's entity-view renderer; the base renders `ui.Child(Entity, token)`.
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Button",

@@ -895,8 +895,6 @@ public sealed class RenderContext
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(render);
         var id = entity.Id.Value;
-        var index = _arena.AddNode(NativeProtocol.ComponentEntityHost);
-        _arena.SetNodeData(index, id.ToString(CultureInfo.InvariantCulture));
         var token = _events.RegisterPersistentElement(
             id,
             (context, _) =>
@@ -905,6 +903,66 @@ public sealed class RenderContext
                 return render(state, context, cx);
             }
         );
+        return EmitEntityHost(id, token);
+    }
+
+    /// <summary>
+    /// Declares a retained subtree whose renderer is the entity view already
+    /// registered under <paramref name="token"/> (usually a source-generated
+    /// <c>[GpuiCallback]</c> token). The renderer reads the entity's live state
+    /// from the entity id the native host passes it.
+    /// </summary>
+    public EntityHostElement Child<T>(Entity<T> entity, ulong token)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        return EmitEntityHost(entity.Id.Value, token);
+    }
+
+    /// <summary>
+    /// Registers an entity-view renderer under a stable <paramref name="key"/>
+    /// and returns its token. The renderer is invoked with the entity's current
+    /// state, resolved from the entity id the native host passes as the first
+    /// argument. This is what a generated <c>[GpuiCallback]</c> entity view
+    /// registers; pair the returned token with <see cref="Child{T}(Entity{T}, ulong)"/>.
+    /// </summary>
+    public ulong RegisterEntityView<TState>(
+        string key,
+        Func<TState, RenderContext, Context<TState>, Element> render
+    )
+        where TState : class
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(render);
+        return _events.RegisterEntityView(
+            key,
+            (context, arguments) =>
+            {
+                if (
+                    arguments.Count == 0
+                    || !ulong.TryParse(
+                        arguments[0],
+                        NumberStyles.None,
+                        CultureInfo.InvariantCulture,
+                        out var id
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"Entity view '{key}' expects an entity id argument."
+                    );
+                }
+                var state = EntityRegistry.Default.Read<TState>(id);
+                var cx = new Context<TState>(EntityRegistry.Default, id);
+                return render(state, context, cx);
+            }
+        );
+    }
+
+    private EntityHostElement EmitEntityHost(ulong id, ulong token)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentEntityHost);
+        _arena.SetNodeData(index, id.ToString(CultureInfo.InvariantCulture));
         _events.MarkEntityRendered(id);
         _arena.AddCallback(index, "render_entity", token);
         return new EntityHostElement(this, index);

@@ -4,7 +4,8 @@ using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class CollapsiblePage : GalleryPage<CollapsiblePage.State>
+[GpuiCallbacks]
+internal sealed partial class CollapsiblePage : GalleryPage<CollapsiblePage.State>
 {
     internal sealed class State
     {
@@ -13,7 +14,14 @@ internal sealed class CollapsiblePage : GalleryPage<CollapsiblePage.State>
 
     public override string Title => "Collapsible";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Collapsible",

@@ -143,4 +143,24 @@ public sealed class EventRegistryTests
         registry.BeginGeneration(2);
         Assert.False(registry.RendersEntity(3));
     }
+
+    [Fact]
+    public void EntityViewsReplaceByKeyAndOutliveGenerations()
+    {
+        var registry = new EventRegistry();
+
+        var first = registry.RegisterEntityView("view", (context, _) => context.Label("a"));
+        Assert.True(registry.TryGetElement(first, out _));
+
+        registry.BeginGeneration(2);
+        registry.Retire(1);
+
+        // Entity views are keyed by name, not generation, so they persist.
+        Assert.True(registry.TryGetElement(first, out _));
+
+        var second = registry.RegisterEntityView("view", (context, _) => context.Label("b"));
+        Assert.NotEqual(first, second);
+        Assert.False(registry.TryGetElement(first, out _));
+        Assert.True(registry.TryGetElement(second, out _));
+    }
 }

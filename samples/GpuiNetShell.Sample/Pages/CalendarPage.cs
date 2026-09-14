@@ -4,7 +4,8 @@ using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Sample.Pages;
 
-internal sealed class CalendarPage : GalleryPage<CalendarPage.State>
+[GpuiCallbacks]
+internal sealed partial class CalendarPage : GalleryPage<CalendarPage.State>
 {
     internal sealed class State
     {
@@ -13,7 +14,14 @@ internal sealed class CalendarPage : GalleryPage<CalendarPage.State>
 
     public override string Title => "Calendar";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx) =>
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx) =>
         Page(
             ref ui,
             "Calendar",

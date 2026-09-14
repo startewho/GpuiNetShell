@@ -74,8 +74,24 @@ internal abstract class GalleryPage<TState> : GalleryPage
     }
 
     public sealed override Element Render(ref RenderContext ui) =>
-        ui.Child(Entity, (state, context, cx) => RenderState(state, context, cx));
+        ui.Child(Entity, RegisterPageCallbacks(ref ui));
 
-    /// <summary>Describes this page's content from its entity state.</summary>
-    protected abstract Element RenderState(TState state, RenderContext ui, Context<TState> cx);
+    /// <summary>
+    /// Registers this page's entity-view renderer and returns its token. The
+    /// default renders <see cref="RenderState"/>. A source-generated page
+    /// overrides this to call <c>RegisterGeneratedCallbacks</c> and return the
+    /// generated entity-view token instead.
+    /// </summary>
+    protected virtual ulong RegisterPageCallbacks(ref RenderContext ui) =>
+        ui.RegisterEntityView<TState>(
+            GetType().FullName ?? GetType().Name,
+            (state, context, cx) => RenderState(state, context, cx)
+        );
+
+    /// <summary>
+    /// Describes this page's content from its entity state. Pages that register
+    /// a generated entity-view token do not need to override this.
+    /// </summary>
+    protected virtual Element RenderState(TState state, RenderContext ui, Context<TState> cx) =>
+        ui.Div();
 }

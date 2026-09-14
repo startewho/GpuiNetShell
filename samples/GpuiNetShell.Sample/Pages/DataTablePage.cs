@@ -21,12 +21,18 @@ internal sealed partial class DataTablePage : GalleryPage<DataTablePage.State>
 
     public override string Title => "DataTable";
 
-    protected override Element RenderState(State state, RenderContext ui, Context<State> cx)
+    protected override ulong RegisterPageCallbacks(ref RenderContext ui)
     {
-        // The source generator registered `RenderRowCell` and produced
-        // `RenderCellToken`; the table asks managed code for one row index at a
-        // time and this page's list stays in C#.
         RegisterGeneratedCallbacks(ref ui);
+        return PageToken;
+    }
+
+    // The source generator produced `RenderCellToken` and `PageToken`; the table
+    // asks managed code for one row index at a time and this page's list stays
+    // in C#.
+    [GpuiCallback("Page")]
+    private Element RenderPage(State state, RenderContext ui, Context<State> cx)
+    {
         return Page(
             ref ui,
             "DataTable",

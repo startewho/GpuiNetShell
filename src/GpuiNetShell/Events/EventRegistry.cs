@@ -27,6 +27,9 @@ public sealed class EventRegistry
     // An entity-backed subtree is retained natively, so its renderer is not
     // generation-scoped: it is keyed by entity id and replaced in place.
     private readonly Dictionary<ulong, ulong> _persistentElements = [];
+    // Entity-view renderers are keyed by a stable name (the generated callback
+    // key) so re-registering the same view replaces its token.
+    private readonly Dictionary<string, ulong> _entityViews = [];
     private readonly HashSet<ulong> _renderedEntities = [];
     private ulong _next = 1;
     private ulong _generation;
@@ -153,6 +156,29 @@ public sealed class EventRegistry
         }
     }
 
+    /// <summary>
+    /// Registers an entity-view renderer under a stable <paramref name="key"/>
+    /// (the generated callback key), replacing any previous registration for
+    /// that key. The renderer receives the native argument list, whose first
+    /// entry is the entity id.
+    /// </summary>
+    public ulong RegisterEntityView(
+        string key,
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(renderer);
+        if (_entityViews.TryGetValue(key, out var previous))
+        {
+            _elementRenderers.Remove(previous);
+        }
+        var token = _next++;
+        _elementRenderers[token] = renderer;
+        _entityViews[key] = token;
+        return token;
+    }
+
     /// <summary>Notes that <paramref name="entityId"/> was rendered this generation.</summary>
     public void MarkEntityRendered(ulong entityId) => _renderedEntities.Add(entityId);
 
@@ -197,6 +223,7 @@ public sealed class EventRegistry
         _elementRenderers.Clear();
         _generations.Clear();
         _persistentElements.Clear();
+        _entityViews.Clear();
         _renderedEntities.Clear();
         _next = 1;
         _generation = 0;

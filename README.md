@@ -45,7 +45,11 @@ A managed `Entity<T>` renders as a retained native `EntityHost` subtree via
 force a full repaint; only an explicit `Context.Notify()` repaints that subtree
 through the native `notify_entity` ingress. The sample gallery uses this for
 every stateful page (`GalleryPage<TState>`), so an interaction rebuilds one page
-subtree instead of the whole window.
+subtree instead of the whole window. A `[GpuiCallback]` method with signature
+`Element M(TState, RenderContext, Context<TState>)` is an **entity view**: the
+source generator emits a `PageToken` and registers it with
+`ui.RegisterEntityView`, which `GalleryPage<TState>.Render` renders through
+`ui.Child(Entity, token)`.
 
 The overlay host (`src/root.rs`) wraps the content view and paints one sheet, a
 dialog stack, and a notification stack over it; the managed `GpuiApplication`

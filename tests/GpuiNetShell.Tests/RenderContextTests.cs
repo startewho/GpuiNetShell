@@ -797,6 +797,55 @@ public sealed unsafe class RenderContextTests
         Assert.Equal("count=3", DecodePacked(labelData, innerUtf8));
     }
 
+    [Fact]
+    public void EntityViewTokenRendersFromTheEntity()
+    {
+        using var arena = new RenderArena();
+        var events = new EventRegistry();
+        var ui = new RenderContext(arena, events, () => { });
+        var counter = EntityRegistry.Default.Create<EntityState>(
+            _ => new EntityState { Count = 9 }
+        );
+
+        try
+        {
+            var token = ui.RegisterEntityView<EntityState>(
+                "tests.entity-view",
+                (state, context, _) => context.Label($"v={state.Count}")
+            );
+            ui.Child(counter, token);
+
+            var descriptor = arena.Publish();
+            Assert.Equal(1u, descriptor.NodesLen);
+            Assert.Equal((uint)NativeProtocol.ComponentEntityHost, descriptor.Nodes[0].Component);
+            Assert.Equal(1u, descriptor.OpsLen);
+            Assert.Equal(token, descriptor.Ops[0].B);
+
+            // The registered renderer resolves the entity from the id argument.
+            Assert.True(events.TryGetElement(token, out var renderer));
+            using var innerArena = new RenderArena();
+            var inner = new RenderContext(innerArena, events, () => { });
+            var subtree = renderer!(
+                inner,
+                [counter.Id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]
+            );
+            Assert.IsType<LabelElement>(subtree);
+
+            var innerBytes = innerArena.Publish();
+            var innerUtf8 = new ReadOnlySpan<byte>(
+                innerBytes.Utf8,
+                checked((int)innerBytes.Utf8Len)
+            );
+            var labelData =
+                ((ulong)innerBytes.Nodes[0].DataOffset << 32) | innerBytes.Nodes[0].DataLen;
+            Assert.Equal("v=9", DecodePacked(labelData, innerUtf8));
+        }
+        finally
+        {
+            EntityRegistry.Default.Release(counter.Id.Value);
+        }
+    }
+
     private sealed class EntityState
     {
         public int Count { get; set; }
