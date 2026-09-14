@@ -921,6 +921,46 @@ public sealed unsafe class RenderContextTests
         Assert.Contains(NativeProtocol.OpCallback, regionCallbacks);
     }
 
+    [Fact]
+    public void HitRegionRecordsCursorAndEventCallbacks()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Canvas("c")
+            .Add(
+                ui.HitRegion("bar", 0.1, 0.0, 0.2, 1.0)
+                    .Cursor(CursorKind.Pointer)
+                    .BlockMouseExceptScroll()
+                    .OnClick(() => { })
+                    .OnHoverEnter(() => { })
+                    .OnMove((_, _) => { })
+                    .OnScroll((_, _) => { })
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal((uint)NativeProtocol.ComponentHitRegion, descriptor.Nodes[1].Component);
+
+        var callbacks = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Where(index =>
+                descriptor.Ops[index].Node == 1
+                && descriptor.Ops[index].Code == NativeProtocol.OpCallback
+            )
+            .ToArray();
+        Assert.Equal(4, callbacks.Length);
+
+        var methods = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Where(index =>
+                descriptor.Ops[index].Node == 1
+                && descriptor.Ops[index].Code == NativeProtocol.OpMethod
+            )
+            .ToArray();
+        // cursor + block_mouse_except_scroll
+        Assert.Equal(2, methods.Length);
+    }
+
     private sealed class EntityState
     {
         public int Count { get; set; }

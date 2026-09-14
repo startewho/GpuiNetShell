@@ -41,6 +41,25 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
                 .Prepaint(PlotToken)
                 .Add(
                     ui.HitRegion("left", 0.0, 0.0, 0.5, 1.0)
+                        .Cursor(CursorKind.Pointer)
+                        .OnHoverEnter(() =>
+                            Update(
+                                (s, c) =>
+                                {
+                                    s.Last = "hover left";
+                                    c.Notify();
+                                }
+                            )
+                        )
+                        .OnHoverExit(() =>
+                            Update(
+                                (s, c) =>
+                                {
+                                    s.Last = "(none)";
+                                    c.Notify();
+                                }
+                            )
+                        )
                         .OnClick(() =>
                             Update(
                                 (s, c) =>
@@ -52,6 +71,7 @@ internal sealed partial class CanvasPage : GalleryPage<CanvasPage.State>
                             )
                         ),
                     ui.HitRegion("right", 0.5, 0.0, 0.5, 1.0)
+                        .Cursor(CursorKind.Pointer)
                         .OnClick(() =>
                             Update(
                                 (s, c) =>

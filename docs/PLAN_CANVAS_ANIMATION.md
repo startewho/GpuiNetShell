@@ -249,4 +249,27 @@ dotnet run --project samples/GpuiNetShell.Sample -- --check
 > 说明：动态 prepaint 是本设计唯一的每帧跨界路径；`CanvasPage` 每帧经
 > `render_element` 触发一次托管绘制回调，返回指令后由 native 重放。
 
+### P3 — 动态区域 + hover/press/move/scroll + cursor + 遮挡（已完成）
+- 组件 id 不变（仅给 `HitRegion` 增加方法）；schema `…6C58 → …6C59`，ABI 保持 `8`。
+- native `paint.rs`：`HitRegionSpec` 增加 `block_scroll`、`cursor`、`hover_enter/exit`、
+  `press/release`、`on_move`、`scroll` token；`cursor` 名字映射 `CursorStyle`；
+  新增方法描述符与 `region_callback_method`。
+- native `canvas.rs`：
+  - 命中行为 `Normal`/`BlockMouse`/`BlockMouseExceptScroll`；
+  - `MouseDown`→press、`MouseUp`→release+click、`MouseMove`→hover enter/exit + move、
+    `ScrollWheel`→scroll；keyed `HoverState`（按 region id）避免 per-frame hitbox id 变化；
+  - `cursor` 在 paint 阶段对 hover 命中的区域 `set_cursor_style`；
+  - 事件经 `invoke(token, CALLBACK_VALUE_STRING, payload)` 回投，payload 为
+    `id` 或 `id\tx\ty` / `id\tdx\tdy`。
+- managed：`HitRegionElement` 增加 `OnHoverEnter/Exit/OnPress/OnRelease/OnMove/OnScroll`、
+  `Cursor(CursorKind)`、`BlockMouseExceptScroll`；`CursorKind` 枚举。
+- sample：`CanvasPage` 区域加 `Cursor(Pointer)` 与 hover enter/exit 演示。
+- 测试：managed `HitRegionRecordsCursorAndEventCallbacks`。
+- 验证：`cargo test` 78；managed 76；`--check` = abi 8 / schema `0x6E65747368656C59`；
+  `CanvasPage` 冒烟无报错。
+
+> 备注：hover/move/scroll 是事件驱动的跨界（非每帧）；`on_move` 在指针移动时触发，
+> 若托管在回调里 `Notify`/`Invalidate`，移动期间会持续重绘，示例只对 hover 进出重绘。
+
+
 

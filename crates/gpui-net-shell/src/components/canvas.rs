@@ -1,18 +1,20 @@
 //! `Canvas`: a self-painted surface with optional per-frame prepaint and
-//! clickable regions.
+//! clickable/hoverable regions.
 //!
 //! A `Canvas` does not lay out its children. Each child is a paint primitive
 //! (see [`crate::components::paint`]) or a `HitRegion`; the canvas resolves
 //! their coordinates against its own bounds, replays the paint primitives in
-//! the paint phase (first declared paints underneath), and routes clicks on the
-//! regions back to managed callbacks.
+//! the paint phase (first declared paints underneath), and routes mouse events
+//! on the regions back to managed callbacks.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use gpui::{
     point, size, AnyElement, App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId,
     Hitbox, HitboxBehavior, HitboxId, InspectorElementId, IntoElement, LayoutId, MouseDownEvent,
-    MouseUpEvent, Pixels, Refineable as _, SharedString, Style, StyleRefinement, Window,
+    MouseMoveEvent, MouseUpEvent, Pixels, Refineable as _, ScrollDelta, ScrollWheelEvent,
+    SharedString, Style, StyleRefinement, Window,
 };
 
 use crate::components::paint::{HitRegionSpec, PaintCommand};
@@ -51,15 +53,22 @@ struct ClickState {
     down: Option<HitboxId>,
 }
 
+/// Regions currently hovered, keyed by region id (hitbox ids change per frame).
+#[derive(Default)]
+struct HoverState {
+    hovered: HashSet<SharedString>,
+}
+
 struct RegionHit {
     hitbox: Hitbox,
-    click: Option<u64>,
+    spec: HitRegionSpec,
 }
 
 pub(crate) struct CanvasPrepaint {
     commands: Vec<PaintCommand>,
     hits: Vec<RegionHit>,
 }
+
 pub(crate) struct CanvasElement {
     id: SharedString,
     commands: Vec<PaintCommand>,
@@ -143,13 +152,15 @@ impl Element for CanvasElement {
             let rect = region_bounds(&region, bounds);
             let behavior = if region.block_mouse {
                 HitboxBehavior::BlockMouse
+            } else if region.block_scroll {
+                HitboxBehavior::BlockMouseExceptScroll
             } else {
                 HitboxBehavior::Normal
             };
             let hitbox = window.insert_hitbox(rect, behavior);
             hits.push(RegionHit {
                 hitbox,
-                click: region.click,
+                spec: region,
             });
         }
         CanvasPrepaint { commands, hits }
@@ -181,21 +192,45 @@ impl Element for CanvasElement {
         });
 
         let host = self.host.clone();
-        let key = ElementId::Name(SharedString::from(format!("canvas-click:{}", self.id)));
-        let click_state = window.use_keyed_state(key, cx, |_window, _cx| ClickState::default());
+        let click_key = ElementId::Name(SharedString::from(format!("canvas-click:{}", self.id)));
+        let hover_key = ElementId::Name(SharedString::from(format!("canvas-hover:{}", self.id)));
+        let click_state =
+            window.use_keyed_state(click_key, cx, |_window, _cx| ClickState::default());
+        let hover_state =
+            window.use_keyed_state(hover_key, cx, |_window, _cx| HoverState::default());
+
         for hit in &prepaint.hits {
+            let region_id = SharedString::from(hit.spec.id.clone());
+
+            if let Some(cursor) = hit.spec.cursor {
+                if hit.hitbox.id.is_hovered(window) {
+                    window.set_cursor_style(cursor, &hit.hitbox);
+                }
+            }
+
+            // Press + arm click.
             let down_hitbox = hit.hitbox.clone();
+            let press = hit.spec.press;
+            let region = region_id.clone();
+            let host_down = host.clone();
             let state = click_state.clone();
             window.on_mouse_event(move |_event: &MouseDownEvent, phase, window, cx| {
-                if phase == DispatchPhase::Bubble && down_hitbox.id.is_hovered(window) {
-                    state.update(cx, |state, _| state.down = Some(down_hitbox.id));
+                if phase != DispatchPhase::Bubble || !down_hitbox.id.is_hovered(window) {
+                    return;
+                }
+                state.update(cx, |state, _| state.down = Some(down_hitbox.id));
+                if let Some(token) = press {
+                    invoke(&host_down, token, region.as_ref());
                 }
             });
 
+            // Release + click.
             let up_hitbox = hit.hitbox.clone();
-            let token = hit.click;
+            let release = hit.spec.release;
+            let click_token = hit.spec.click;
+            let region = region_id.clone();
+            let host_up = host.clone();
             let state = click_state.clone();
-            let host = host.clone();
             window.on_mouse_event(move |_event: &MouseUpEvent, phase, window, cx| {
                 if phase != DispatchPhase::Bubble || state.read(cx).down != Some(up_hitbox.id) {
                     return;
@@ -204,16 +239,85 @@ impl Element for CanvasElement {
                 if !up_hitbox.id.is_hovered(window) {
                     return;
                 }
-                if let Some(token) = token {
-                    if let Some(click) = host.callbacks.click {
+                if let Some(token) = release {
+                    invoke(&host_up, token, region.as_ref());
+                }
+                if let Some(token) = click_token {
+                    if let Some(click) = host_up.callbacks.click {
                         // SAFETY: the managed callback copies anything it keeps.
                         unsafe {
-                            let _ = click(host.session_id, token);
+                            let _ = click(host_up.session_id, token);
                         }
                     }
                 }
-                (host.invalidate)(cx);
+                (host_up.invalidate)(cx);
             });
+
+            // Hover enter/exit + move.
+            if hit.spec.hover_enter.is_some()
+                || hit.spec.hover_exit.is_some()
+                || hit.spec.on_move.is_some()
+            {
+                let move_hitbox = hit.hitbox.clone();
+                let region = region_id.clone();
+                let enter = hit.spec.hover_enter;
+                let exit = hit.spec.hover_exit;
+                let move_token = hit.spec.on_move;
+                let host_move = host.clone();
+                let state = hover_state.clone();
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                    if phase != DispatchPhase::Bubble {
+                        return;
+                    }
+                    let hovered = move_hitbox.id.is_hovered(window);
+                    let was = state.read(cx).hovered.contains(&region);
+                    if hovered && !was {
+                        let id = region.clone();
+                        state.update(cx, |state, _| {
+                            state.hovered.insert(id);
+                        });
+                        if let Some(token) = enter {
+                            invoke(&host_move, token, region.as_ref());
+                        }
+                    } else if !hovered && was {
+                        let id = region.clone();
+                        state.update(cx, |state, _| {
+                            state.hovered.remove(&id);
+                        });
+                        if let Some(token) = exit {
+                            invoke(&host_move, token, region.as_ref());
+                        }
+                    }
+                    if hovered {
+                        if let Some(token) = move_token {
+                            let x = f32::from(event.position.x);
+                            let y = f32::from(event.position.y);
+                            invoke(&host_move, token, &format!("{}\t{x}\t{y}", region.as_ref()));
+                        }
+                    }
+                });
+            }
+
+            // Scroll.
+            if let Some(scroll_token) = hit.spec.scroll {
+                let scroll_hitbox = hit.hitbox.clone();
+                let region = region_id.clone();
+                let host_scroll = host.clone();
+                window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, _cx| {
+                    if phase != DispatchPhase::Bubble || !scroll_hitbox.id.is_hovered(window) {
+                        return;
+                    }
+                    let (dx, dy) = match event.delta {
+                        ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
+                        ScrollDelta::Lines(point) => (point.x, point.y),
+                    };
+                    invoke(
+                        &host_scroll,
+                        scroll_token,
+                        &format!("{}\t{dx}\t{dy}", region.as_ref()),
+                    );
+                });
+            }
         }
     }
 }
@@ -228,6 +332,24 @@ fn region_bounds(region: &HitRegionSpec, bounds: Bounds<Pixels>) -> Bounds<Pixel
             region.h.extent(bounds.size.height),
         ),
     )
+}
+
+/// Invokes a managed `invoke`-style callback with a string payload.
+fn invoke(host: &HostContext, token: u64, payload: &str) {
+    if let Some(callback) = host.callbacks.invoke {
+        // SAFETY: the managed callback copies anything it keeps; `payload` is
+        // live for the call.
+        unsafe {
+            let _ = callback(
+                host.session_id,
+                token,
+                crate::schema::CALLBACK_VALUE_STRING,
+                0.0,
+                payload.as_ptr(),
+                payload.len() as u32,
+            );
+        }
+    }
 }
 
 struct CanvasMaterializer;

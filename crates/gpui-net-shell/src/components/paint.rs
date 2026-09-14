@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use gpui::{
     linear_color_stop, linear_gradient, point, px, size, transparent_black, AnyElement, Background,
-    BorderStyle, Bounds, BoxShadow, Corners, Edges, Hsla, IntoElement as _, PathBuilder, Pixels,
-    Point, Window,
+    BorderStyle, Bounds, BoxShadow, Corners, CursorStyle, Edges, Hsla, IntoElement as _,
+    PathBuilder, Pixels, Point, Window,
 };
 use gpui_component::try_parse_color;
 
@@ -738,22 +738,55 @@ impl ComponentMaterializer for PaintShadowMaterializer {
 /// A clickable region declared on a [`crate::components::canvas::CanvasElement`].
 ///
 /// The canvas inserts a hitbox for it during prepaint; the region itself paints
-/// nothing.
+/// nothing. Each event has its own managed callback token.
 #[derive(Clone, Debug)]
 pub(crate) struct HitRegionSpec {
-    #[allow(dead_code)]
     pub id: String,
     pub x: Coord,
     pub y: Coord,
     pub w: Coord,
     pub h: Coord,
     pub block_mouse: bool,
+    pub block_scroll: bool,
+    pub cursor: Option<CursorStyle>,
     pub click: Option<u64>,
+    pub hover_enter: Option<u64>,
+    pub hover_exit: Option<u64>,
+    pub press: Option<u64>,
+    pub release: Option<u64>,
+    pub on_move: Option<u64>,
+    pub scroll: Option<u64>,
 }
 
 #[derive(Clone)]
 enum HitRegionOp {
     BlockMouse(bool),
+    BlockScroll(bool),
+    Cursor(CursorStyle),
+    HoverEnter(u64),
+    HoverExit(u64),
+    Press(u64),
+    Release(u64),
+    Move(u64),
+    Scroll(u64),
+}
+
+fn parse_cursor(name: &str) -> Option<CursorStyle> {
+    Some(match name {
+        "arrow" | "default" => CursorStyle::Arrow,
+        "pointer" => CursorStyle::PointingHand,
+        "text" => CursorStyle::IBeam,
+        "crosshair" => CursorStyle::Crosshair,
+        "grab" => CursorStyle::OpenHand,
+        "grabbing" => CursorStyle::ClosedHand,
+        "ew-resize" => CursorStyle::ResizeLeftRight,
+        "ns-resize" => CursorStyle::ResizeUpDown,
+        "n-resize" => CursorStyle::ResizeUp,
+        "s-resize" => CursorStyle::ResizeDown,
+        "w-resize" => CursorStyle::ResizeLeft,
+        "e-resize" => CursorStyle::ResizeRight,
+        _ => return None,
+    })
 }
 
 struct HitRegionMaterializer;
@@ -761,21 +794,60 @@ struct HitRegionMaterializer;
 impl ComponentMaterializer for HitRegionMaterializer {
     fn materialize(&self, request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let raw = args(&request, 5)?;
-        let block_mouse = request
-            .methods()
-            .filter_map(|method| method.payload().downcast_ref::<HitRegionOp>())
-            .any(|op| matches!(op, HitRegionOp::BlockMouse(true)));
-        let spec = HitRegionSpec {
+        let mut spec = HitRegionSpec {
             id: raw[0].clone(),
             x: coord_arg(&raw[1])?,
             y: coord_arg(&raw[2])?,
             w: coord_arg(&raw[3])?,
             h: coord_arg(&raw[4])?,
-            block_mouse,
+            block_mouse: false,
+            block_scroll: false,
+            cursor: None,
             click: request.on_click(),
+            hover_enter: None,
+            hover_exit: None,
+            press: None,
+            release: None,
+            on_move: None,
+            scroll: None,
         };
+        for op in request
+            .methods()
+            .filter_map(|method| method.payload().downcast_ref::<HitRegionOp>())
+        {
+            match op {
+                HitRegionOp::BlockMouse(value) => spec.block_mouse = *value,
+                HitRegionOp::BlockScroll(value) => spec.block_scroll = *value,
+                HitRegionOp::Cursor(value) => spec.cursor = Some(*value),
+                HitRegionOp::HoverEnter(token) => spec.hover_enter = Some(*token),
+                HitRegionOp::HoverExit(token) => spec.hover_exit = Some(*token),
+                HitRegionOp::Press(token) => spec.press = Some(*token),
+                HitRegionOp::Release(token) => spec.release = Some(*token),
+                HitRegionOp::Move(token) => spec.on_move = Some(*token),
+                HitRegionOp::Scroll(token) => spec.scroll = Some(*token),
+            }
+        }
         Ok(Carrier::new(spec).into_any_element())
     }
+}
+
+fn region_callback_method(
+    name: &'static str,
+    make: fn(u64) -> HitRegionOp,
+    docs: &'static str,
+) -> MethodDescriptor {
+    MethodDescriptor::new(
+        name,
+        vec![ArgumentDescriptor::new(
+            "callback",
+            ArgumentSchema::Callback,
+        )],
+        move |arguments| match arguments {
+            [ComponentArgument::Callback(token)] => Ok(ComponentPayload::new(make(*token))),
+            _ => Err(format!("{name}(callback) expects a callback")),
+        },
+    )
+    .with_documentation(docs)
 }
 
 fn register_rect(registry: &mut ComponentRegistry) {
@@ -919,20 +991,91 @@ fn register_hit_region(registry: &mut ComponentRegistry) {
                         length_arg("h"),
                     ],
                 )])
-                .with_methods(vec![MethodDescriptor::new(
-                    "block_mouse",
-                    vec![ArgumentDescriptor::new("block", ArgumentSchema::Boolean)],
-                    |arguments| match arguments {
-                        [ComponentArgument::Boolean(value)] => {
-                            Ok(ComponentPayload::new(HitRegionOp::BlockMouse(*value)))
-                        }
-                        [ComponentArgument::Number(value)] => Ok(ComponentPayload::new(
-                            HitRegionOp::BlockMouse(*value != 0.0),
-                        )),
-                        _ => Err("block_mouse(flag) expects a boolean".into()),
-                    },
-                )
-                .with_documentation("Blocks mouse events from reaching regions beneath.")])
+                .with_methods(vec![
+                    MethodDescriptor::new(
+                        "block_mouse",
+                        vec![ArgumentDescriptor::new("block", ArgumentSchema::Boolean)],
+                        |arguments| match arguments {
+                            [ComponentArgument::Boolean(value)] => {
+                                Ok(ComponentPayload::new(HitRegionOp::BlockMouse(*value)))
+                            }
+                            [ComponentArgument::Number(value)] => Ok(ComponentPayload::new(
+                                HitRegionOp::BlockMouse(*value != 0.0),
+                            )),
+                            _ => Err("block_mouse(flag) expects a boolean".into()),
+                        },
+                    )
+                    .with_documentation("Blocks mouse events from reaching regions beneath."),
+                    MethodDescriptor::new(
+                        "block_mouse_except_scroll",
+                        vec![ArgumentDescriptor::new("block", ArgumentSchema::Boolean)],
+                        |arguments| match arguments {
+                            [ComponentArgument::Boolean(value)] => {
+                                Ok(ComponentPayload::new(HitRegionOp::BlockScroll(*value)))
+                            }
+                            [ComponentArgument::Number(value)] => Ok(ComponentPayload::new(
+                                HitRegionOp::BlockScroll(*value != 0.0),
+                            )),
+                            _ => Err("block_mouse_except_scroll(flag) expects a boolean".into()),
+                        },
+                    )
+                    .with_documentation("Blocks mouse events but allows scroll to pass through."),
+                    MethodDescriptor::new(
+                        "cursor",
+                        vec![ArgumentDescriptor::new(
+                            "cursor",
+                            ArgumentSchema::Enum(&[
+                                "default",
+                                "pointer",
+                                "text",
+                                "crosshair",
+                                "grab",
+                                "grabbing",
+                                "ew-resize",
+                                "ns-resize",
+                            ]),
+                        )],
+                        |arguments| match arguments {
+                            [value] => value
+                                .as_str()
+                                .and_then(parse_cursor)
+                                .map(|cursor| ComponentPayload::new(HitRegionOp::Cursor(cursor)))
+                                .ok_or_else(|| "cursor: unknown cursor name".to_string()),
+                            _ => Err("cursor(name) expects a string".into()),
+                        },
+                    )
+                    .with_documentation("Sets the cursor while hovering the region."),
+                    region_callback_method(
+                        "on_hover_enter",
+                        HitRegionOp::HoverEnter,
+                        "Runs when the pointer enters the region.",
+                    ),
+                    region_callback_method(
+                        "on_hover_exit",
+                        HitRegionOp::HoverExit,
+                        "Runs when the pointer leaves the region.",
+                    ),
+                    region_callback_method(
+                        "on_press",
+                        HitRegionOp::Press,
+                        "Runs when the region is pressed.",
+                    ),
+                    region_callback_method(
+                        "on_release",
+                        HitRegionOp::Release,
+                        "Runs when the region is released.",
+                    ),
+                    region_callback_method(
+                        "on_move",
+                        HitRegionOp::Move,
+                        "Runs as the pointer moves over the region, with local coordinates.",
+                    ),
+                    region_callback_method(
+                        "on_scroll",
+                        HitRegionOp::Scroll,
+                        "Runs when the region is scrolled, with the scroll delta.",
+                    ),
+                ])
                 .with_documentation("A clickable region on a Canvas."),
         )
         .expect("the HitRegion descriptor is valid");
