@@ -40,6 +40,7 @@ pub mod label;
 pub mod link;
 pub mod list;
 pub mod menu;
+pub mod motion;
 pub mod native_menu;
 pub mod number_input;
 pub mod otp_input;
@@ -141,6 +142,7 @@ pub fn register(registry: &mut ComponentRegistry) {
     entity_host::register(registry);
     canvas::register(registry);
     paint::register(registry);
+    motion::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -273,6 +275,8 @@ mod tests {
                 "PaintGradient",
                 "PaintShadow",
                 "HitRegion",
+                "Motion",
+                "Presence",
             ]
         );
     }

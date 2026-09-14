@@ -961,6 +961,41 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(2, methods.Length);
     }
 
+    [Fact]
+    public void MotionAndPresenceRecordTargets()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Motion("panel", MotionSpec.Transition(TimeSpan.FromMilliseconds(220), Easing.Out))
+            .Opacity(0.5)
+            .TranslateY(8)
+            .Width(120)
+            .Add(ui.Label("x"));
+        ui.Presence("notice", true, MotionSpec.Transition(TimeSpan.FromMilliseconds(200)))
+            .Fade(0, 1)
+            .SlideY(8, 0)
+            .Add(ui.Label("y"));
+
+        var descriptor = arena.Publish();
+        Assert.Equal(4u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentMotion, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPresence, descriptor.Nodes[2].Component);
+
+        static int MethodCount(NativeArena descriptor, uint node) =>
+            Enumerable
+                .Range(0, (int)descriptor.OpsLen)
+                .Count(index =>
+                    descriptor.Ops[index].Node == node
+                    && descriptor.Ops[index].Code == NativeProtocol.OpMethod
+                );
+
+        // duration_ms + easing + opacity + translate_y + width
+        Assert.Equal(5, MethodCount(descriptor, 0));
+        // present + duration_ms + easing + fade_from + fade_to + slide_from + slide_to
+        Assert.Equal(7, MethodCount(descriptor, 2));
+    }
+
     private sealed class EntityState
     {
         public int Count { get; set; }

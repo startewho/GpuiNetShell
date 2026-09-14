@@ -15,7 +15,7 @@ pub const ABI_VERSION: u32 = 8;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C59;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C5A;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -253,6 +253,12 @@ pub const COMPONENT_PAINT_SHADOW: u32 = 108;
 /// A clickable region on a `Canvas`; painted by nothing, hit-tested by the canvas.
 #[allow(dead_code)]
 pub const COMPONENT_HIT_REGION: u32 = 109;
+/// An animated container: interpolates opacity/translation/size to targets.
+#[allow(dead_code)]
+pub const COMPONENT_MOTION: u32 = 110;
+/// A container that stays mounted through its exit animation.
+#[allow(dead_code)]
+pub const COMPONENT_PRESENCE: u32 = 111;
 
 // ---------------------------------------------------------------------------
 // Operations
@@ -332,7 +338,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C59);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C5A);
     }
 
     #[test]

@@ -1070,6 +1070,29 @@ public sealed class RenderContext
     private static string Joined(params string[] parts) =>
         string.Join(NativeProtocol.ConstructorArgSeparator, parts);
 
+    /// <summary>Declares an animated container whose targets are uploaded each render.</summary>
+    public MotionElement Motion(string id, MotionSpec spec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        var index = _arena.AddNode(NativeProtocol.ComponentMotion);
+        _arena.SetNodeData(index, id);
+        _arena.AddMethodNumber(index, "duration_ms", spec.DurationMs);
+        _arena.AddMethodEnum(index, "easing", MotionSpec.Wire(spec.Easing));
+        return new MotionElement(this, index);
+    }
+
+    /// <summary>Declares a container that stays mounted through its exit animation.</summary>
+    public PresenceElement Presence(string id, bool present, MotionSpec spec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        var index = _arena.AddNode(NativeProtocol.ComponentPresence);
+        _arena.SetNodeData(index, id);
+        _arena.AddMethodNumber(index, "present", present ? 1 : 0);
+        _arena.AddMethodNumber(index, "duration_ms", spec.DurationMs);
+        _arena.AddMethodEnum(index, "easing", MotionSpec.Wire(spec.Easing));
+        return new PresenceElement(this, index);
+    }
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

@@ -271,5 +271,25 @@ dotnet run --project samples/GpuiNetShell.Sample -- --check
 > 备注：hover/move/scroll 是事件驱动的跨界（非每帧）；`on_move` 在指针移动时触发，
 > 若托管在回调里 `Notify`/`Invalidate`，移动期间会持续重绘，示例只对 hover 进出重绘。
 
+### P4 — Motion（transition：opacity/translate/size）+ Presence（已完成）
+- 组件 id：`Motion = 110`、`Presence = 111`；schema `…6C59 → …6C5A`，ABI 保持 `8`。
+- native `components/motion.rs`：
+  - `Motion`：读目标（opacity/translate_x/y/width/height）与 `duration_ms`/`easing`，
+    用 `gpui_base::motion::transition(id, target, Transition, window, cx)`（每个属性独立 channel）
+    采样；wrapper `div().relative()` + `.left/.top`（纯视觉位移）、`.opacity`、`.w/.h`。
+  - `Presence`：`Presence::new(id, present).transition(policy).sample(window, cx)`；
+    `should_render()` 决定是否挂载，`progress` 驱动 fade/slide。
+  - `Easing` 名称在 materialize 时解析（payload 存字符串以保持 `Send`）。
+- managed：`Elements/MotionElement.cs`（`Easing`/`MotionSpec`/`MotionElement`/`PresenceElement`）、
+  `RenderContext.Motion/Presence`。
+- sample：`AnimationPage`（collapse/expand 切换驱动 Motion 与 Presence）。
+- 测试：managed `MotionAndPresenceRecordTargets`；native `motion.rs` 注册测试。
+- 验证：`cargo test` 79；managed 77；`--check` = abi 8 / schema `0x6E65747368656C5A`；
+  `AnimationPage` 冒烟无报错。
+
+> 说明：动画在 native 按帧采样，托管仅在状态变化时上传目标值；`reduce_motion` 时
+> gpui-base 直接取终值。位移用 relative 偏移，不影响布局。
+
+
 
 
