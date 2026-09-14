@@ -968,6 +968,108 @@ public sealed class RenderContext
         return new EntityHostElement(this, index);
     }
 
+    /// <summary>
+    /// Declares a self-painted surface. Its children are paint primitives
+    /// painted in declaration order against the canvas bounds.
+    /// </summary>
+    public CanvasElement Canvas(string id)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentCanvas);
+        _arena.SetNodeData(index, id);
+        return new CanvasElement(this, index);
+    }
+
+    /// <summary>Declares a rectangle painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintRectElement PaintRect(PaintLength x, PaintLength y, PaintLength w, PaintLength h)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintRect);
+        _arena.SetNodeData(index, Joined(x.Wire, y.Wire, w.Wire, h.Wire));
+        return new PaintRectElement(this, index);
+    }
+
+    /// <summary>Declares a straight line painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintLineElement PaintLine(PaintLength x1, PaintLength y1, PaintLength x2, PaintLength y2)
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintLine);
+        _arena.SetNodeData(index, Joined(x1.Wire, y1.Wire, x2.Wire, y2.Wire));
+        return new PaintLineElement(this, index);
+    }
+
+    /// <summary>Declares a path painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintPathElement PaintPath(string dsl)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(dsl);
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintPath);
+        _arena.SetNodeData(index, dsl);
+        return new PaintPathElement(this, index);
+    }
+
+    /// <summary>Declares a two-stop linear gradient rectangle painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintGradientElement PaintGradient(
+        PaintLength x,
+        PaintLength y,
+        PaintLength w,
+        PaintLength h,
+        double angle,
+        string from,
+        string to
+    )
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintGradient);
+        _arena.SetNodeData(
+            index,
+            Joined(x.Wire, y.Wire, w.Wire, h.Wire, Length.Format(angle), from, to)
+        );
+        return new PaintGradientElement(this, index);
+    }
+
+    /// <summary>Declares a shadow painted on a <see cref="CanvasElement"/>.</summary>
+    public PaintShadowElement PaintShadow(
+        PaintLength x,
+        PaintLength y,
+        PaintLength w,
+        PaintLength h,
+        double offsetX,
+        double offsetY,
+        double blur,
+        string color
+    )
+    {
+        var index = _arena.AddNode(NativeProtocol.ComponentPaintShadow);
+        _arena.SetNodeData(
+            index,
+            Joined(
+                x.Wire,
+                y.Wire,
+                w.Wire,
+                h.Wire,
+                Length.Format(offsetX),
+                Length.Format(offsetY),
+                Length.Format(blur),
+                color
+            )
+        );
+        return new PaintShadowElement(this, index);
+    }
+
+    /// <summary>Declares a clickable region on a <see cref="CanvasElement"/>.</summary>
+    public HitRegionElement HitRegion(
+        string id,
+        PaintLength x,
+        PaintLength y,
+        PaintLength w,
+        PaintLength h
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        var index = _arena.AddNode(NativeProtocol.ComponentHitRegion);
+        _arena.SetNodeData(index, Joined(id, x.Wire, y.Wire, w.Wire, h.Wire));
+        return new HitRegionElement(this, index);
+    }
+
+    private static string Joined(params string[] parts) =>
+        string.Join(NativeProtocol.ConstructorArgSeparator, parts);
+
     /// <summary>A column container.</summary>
     public DivElement VStack(params Element[] children) => Div(children).Flex().FlexColumn();
 

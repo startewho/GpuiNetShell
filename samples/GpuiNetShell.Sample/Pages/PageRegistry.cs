@@ -68,6 +68,7 @@ internal static class PageRegistry
             new VirtualListPage(),
             new ImagePage(),
             new EntityPage(),
+            new CanvasPage(),
             new MultiWindowPage(),
         ];
 }

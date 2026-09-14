@@ -846,6 +846,81 @@ public sealed unsafe class RenderContextTests
         }
     }
 
+    [Fact]
+    public void CanvasRecordsPaintPrimitivesAsChildren()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Canvas("paint")
+            .Clip()
+            .Add(
+                ui.PaintRect(0.0, 0.0, 1.0, 0.5).Fill("#ffffff").Stroke(1.5).Radius(4),
+                ui.PaintLine(0.0, 1.0, 1.0, 1.0).Stroke(1).Color("#333333").Dash(4, 2),
+                ui.PaintPath("M 0 0 L 1 1").Stroke(2).Color("#000000"),
+                ui.PaintGradient(0.0, 0.0, 1.0, 1.0, 45, "#111111", "#222222"),
+                ui.PaintShadow(0.0, 0.0, 1.0, 0.5, 0, 4, 8, "#00000055")
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal(6u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentCanvas, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintRect, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintLine, descriptor.Nodes[2].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintPath, descriptor.Nodes[3].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintGradient, descriptor.Nodes[4].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintShadow, descriptor.Nodes[5].Component);
+        Assert.Equal(5u, descriptor.ChildrenLen);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        var rectData =
+            ((ulong)descriptor.Nodes[1].DataOffset << 32) | descriptor.Nodes[1].DataLen;
+        var rect = DecodePacked(rectData, utf8);
+        Assert.Contains("0%", rect);
+        Assert.Contains("100%", rect);
+
+        var pathData =
+            ((ulong)descriptor.Nodes[3].DataOffset << 32) | descriptor.Nodes[3].DataLen;
+        Assert.Equal("M 0 0 L 1 1", DecodePacked(pathData, utf8));
+    }
+
+    [Fact]
+    public void CanvasRecordsPrepaintAndHitRegions()
+    {
+        using var arena = new RenderArena();
+        var events = new EventRegistry();
+        var ui = new RenderContext(arena, events, () => { });
+        var prepaint = events.RegisterElement((context, _) => context.Label("x"));
+
+        ui.Canvas("c")
+            .Prepaint(prepaint)
+            .Add(
+                ui.HitRegion("left", 0.0, 0.0, 0.5, 1.0).OnClick(() => { }),
+                ui.PaintRect(0.0, 0.0, 1.0, 1.0).Fill("#ffffff")
+            );
+
+        var descriptor = arena.Publish();
+        Assert.Equal(3u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentCanvas, descriptor.Nodes[0].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentHitRegion, descriptor.Nodes[1].Component);
+        Assert.Equal((uint)NativeProtocol.ComponentPaintRect, descriptor.Nodes[2].Component);
+        Assert.Equal(2u, descriptor.ChildrenLen);
+
+        var canvasCallbacks = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Where(index => descriptor.Ops[index].Node == 0)
+            .Select(index => descriptor.Ops[index].Code)
+            .ToArray();
+        Assert.Contains(NativeProtocol.OpCallback, canvasCallbacks);
+
+        var regionCallbacks = Enumerable
+            .Range(0, (int)descriptor.OpsLen)
+            .Where(index => descriptor.Ops[index].Node == 1)
+            .Select(index => descriptor.Ops[index].Code)
+            .ToArray();
+        Assert.Contains(NativeProtocol.OpCallback, regionCallbacks);
+    }
+
     private sealed class EntityState
     {
         public int Count { get; set; }

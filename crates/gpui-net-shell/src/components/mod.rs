@@ -11,6 +11,7 @@ pub mod badge;
 pub mod breadcrumb;
 pub mod button;
 pub mod calendar;
+pub mod canvas;
 pub mod chat;
 pub mod clipboard;
 pub mod collapsible;
@@ -43,6 +44,7 @@ pub mod native_menu;
 pub mod number_input;
 pub mod otp_input;
 pub mod pagination;
+pub mod paint;
 pub mod popover;
 pub mod progress;
 pub mod radio;
@@ -137,6 +139,8 @@ pub fn register(registry: &mut ComponentRegistry) {
     virtual_list::register(registry);
     image::register(registry);
     entity_host::register(registry);
+    canvas::register(registry);
+    paint::register(registry);
 }
 
 /// Builds and freezes the built-in catalog.
@@ -262,6 +266,13 @@ mod tests {
                 "VirtualList",
                 "Image",
                 "EntityHost",
+                "Canvas",
+                "PaintRect",
+                "PaintLine",
+                "PaintPath",
+                "PaintGradient",
+                "PaintShadow",
+                "HitRegion",
             ]
         );
     }
