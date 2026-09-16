@@ -48,16 +48,21 @@ enum VirtualListOp {
     ScrollToken(u64),
 }
 
+/// A cached uniform size vector plus the inputs it was built from.
+type UniformSizes = (usize, f32, Rc<Vec<Size<Pixels>>>);
+
 struct VirtualListView {
     id: ElementId,
     axis: Axis,
     item_count: usize,
     item_size: f32,
     /// Per-item sizes when the host supplies them; otherwise a uniform size.
-    item_sizes: Option<Vec<Size<Pixels>>>,
+    item_sizes: Option<Rc<Vec<Size<Pixels>>>>,
+    /// The uniform size vector, rebuilt only when the count or size changes.
+    uniform_sizes: Option<UniformSizes>,
     renderer: Option<ElementCallback>,
     on_select: Option<ComponentCallback>,
-    row_menu: Vec<Entry>,
+    row_menu: Rc<Vec<Entry>>,
     /// A one-shot scroll request, applied when `scroll_token` changes.
     scroll_target: Option<usize>,
     scroll_token: u64,
@@ -72,13 +77,38 @@ impl VirtualListView {
             item_count,
             item_size,
             item_sizes: None,
+            uniform_sizes: None,
             renderer: None,
             on_select: None,
-            row_menu: Vec::new(),
+            row_menu: Rc::new(Vec::new()),
             scroll_target: None,
             scroll_token: 0,
             scroll_handle: VirtualListScrollHandle::new(),
         }
+    }
+
+    /// The size vector for the list, building the uniform one only when the
+    /// item count or size changed since the last build.
+    fn sizes(&mut self) -> Rc<Vec<Size<Pixels>>> {
+        if let Some(sizes) = &self.item_sizes {
+            return sizes.clone();
+        }
+        let stale = match &self.uniform_sizes {
+            Some((count, size, _)) => *count != self.item_count || *size != self.item_size,
+            None => true,
+        };
+        if stale {
+            let built = Rc::new(vec![
+                size(px(self.item_size), px(self.item_size));
+                self.item_count
+            ]);
+            self.uniform_sizes = Some((self.item_count, self.item_size, built));
+        }
+        self.uniform_sizes
+            .as_ref()
+            .expect("uniform sizes were just built")
+            .2
+            .clone()
     }
 }
 
@@ -105,7 +135,7 @@ fn render_index(
 fn item_element(
     renderer: &Option<ElementCallback>,
     on_select: &Option<ComponentCallback>,
-    row_menu: &[Entry],
+    row_menu: &Rc<Vec<Entry>>,
     horizontal: bool,
     index: usize,
     window: &mut Window,
@@ -130,11 +160,11 @@ fn item_element(
         });
     }
     if !row_menu.is_empty() {
-        let entries = row_menu.to_vec();
+        let entries = row_menu.clone();
         return item
             .context_menu(move |mut menu, _window, _cx| {
-                for entry in entries.clone() {
-                    menu = menu.item(entry.into_menu_item(Some(index)));
+                for entry in entries.iter() {
+                    menu = menu.item(entry.clone().into_menu_item(Some(index)));
                 }
                 menu
             })
@@ -150,10 +180,7 @@ impl Render for VirtualListView {
                 .scroll_to_item(target, ScrollStrategy::Top);
         }
 
-        let sizes: Rc<Vec<Size<Pixels>>> = Rc::new(match &self.item_sizes {
-            Some(sizes) => sizes.clone(),
-            None => vec![size(px(self.item_size), px(self.item_size)); self.item_count],
-        });
+        let sizes = self.sizes();
         let entity = cx.entity();
         let handle = self.scroll_handle.clone();
         let renderer = self.renderer.clone();
@@ -277,14 +304,14 @@ impl ComponentMaterializer for VirtualListMaterializer {
             }
         }
         let item_sizes = match &sizes_argument {
-            Some(argument) => Some(
+            Some(argument) => Some(Rc::new(
                 request
                     .resolve_rows(argument)?
-                    .into_iter()
+                    .iter()
                     .filter_map(|row| row.first().and_then(|value| value.parse::<f32>().ok()))
                     .map(|value| size(px(value), px(value)))
                     .collect::<Vec<_>>(),
-            ),
+            )),
             None => None,
         };
         let style = request.take_style();
@@ -303,7 +330,7 @@ impl ComponentMaterializer for VirtualListMaterializer {
             view.axis = axis;
             view.renderer = renderer;
             view.on_select = on_select;
-            view.row_menu = row_menu;
+            view.row_menu = Rc::new(row_menu);
             if let Some(token) = scroll_token {
                 if token != view.scroll_token {
                     view.scroll_token = token;

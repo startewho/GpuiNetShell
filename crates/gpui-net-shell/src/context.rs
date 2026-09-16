@@ -12,6 +12,7 @@ use std::rc::Rc;
 use gpui::App;
 
 use crate::abi::GpuiNetCallbacks;
+use crate::registry::Row;
 
 /// Requests one managed re-render from inside a native callback that only has
 /// `&mut App`. The managed view's `refresh` drives `Context::notify`.
@@ -31,6 +32,27 @@ pub type EntityNotifier = Rc<dyn Fn(&mut App)>;
 /// dropped.
 pub type EntityHosts = Rc<RefCell<HashMap<u64, EntityNotifier>>>;
 
+/// A reusable buffer for one `resolve_rows` call. Reusing it avoids allocating
+/// a 64 KB scratch vector on every list/select materialization.
+pub type RowScratch = Rc<RefCell<Vec<u8>>>;
+
+/// Resolved row snapshots, keyed by the callback token that produced them.
+///
+/// Tokens are never reused, so within one generation a resolved row set is
+/// stable; the cache is cleared when a new description is built. Without it a
+/// `List`/`Select`/`VirtualList` re-enters managed code on every repaint.
+pub type RowCache = Rc<RefCell<HashMap<u64, Rc<Vec<Row>>>>>;
+
+/// A fresh, empty [`RowCache`].
+pub fn new_row_cache() -> RowCache {
+    Rc::new(RefCell::new(HashMap::new()))
+}
+
+/// A fresh, empty [`RowScratch`].
+pub fn new_row_scratch() -> RowScratch {
+    Rc::new(RefCell::new(Vec::new()))
+}
+
 /// The native capabilities a materializer needs.
 #[derive(Clone)]
 pub struct HostContext {
@@ -39,6 +61,10 @@ pub struct HostContext {
     pub invalidate: Invalidate,
     /// The window's retained entity subtrees.
     pub entity_hosts: EntityHosts,
+    /// Reused buffer for `resolve_rows`.
+    pub row_scratch: RowScratch,
+    /// Resolved rows for this generation, keyed by callback token.
+    pub row_cache: RowCache,
 }
 
 impl HostContext {

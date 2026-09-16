@@ -79,8 +79,8 @@ impl SearchableListItem for Item {
     }
 }
 
-fn parse_items(rows: Vec<Row>, renderer: Option<ElementCallback>) -> Vec<Item> {
-    rows.into_iter()
+fn parse_items(rows: &[Row], renderer: Option<ElementCallback>) -> Vec<Item> {
+    rows.iter()
         .enumerate()
         .map(|(index, fields)| {
             let mut parts = fields.iter().cloned();
@@ -94,7 +94,7 @@ fn parse_items(rows: Vec<Row>, renderer: Option<ElementCallback>) -> Vec<Item> {
                 id,
                 title: title.into(),
                 disabled,
-                fields,
+                fields: fields.clone(),
                 renderer: renderer.clone(),
             }
         })
@@ -148,7 +148,7 @@ impl ComponentMaterializer for SelectMaterializer {
             return Err("Select does not accept children".to_string());
         }
         let items = parse_items(
-            request.resolve_rows(&payload.rows)?,
+            &request.resolve_rows(&payload.rows)?,
             request
                 .methods()
                 .find_map(|method| match method.payload().downcast_ref::<SelectOp>() {

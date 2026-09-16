@@ -18,11 +18,14 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, px, AnyElement, App, Context, IntoElement, MouseButton, Render, ScrollDelta, Window,
+    div, px, AnyElement, App, Context, Entity, IntoElement, MouseButton, Render, ScrollDelta,
+    Window,
 };
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
-use crate::context::{EntityHosts, HostContext, Invalidate};
+use crate::context::{
+    new_row_cache, new_row_scratch, EntityHosts, HostContext, Invalidate, RowCache, RowScratch,
+};
 use crate::materialize::{materialize, prepare};
 use crate::registry::FrozenComponentRegistry;
 use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK};
@@ -34,14 +37,26 @@ pub struct ShellView {
     session_id: u64,
     callbacks: GpuiNetCallbacks,
     registry: Rc<FrozenComponentRegistry>,
-    /// The description the managed host last published.
+    /// The retained content subtree. Materialization happens there, not in
+    /// `ShellView::render`, so GPUI can reuse the built tree.
+    content: Entity<ContentHost>,
+    /// The description the managed host last published and is now displayed.
     current: Option<RenderSnapshot>,
+    /// The fingerprint of `current`, used to keep it when a rebuild produces
+    /// the same interface.
+    displayed_fingerprint: Option<u64>,
+    /// Whether the content entity must be updated on the next render.
+    content_dirty: bool,
     revision: u64,
     dirty: bool,
     retired: bool,
     /// Retained entity subtrees for this window, keyed by managed entity id.
     /// Rebuilt on each render; `notify_entity` repaints one in place.
     entity_hosts: EntityHosts,
+    /// Resolved row snapshots for the current description, so a repaint does
+    /// not re-enter managed code for a `List`/`Select`/`VirtualList`. The
+    /// content host holds the same map; `rebuild` clears it.
+    row_cache: RowCache,
     /// The failure of the most recent build, if it failed. Held rather than
     /// re-derived so a broken render is not re-run every frame.
     error: Option<String>,
@@ -53,16 +68,41 @@ impl ShellView {
         session_id: u64,
         callbacks: GpuiNetCallbacks,
         registry: Rc<FrozenComponentRegistry>,
+        cx: &mut Context<Self>,
     ) -> Self {
+        let weak = cx.entity().downgrade();
+        let invalidate: Invalidate = Rc::new(move |app: &mut App| {
+            // Event dispatch runs on the GPUI thread, so the view is reachable
+            // synchronously without an ingress queue.
+            let _ = weak.update(app, |view, cx| view.refresh(cx));
+        });
+        let entity_hosts = EntityHosts::default();
+        let row_scratch = new_row_scratch();
+        let row_cache = new_row_cache();
+        let content = cx.new(|_cx| ContentHost {
+            session_id,
+            callbacks,
+            registry: registry.clone(),
+            invalidate: invalidate.clone(),
+            entity_hosts: entity_hosts.clone(),
+            row_scratch: row_scratch.clone(),
+            row_cache: row_cache.clone(),
+            snapshot: None,
+            error: None,
+        });
         Self {
             session_id,
             callbacks,
             registry,
+            content,
             current: None,
+            displayed_fingerprint: None,
+            content_dirty: true,
             revision: 0,
             dirty: true,
             retired: false,
-            entity_hosts: EntityHosts::default(),
+            entity_hosts,
+            row_cache,
             error: None,
         }
     }
@@ -116,6 +156,7 @@ impl ShellView {
         self.dirty = false;
         self.error = None;
         self.current = None;
+        self.displayed_fingerprint = None;
     }
 
     /// Pulls a new description from the managed host.
@@ -128,6 +169,7 @@ impl ShellView {
 
         let Some(render) = self.callbacks.render else {
             self.error = Some("The host has no render callback.".into());
+            self.content_dirty = true;
             return;
         };
 
@@ -139,6 +181,7 @@ impl ShellView {
         let status = unsafe { render(self.session_id, generation, &mut arena, &mut root) };
         if status != STATUS_OK {
             self.error = Some(format!("Managed render failed with status {status}."));
+            self.content_dirty = true;
             self.complete(generation, status);
             return;
         }
@@ -147,21 +190,48 @@ impl ShellView {
             Ok(mut snapshot) => {
                 if let Err(message) = prepare(&self.registry, &mut snapshot) {
                     self.error = Some(message);
+                    self.content_dirty = true;
                     self.complete(generation, STATUS_INVALID_ARGUMENT);
                     return;
                 }
+                let fingerprint = snapshot.fingerprint();
+
+                // An unchanged interface keeps the displayed description, which
+                // also keeps its generation's callbacks alive for the retained
+                // subtree. This generation's callbacks are retired instead.
+                if self.error.is_none()
+                    && self.current.is_some()
+                    && self.displayed_fingerprint == Some(fingerprint)
+                {
+                    self.revision = generation;
+                    self.complete(generation, STATUS_OK);
+                    if let Some(retire) = self.callbacks.retire_callbacks {
+                        // SAFETY: retiring one generation touches no arena.
+                        unsafe {
+                            let _ = retire(self.session_id, generation);
+                        }
+                    }
+                    return;
+                }
+
                 let frozen =
                     RenderSnapshot::new(self.session_id, generation, snapshot, self.callbacks);
                 // Replacing `current` drops the snapshot it replaced, which
                 // retires that generation's callbacks immediately. Nothing in
                 // the host reads the previous description, so it is not kept.
                 self.current = Some(frozen);
+                self.displayed_fingerprint = Some(fingerprint);
+                // A new description retires every callback token, so the
+                // resolved-row cache for the old one is dead.
+                self.row_cache.borrow_mut().clear();
                 self.revision = generation;
                 self.error = None;
+                self.content_dirty = true;
                 self.complete(generation, STATUS_OK);
             }
             Err(code) => {
                 self.error = Some(format!("Native snapshot decode failed with status {code}."));
+                self.content_dirty = true;
                 self.complete(generation, code);
             }
         }
@@ -175,19 +245,46 @@ impl ShellView {
             }
         }
     }
+}
 
-    /// The subtree for the current description, with a banner when the most
-    /// recent build failed over an earlier good snapshot.
-    fn content(&mut self, host: &HostContext, window: &mut Window, cx: &mut App) -> AnyElement {
+/// The retained content subtree.
+///
+/// Materialization lives here rather than in `ShellView::render`, so GPUI can
+/// reuse the built element tree: the content re-renders only when a new
+/// description is pushed, not on every `ShellView` repaint. Combined with the
+/// structural fingerprint that lets `rebuild` keep an unchanged description, a
+/// repaint that does not change the interface performs no native work.
+struct ContentHost {
+    session_id: u64,
+    callbacks: GpuiNetCallbacks,
+    registry: Rc<FrozenComponentRegistry>,
+    invalidate: Invalidate,
+    entity_hosts: EntityHosts,
+    row_scratch: RowScratch,
+    row_cache: RowCache,
+    snapshot: Option<RenderSnapshot>,
+    error: Option<String>,
+}
+
+impl Render for ContentHost {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Entity notifiers are re-registered as each `EntityHost` materializes;
         // clear so an entity that left the tree stops being retained.
         if let Ok(mut hosts) = self.entity_hosts.try_borrow_mut() {
             hosts.clear();
         }
+        let host = HostContext {
+            session_id: self.session_id,
+            callbacks: self.callbacks,
+            invalidate: self.invalidate.clone(),
+            entity_hosts: self.entity_hosts.clone(),
+            row_scratch: self.row_scratch.clone(),
+            row_cache: self.row_cache.clone(),
+        };
         let materialized = self
-            .current
+            .snapshot
             .as_ref()
-            .map(|snapshot| materialize(&self.registry, snapshot, host, window, cx));
+            .map(|snapshot| materialize(&self.registry, snapshot, &host, window, cx));
 
         match (self.error.clone(), materialized) {
             (None, Some(Ok(element))) => element,
@@ -209,28 +306,25 @@ impl ShellView {
 }
 
 impl Render for ShellView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.retired {
             return div().into_any_element();
         }
         if self.is_dirty() {
             self.rebuild();
         }
+        if self.content_dirty {
+            let snapshot = self.current.clone();
+            let error = self.error.clone();
+            self.content.update(cx, |content, cx| {
+                content.snapshot = snapshot;
+                content.error = error;
+                cx.notify();
+            });
+            self.content_dirty = false;
+        }
 
-        let weak = cx.entity().downgrade();
-        let invalidate: Invalidate = Rc::new(move |app: &mut App| {
-            // Event dispatch runs on the GPUI thread, so the view is reachable
-            // synchronously without an ingress queue.
-            let _ = weak.update(app, |view, cx| view.refresh(cx));
-        });
-        let host = HostContext {
-            session_id: self.session_id,
-            callbacks: self.callbacks,
-            invalidate,
-            entity_hosts: self.entity_hosts.clone(),
-        };
-
-        let content = self.content(&host, window, cx);
+        let content = self.content.clone().into_any_element();
         let callbacks = self.callbacks;
         let session = self.session_id;
         div()

@@ -44,33 +44,43 @@ Snapshot::decode -> prepare -> RenderSnapshot   Rust
 materialize -> ComponentRegistry -> materializers -> elements
 ```
 
-A clean GPUI repaint re-materializes the retained snapshot without calling
-managed `Render`, and without re-resolving it: `prepare` folds each node's ops
-into a `PreparedNode` (style, payload, recorded methods, child routing) once,
-when the description is built. `materialize` then only borrows that and builds
-the GPUI element. `Render` runs only when the view is dirty, which is set on
-first mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Notify()`.
+Materialization lives in a retained `ContentHost` entity, not in
+`ShellView::render`. GPUI re-runs a view's `render` only when it is notified, so
+the content subtree is reused unless a new description is pushed. `prepare`
+folds each node's ops into a `PreparedNode` (style, payload, recorded methods,
+child routing) once, when the description is built, and `materialize` only
+borrows that. `Render` runs only when the view is dirty, which is set on first
+mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Notify()`.
 
 ## View and snapshots
 
 `crates/gpui-net-shell/src/view.rs` mirrors `gpui-shell`'s `view.rs`. A
 `ShellView` entity owns:
 
-- `current` — the published `RenderSnapshot`. Replacing it drops the one it
+- `current` — the displayed `RenderSnapshot`. Replacing it drops the one it
   replaced, which retires that generation's callbacks immediately;
+- `displayed_fingerprint` — the structural fingerprint of `current`. When a
+  rebuild produces the same fingerprint, the displayed description (and its
+  generation, and therefore its callbacks) is kept and the new generation is
+  retired instead, so a redundant invalidation does no native materialization;
+- a retained `content: Entity<ContentHost>` that owns the element tree;
 - `dirty`, `retired`, and the last build `error`;
 - the frozen component registry.
 
+The fingerprint in `snapshot.rs` hashes components, data, style and method
+codes, arguments, slots, and child edges, but **not** callback tokens: tokens
+are new every generation by design and do not change the interface.
+
 `rebuild` is transactional: the managed callback fills the arena, `Snapshot::decode`
-validates it, `prepare` resolves it, and only then is the new `RenderSnapshot`
-swapped in. A failed build leaves the previous description and its callbacks
-untouched.
+validates it, `prepare` resolves it (including the fingerprint), and only then
+is the new `RenderSnapshot` swapped in. A failed build leaves the previous
+description and its callbacks untouched.
 
 A `RenderSnapshot` (in `src/snapshot.rs`) is a cloneable `Rc` handle that owns
 its generation. When it is dropped, it calls the managed `retire_callbacks`
 with its generation, and the managed host releases exactly that generation's
-event handlers. That is what keeps callback lifetime tied to a description
-rather than to a frame or a global counter.
+event handlers. Because the retained `ContentHost` holds the displayed snapshot,
+its generation — and its callbacks — stay alive for as long as it is shown.
 
 Managed code requests a rebuild through `View.Invalidate()` or
 `RenderContext.Notify()`, both of which post the native `invalidate` command.
@@ -328,4 +338,10 @@ manifest requirement for Windows common controls.
 
 - rich overlay content (dialogs and notifications currently carry plain text);
 - a theme payload from C# (the native host uses the gpui-component default);
-- virtualized item batches.
+- virtualized item batches;
+- per-node incremental repaint. The content subtree is retained and a rebuild
+  that produces the same fingerprint is skipped outright, and stateful pages
+  already retain their subtree through `EntityHost`, so a change rebuilds one
+  page. What is not built is diffing a *changed* description node by node to
+  rebuild only the changed subtrees; that needs a stable structural key per
+  node (React-style keys) that the current description does not carry.

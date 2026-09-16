@@ -47,8 +47,8 @@ struct ListDelegateImpl {
     selected: Option<IndexPath>,
 }
 
-fn parse_list_rows(rows: Vec<Row>) -> Vec<ListRow> {
-    rows.into_iter()
+fn parse_list_rows(rows: &[Row]) -> Vec<ListRow> {
+    rows.iter()
         .enumerate()
         .map(|(index, fields)| {
             let mut parts = fields.iter().cloned();
@@ -62,7 +62,7 @@ fn parse_list_rows(rows: Vec<Row>) -> Vec<ListRow> {
                 id: id.into(),
                 label: label.into(),
                 disabled,
-                fields,
+                fields: fields.clone(),
             }
         })
         .collect()
@@ -122,7 +122,7 @@ impl ComponentMaterializer for ListMaterializer {
         if request.children_len() != 0 {
             return Err("List does not accept children".to_string());
         }
-        let rows = parse_list_rows(request.resolve_rows(&payload.rows)?);
+        let rows = parse_list_rows(&request.resolve_rows(&payload.rows)?);
         let render_row = request.methods().find_map(|method| {
             method
                 .payload()
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn rows_parse_id_label_and_disabled() {
-        let rows = parse_list_rows(vec![
+        let rows = parse_list_rows(&[
             vec!["a".into(), "Alpha".into()],
             vec!["b".into(), "Beta".into(), "true".into()],
         ]);

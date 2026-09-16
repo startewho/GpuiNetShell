@@ -304,7 +304,7 @@ fn open_managed_window(
 ) -> Result<(), String> {
     let custom_titlebar = flags & FLAG_CUSTOM_TITLEBAR != 0;
     let registry = std::rc::Rc::new(crate::components::catalog());
-    let view = cx.new(|_| ShellView::new(session_id, callbacks, registry));
+    let view = cx.new(|cx| ShellView::new(session_id, callbacks, registry, cx));
     let root = cx.new(|cx| Root::new(view, session_id, callbacks, custom_titlebar, cx));
     let weak_root = root.downgrade();
 

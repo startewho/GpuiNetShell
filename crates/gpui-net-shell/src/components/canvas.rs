@@ -8,6 +8,7 @@
 //! on the regions back to managed callbacks.
 
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
@@ -64,17 +65,20 @@ struct HoverState {
 struct RegionHit {
     hitbox: Hitbox,
     spec: HitRegionSpec,
+    region_id: SharedString,
 }
 
 pub(crate) struct CanvasPrepaint {
-    commands: Vec<PaintCommand>,
+    commands: Rc<Vec<PaintCommand>>,
     hits: Vec<RegionHit>,
 }
 
 pub(crate) struct CanvasElement {
-    id: SharedString,
-    commands: Vec<PaintCommand>,
-    regions: Vec<HitRegionSpec>,
+    /// Precomputed keyed-state ids, so paint does not format them per frame.
+    click_key: ElementId,
+    hover_key: ElementId,
+    commands: Rc<Vec<PaintCommand>>,
+    regions: Rc<Vec<HitRegionSpec>>,
     prepaint_callback: Option<ElementCallback>,
     measure_callback: Option<ElementCallback>,
     clip: bool,
@@ -142,8 +146,15 @@ impl Element for CanvasElement {
             match callback.build(&arguments, window, cx) {
                 Ok(mut element) => {
                     if let Some(canvas) = element.downcast_mut::<CanvasElement>() {
-                        commands.extend(canvas.commands.iter().cloned());
-                        regions.extend(canvas.regions.iter().cloned());
+                        // Only a prepaint callback merges commands, so the
+                        // common case keeps the shared `Rc` and copies nothing.
+                        let mut merged: Vec<PaintCommand> = self.commands.iter().cloned().collect();
+                        merged.extend(canvas.commands.iter().cloned());
+                        commands = Rc::new(merged);
+                        let mut merged_regions: Vec<HitRegionSpec> =
+                            self.regions.iter().cloned().collect();
+                        merged_regions.extend(canvas.regions.iter().cloned());
+                        regions = Rc::new(merged_regions);
                     } else {
                         eprintln!(
                             "gpui-net-shell: canvas prepaint callback must return a Canvas of \
@@ -157,8 +168,8 @@ impl Element for CanvasElement {
             }
         }
         let mut hits = Vec::with_capacity(regions.len());
-        for region in regions {
-            let rect = region_bounds(&region, bounds);
+        for region in regions.iter() {
+            let rect = region_bounds(region, bounds);
             let behavior = if region.block_mouse {
                 HitboxBehavior::BlockMouse
             } else if region.block_scroll {
@@ -169,7 +180,8 @@ impl Element for CanvasElement {
             let hitbox = window.insert_hitbox(rect, behavior);
             hits.push(RegionHit {
                 hitbox,
-                spec: region,
+                spec: region.clone(),
+                region_id: SharedString::from(region.id.clone()),
             });
         }
         CanvasPrepaint { commands, hits }
@@ -189,7 +201,7 @@ impl Element for CanvasElement {
         let commands = &prepaint.commands;
         style.paint(bounds, window, cx, |window, cx| {
             let draw = |window: &mut Window, cx: &mut App| {
-                for command in commands {
+                for command in commands.iter() {
                     command.paint(bounds, window, cx);
                 }
             };
@@ -201,15 +213,15 @@ impl Element for CanvasElement {
         });
 
         let host = self.host.clone();
-        let click_key = ElementId::Name(SharedString::from(format!("canvas-click:{}", self.id)));
-        let hover_key = ElementId::Name(SharedString::from(format!("canvas-hover:{}", self.id)));
+        let click_key = self.click_key.clone();
+        let hover_key = self.hover_key.clone();
         let click_state =
             window.use_keyed_state(click_key, cx, |_window, _cx| ClickState::default());
         let hover_state =
             window.use_keyed_state(hover_key, cx, |_window, _cx| HoverState::default());
 
         for hit in &prepaint.hits {
-            let region_id = SharedString::from(hit.spec.id.clone());
+            let region_id = hit.region_id.clone();
 
             if let Some(cursor) = hit.spec.cursor {
                 if hit.hitbox.id.is_hovered(window) {
@@ -436,10 +448,13 @@ impl ComponentMaterializer for CanvasMaterializer {
 
         let host = request.host().clone();
         let style = request.take_style();
+        let click_key = ElementId::Name(SharedString::from(format!("canvas-click:{id}")));
+        let hover_key = ElementId::Name(SharedString::from(format!("canvas-hover:{id}")));
         Ok(CanvasElement {
-            id: SharedString::from(id),
-            commands,
-            regions,
+            click_key,
+            hover_key,
+            commands: Rc::new(commands),
+            regions: Rc::new(regions),
             prepaint_callback,
             measure_callback,
             clip,

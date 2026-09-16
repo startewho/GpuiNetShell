@@ -641,19 +641,25 @@ impl<'a> MaterializeRequest<'a> {
     /// The managed side writes newline-separated rows of tab-separated fields;
     /// a [`crate::schema::STATUS_TRUNCATED`] reply means its buffer was too
     /// small, so the call is retried with the size it reported.
-    pub fn resolve_rows(&self, argument: &ComponentArgument) -> Result<Vec<Row>, String> {
+    pub fn resolve_rows(&self, argument: &ComponentArgument) -> Result<Rc<Vec<Row>>, String> {
         let token = match argument {
             ComponentArgument::Callback(token) => *token,
             other => return Err(format!("expected a rows callback, got {other:?}")),
         };
         let host = self.factory.host();
+        if let Some(cached) = host.row_cache.borrow().get(&token) {
+            return Ok(cached.clone());
+        }
         let Some(resolve) = host.callbacks.resolve_rows else {
             return Err("the host has no resolve_rows callback".into());
         };
 
         let mut capacity = 64 * 1024usize;
-        loop {
-            let mut buffer = vec![0u8; capacity];
+        let length = loop {
+            let mut buffer = host.row_scratch.borrow_mut();
+            if buffer.len() < capacity {
+                buffer.resize(capacity, 0);
+            }
             let mut length = 0u32;
             // SAFETY: the buffer is live for the call and the managed side
             // writes at most `capacity` bytes before returning.
@@ -667,6 +673,7 @@ impl<'a> MaterializeRequest<'a> {
                 )
             };
             if status == crate::schema::STATUS_TRUNCATED {
+                drop(buffer);
                 capacity = (length as usize).max(capacity * 2);
                 if capacity > 8 * 1024 * 1024 {
                     return Err("row snapshot is too large".into());
@@ -676,11 +683,17 @@ impl<'a> MaterializeRequest<'a> {
             if status != crate::schema::STATUS_OK {
                 return Err(format!("row snapshot failed with status {status}"));
             }
-            buffer.truncate(length as usize);
-            let text =
-                String::from_utf8(buffer).map_err(|_| "row snapshot is not UTF-8".to_string())?;
-            return Ok(parse_rows(&text));
-        }
+            break length as usize;
+        };
+
+        let rows = {
+            let buffer = host.row_scratch.borrow();
+            let text = std::str::from_utf8(&buffer[..length])
+                .map_err(|_| "row snapshot is not UTF-8".to_string())?;
+            Rc::new(parse_rows(text))
+        };
+        host.row_cache.borrow_mut().insert(token, rows.clone());
+        Ok(rows)
     }
 
     pub fn children_len(&self) -> usize {

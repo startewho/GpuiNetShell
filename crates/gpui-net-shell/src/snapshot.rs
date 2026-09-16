@@ -48,6 +48,116 @@ pub struct Snapshot {
     /// The node descriptions resolved once by [`crate::materialize::prepare`].
     /// Empty for a raw decode; a snapshot is prepared before it is materialized.
     pub prepared: Vec<PreparedNode>,
+    /// A structural fingerprint of `nodes`, set by
+    /// [`crate::materialize::prepare`]. Two descriptions with the same
+    /// fingerprint render identically, so the displayed one can be kept.
+    pub(crate) fingerprint: u64,
+}
+
+impl Snapshot {
+    /// The structural fingerprint set by [`crate::materialize::prepare`].
+    pub fn fingerprint(&self) -> u64 {
+        self.fingerprint
+    }
+}
+
+/// A structural fingerprint of a description.
+///
+/// Callback tokens are deliberately excluded: they are new every generation by
+/// design and do not change the interface. Everything else — components, data,
+/// style and method codes, arguments, slots, and child edges — is included, so
+/// an equal fingerprint means the same element tree.
+pub(crate) fn compute_fingerprint(nodes: &[Node]) -> u64 {
+    let mut hasher = Fnv::new();
+    hasher.write(nodes.len() as u64);
+    for node in nodes {
+        hasher.write(node.component as u64);
+        hasher.write_str(&node.data);
+        hasher.write(node.ops.len() as u64);
+        for op in &node.ops {
+            match op {
+                Op::NullaryStyle(code) => {
+                    hasher.write(1);
+                    hasher.write(*code as u64);
+                }
+                Op::ParamStyle(code, arg) => {
+                    hasher.write(2);
+                    hasher.write(*code as u64);
+                    fingerprint_arg(&mut hasher, arg);
+                }
+                Op::Method(code, args) => {
+                    hasher.write(3);
+                    hasher.write(*code);
+                    hasher.write(args.len() as u64);
+                    for arg in args {
+                        fingerprint_arg(&mut hasher, arg);
+                    }
+                }
+                Op::Callback(name, _token) => {
+                    hasher.write(4);
+                    hasher.write_str(name);
+                }
+                Op::Slot(name, child) => {
+                    hasher.write(5);
+                    hasher.write_str(name);
+                    hasher.write(*child as u64);
+                }
+            }
+        }
+        hasher.write(node.children.len() as u64);
+        for child in &node.children {
+            hasher.write(*child as u64);
+        }
+    }
+    hasher.finish()
+}
+
+fn fingerprint_arg(hasher: &mut Fnv, arg: &StyleArg) {
+    match arg {
+        StyleArg::Number(value) => {
+            hasher.write(10);
+            hasher.write(value.to_bits() as u64);
+        }
+        StyleArg::String(value) => {
+            hasher.write(11);
+            hasher.write_str(value);
+        }
+        StyleArg::Enum(value) => {
+            hasher.write(12);
+            hasher.write_str(value);
+        }
+        // A callback token does not change the interface.
+        StyleArg::Callback(_) => hasher.write(13),
+        StyleArg::Element(node) => {
+            hasher.write(14);
+            hasher.write(*node as u64);
+        }
+    }
+}
+
+/// A tiny FNV-1a hasher; fingerprints are compared within one process only.
+struct Fnv(u64);
+
+impl Fnv {
+    fn new() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+
+    fn write(&mut self, value: u64) {
+        self.0 ^= value;
+        self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+
+    fn write_str(&mut self, value: &str) {
+        self.write(value.len() as u64);
+        for byte in value.as_bytes() {
+            self.write(*byte as u64);
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
 
 impl Snapshot {
@@ -107,6 +217,7 @@ impl Snapshot {
             root,
             nodes,
             prepared: Vec::new(),
+            fingerprint: 0,
         })
     }
 }
@@ -157,6 +268,11 @@ impl RenderSnapshot {
     /// The generation this description was built for.
     pub fn revision(&self) -> u64 {
         self.inner.revision
+    }
+
+    /// The structural fingerprint of the description.
+    pub fn fingerprint(&self) -> u64 {
+        self.inner.snapshot.fingerprint()
     }
 
     pub fn root(&self) -> u32 {
@@ -624,6 +740,54 @@ mod tests {
         assert_eq!(Snapshot::decode(&arena, 0).err(), Some(STATUS_BAD_INDEX));
     }
 
+    /// A repaint produces new callback tokens, but the interface is the same,
+    /// so the fingerprint must not change — otherwise P7 could never keep an
+    /// unchanged description.
+    #[test]
+    fn fingerprint_ignores_callback_tokens() {
+        let with_token = |token| Node {
+            component: COMPONENT_BUTTON,
+            data: "save".into(),
+            ops: vec![
+                Op::Callback("on_click".into(), token),
+                Op::Method(
+                    crate::schema::method_code("label"),
+                    vec![StyleArg::String("Save".into())],
+                ),
+            ],
+            children: Vec::new(),
+        };
+        assert_eq!(
+            compute_fingerprint(&[with_token(1)]),
+            compute_fingerprint(&[with_token(9999)]),
+        );
+    }
+
+    #[test]
+    fn fingerprint_changes_with_the_interface() {
+        let text = |value: &str| Node {
+            component: COMPONENT_TEXT,
+            data: value.into(),
+            ops: Vec::new(),
+            children: Vec::new(),
+        };
+        assert_ne!(
+            compute_fingerprint(&[text("a")]),
+            compute_fingerprint(&[text("b")]),
+        );
+
+        let styled = |code| Node {
+            component: COMPONENT_DIV,
+            data: String::new(),
+            ops: vec![Op::NullaryStyle(code)],
+            children: Vec::new(),
+        };
+        assert_ne!(
+            compute_fingerprint(&[styled(0)]),
+            compute_fingerprint(&[styled(1)]),
+        );
+    }
+
     #[test]
     fn dropping_a_snapshot_retires_its_generation() {
         use std::sync::atomic::{AtomicU64, Ordering};
@@ -652,6 +816,7 @@ mod tests {
             root: 0,
             nodes: Vec::new(),
             prepared: Vec::new(),
+            fingerprint: 0,
         };
 
         let frozen = RenderSnapshot::new(11, 7, snapshot, callbacks);

@@ -107,9 +107,11 @@ public sealed class EventRegistryTests
         Assert.True(registry.RendersEntity(7));
 
         var second = registry.RegisterPersistentElement(7, (context, _) => context.Label("b"));
-        Assert.NotEqual(first, second);
-        Assert.False(registry.TryGetElement(first, out _));
-        Assert.True(registry.TryGetElement(second, out _));
+        // Re-registering reuses the token so a retained subtree that still
+        // references it keeps working; only the handler is replaced.
+        Assert.Equal(first, second);
+        Assert.True(registry.TryGetElement(first, out _));
+        Assert.Equal(1, registry.ElementRendererCount);
 
         registry.ReleasePersistentElement(7);
         Assert.False(registry.TryGetElement(second, out _));
@@ -159,9 +161,10 @@ public sealed class EventRegistryTests
         Assert.True(registry.TryGetElement(first, out _));
 
         var second = registry.RegisterEntityView("view", (context, _) => context.Label("b"));
-        Assert.NotEqual(first, second);
-        Assert.False(registry.TryGetElement(first, out _));
-        Assert.True(registry.TryGetElement(second, out _));
+        // The keyed token is reused; the handler is replaced in place.
+        Assert.Equal(first, second);
+        Assert.True(registry.TryGetElement(first, out _));
+        Assert.Equal(1, registry.ElementRendererCount);
     }
 
     [Fact]
@@ -222,7 +225,8 @@ public sealed class EventRegistryTests
 
         var second = registry.RegisterEntityView("view", (context, _) => context.Label("b"));
 
-        Assert.NotEqual(first, second);
+        // The token is reused, but the previous invocation's scope is retired.
+        Assert.Equal(first, second);
         Assert.False(registry.Dispatch(handler));
     }
 }

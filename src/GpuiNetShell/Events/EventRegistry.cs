@@ -302,10 +302,14 @@ public sealed class EventRegistry
     )
     {
         ArgumentNullException.ThrowIfNull(renderer);
-        if (_persistentElements.TryGetValue(entityId, out var previous))
+        // Reuse the token for a re-registration. A retained subtree keeps the
+        // token it was built with, so replacing it would strand that subtree.
+        // Its previous invocation's handlers are dead now, though.
+        if (_persistentElements.TryGetValue(entityId, out var existing))
         {
-            _elementRenderers.Remove(previous);
-            ForgetCallbackScope(previous);
+            _elementRenderers[existing] = renderer;
+            ForgetCallbackScope(existing);
+            return existing;
         }
         var token = _next++;
         _elementRenderers[token] = renderer;
@@ -336,10 +340,12 @@ public sealed class EventRegistry
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(renderer);
-        if (_entityViews.TryGetValue(key, out var previous))
+        // Reuse the token for a re-registration; see RegisterPersistentElement.
+        if (_entityViews.TryGetValue(key, out var existing))
         {
-            _elementRenderers.Remove(previous);
-            ForgetCallbackScope(previous);
+            _elementRenderers[existing] = renderer;
+            ForgetCallbackScope(existing);
+            return existing;
         }
         var token = _next++;
         _elementRenderers[token] = renderer;

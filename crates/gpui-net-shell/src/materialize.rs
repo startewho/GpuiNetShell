@@ -35,6 +35,7 @@ struct Behavior {
 /// never on a clean repaint. Materialization then only borrows the result, so a
 /// repaint does not re-resolve ops, rebuild payloads, or re-record methods.
 pub fn prepare(registry: &FrozenComponentRegistry, snapshot: &mut Snapshot) -> Result<(), String> {
+    snapshot.fingerprint = crate::snapshot::compute_fingerprint(&snapshot.nodes);
     let mut prepared = Vec::with_capacity(snapshot.nodes.len());
     for node in &snapshot.nodes {
         let descriptor = registry
@@ -470,10 +471,12 @@ mod tests {
                 },
             ],
             prepared: Vec::new(),
+            fingerprint: 0,
         };
 
         prepare(&frozen, &mut snapshot).unwrap();
 
+        assert_ne!(snapshot.fingerprint(), 0);
         assert_eq!(snapshot.prepared.len(), 2);
         assert_eq!(
             snapshot.prepared[0].style.align_items,
