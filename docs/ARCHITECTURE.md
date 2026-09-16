@@ -30,7 +30,7 @@ never per builder call, per frame, or per property.
 
 ```text
 ShellView::render                       Rust
-        │ dirty?  ── no ──▶ materialize the retained snapshot
+        │ dirty?  ── no ──▶ materialize from the prepared snapshot
         ▼ yes
 render callback (session, generation)   C ABI
         │ managed View.Render writes nodes / ops / children / UTF-8
@@ -38,14 +38,17 @@ render callback (session, generation)   C ABI
 RenderArena.Publish()                   C#
         │ NativeArena descriptor
         ▼
-Snapshot::decode -> RenderSnapshot      Rust
+Snapshot::decode -> prepare -> RenderSnapshot   Rust
         │ render_completed(session, generation)
         ▼
 materialize -> ComponentRegistry -> materializers -> elements
 ```
 
 A clean GPUI repaint re-materializes the retained snapshot without calling
-managed `Render`. `Render` runs only when the view is dirty, which is set on
+managed `Render`, and without re-resolving it: `prepare` folds each node's ops
+into a `PreparedNode` (style, payload, recorded methods, child routing) once,
+when the description is built. `materialize` then only borrows that and builds
+the GPUI element. `Render` runs only when the view is dirty, which is set on
 first mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Notify()`.
 
 ## View and snapshots
@@ -53,15 +56,15 @@ first mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Not
 `crates/gpui-net-shell/src/view.rs` mirrors `gpui-shell`'s `view.rs`. A
 `ShellView` entity owns:
 
-- `current` and `previous` `RenderSnapshot`s — the previous is held one
-  generation longer so an event dispatched against the last frame still
-  resolves its callback tokens;
+- `current` — the published `RenderSnapshot`. Replacing it drops the one it
+  replaced, which retires that generation's callbacks immediately;
 - `dirty`, `retired`, and the last build `error`;
 - the frozen component registry.
 
 `rebuild` is transactional: the managed callback fills the arena, `Snapshot::decode`
-validates it, and only then is the new `RenderSnapshot` swapped in. A failed
-build leaves the previous description and its callbacks untouched.
+validates it, `prepare` resolves it, and only then is the new `RenderSnapshot`
+swapped in. A failed build leaves the previous description and its callbacks
+untouched.
 
 A `RenderSnapshot` (in `src/snapshot.rs`) is a cloneable `Rc` handle that owns
 its generation. When it is dropped, it calls the managed `retire_callbacks`
@@ -123,19 +126,28 @@ applied. A name outside the vocabulary is dropped, exactly as a typo was before.
 ## Components and behavior
 
 `crates/gpui-net-shell/src/materialize.rs` mirrors `gpui-shell`'s
-`materialize.rs` and dispatches to a component registry:
+`materialize.rs` and dispatches to a component registry. The work is split in
+two so a repaint is cheap:
 
-- `resolve_ops` performs one pass over a node's ops: style calls fold into a
-  `StyleRefinement`, `Method` ops split into shell behavior (`disabled`,
-  `selected`) and recorded component methods, and `Callback` ops set the event
-  tokens.
-- `materialize_node` builds children first, then asks
-  `FrozenComponentRegistry::descriptor(id)` for the component, runs its
-  constructor with the node identity, records its methods, and hands a
-  `MaterializeRequest` to the descriptor's `ComponentMaterializer`.
+- `prepare` runs once per built description. For each node it performs one pass
+  over the ops: style calls fold into a `StyleRefinement`, `Method` ops split
+  into shell behavior (`disabled`, `selected`) and recorded component methods,
+  `Callback` ops set the event tokens, and named slots are routed out of the
+  ordinary children. The result is a `PreparedNode` — style, constructor
+  payload, recorded methods, slots, child ids, behavior — stored on the
+  snapshot.
+- `materialize_node` runs on every repaint. It borrows the `PreparedNode`,
+  materializes the children, and hands a `MaterializeRequest` to the
+  descriptor's `ComponentMaterializer`. It does not re-resolve ops, rebuild
+  payloads, or re-record methods.
 - The materializer builds the element and calls `request.finish(element)`, which
   applies the `StyleRefinement` and the ordinary children and returns an
   `AnyElement`.
+
+A component method's name does not cross the ABI either: the managed side sends
+a `MethodOps` code (FNV-1a over the name), and the frozen registry resolves it
+back to the name for `ComponentDescriptor::method`. `disabled` and `selected`
+are reserved names in that table.
 
 The registry (`src/registry.rs`) is the seam adapted from `gpui-shell`'s
 `component_registry.rs`: a `ComponentDescriptor` owns its constructors, methods,
@@ -147,8 +159,8 @@ and materializer. Adding a component is:
 The runtime never names a concrete component: the decoder knows only an id, and
 `materialize.rs` knows only a descriptor. Component methods are not enumerated
 per method either: `ComponentDescriptor::method(name)` resolves a recorded name
-to its recorder. `resolve_ops` and the descriptor recorders are pure and tested
-without a window.
+to its recorder. `prepare`, `resolve_ops`, and the descriptor recorders are pure
+and tested without a window.
 
 The built-in catalog is `Div`, `Text`, `Button`, `Label`, `Badge`, `Progress`,
 `Combobox`, `Radio`, `Tabs`, `Scroll`, `Scrollbar`, `Resizable`, and `Popover`;

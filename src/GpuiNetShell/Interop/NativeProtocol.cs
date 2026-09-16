@@ -10,15 +10,16 @@ namespace GpuiNetShell.Interop;
 /// closed vocabulary: a style call carries a <c>u16</c> opcode indexing
 /// <see cref="StyleOps"/>, which the native host maps to direct GPUI style
 /// calls. There is no runtime reflection. Component behavior is a generic
-/// <see cref="OpMethod"/>, and event bindings are a generic
-/// <see cref="OpCallback"/>.
+/// <see cref="OpMethod"/> whose <c>a</c> word is a <see cref="MethodOps"/>
+/// code, and event bindings are a generic <see cref="OpCallback"/> carrying a
+/// packed name.
 /// </remarks>
 public static class NativeProtocol
 {
     public const uint AbiVersion = 8;
 
     /// <summary>Identifies the component/operation vocabulary below.</summary>
-    public const ulong SchemaHash = 0x6E65_7473_6865_6C60;
+    public const ulong SchemaHash = 0x6E65_7473_6865_6C61;
 
     /// <summary>
     /// Separates the string arguments of a multi-argument constructor inside one
@@ -143,13 +144,14 @@ public static class NativeProtocol
     public const uint ComponentReveal = 112;
     public const uint ComponentPaintImage = 113;
 
-    // Operations. For a style op `a` is a u16 opcode into StyleOps; for a
-    // method/callback/slot op `a` is the packed UTF-8 range of a name. `flags`
-    // classifies the argument in `b`.
+    // Operations. A style op's `a` is a u16 opcode into StyleOps; a method op's
+    // `a` is a MethodOps code; a callback/slot op's `a` is the packed UTF-8
+    // range of a name. `flags` classifies the argument in `b`.
     /// <summary>A no-argument style; <c>a</c> is a <see cref="StyleOps"/> nullary opcode.</summary>
     public const ushort OpNullaryStyle = 1;
     /// <summary>A style taking one argument; <c>a</c> is a <see cref="StyleOps"/> param opcode.</summary>
     public const ushort OpParamStyle = 2;
+    /// <summary>A component behavior method; <c>a</c> is a <see cref="MethodOps"/> code.</summary>
     public const ushort OpMethod = 3;
     public const ushort OpCallback = 4;
     /// <summary>A named slot: <c>a</c> is the name, <c>b</c> the child node index.</summary>

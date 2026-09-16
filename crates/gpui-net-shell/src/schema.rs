@@ -9,18 +9,39 @@
 //! vocabulary: a style call carries a `u16` opcode indexing [`crate::style`]'s
 //! declared method lists, which the native host maps to direct GPUI style
 //! calls. There is no runtime reflection. Component behavior is a generic
-//! `Method`, and event bindings are a generic `Callback`.
+//! `Method` whose `a` word is a [`method_code`], and event bindings are a
+//! generic `Callback` whose `a` word is a packed name.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
 pub const ABI_VERSION: u32 = 8;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C60;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C61;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
 pub const CONSTRUCTOR_ARG_SEPARATOR: char = '\u{1F}';
+
+/// The stable numeric code a component method name travels as.
+///
+/// Component method names are a closed set of ASCII identifiers known to both
+/// the managed builders and the native catalog. Rather than send the string,
+/// the two sides compute the same FNV-1a 64-bit code over the name's UTF-8
+/// bytes; the native catalog builds a `code -> name` table from its descriptors
+/// and the managed side sends the code. This mirrors `MethodOps.Code` in
+/// `src/GpuiNetShell/Interop/MethodOps.cs`; a test pins both.
+pub const fn method_code(name: &str) -> u64 {
+    let bytes = name.as_bytes();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut index = 0;
+    while index < bytes.len() {
+        hash ^= bytes[index] as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        index += 1;
+    }
+    hash
+}
 
 // ---------------------------------------------------------------------------
 // Components
@@ -272,8 +293,9 @@ pub const COMPONENT_PAINT_IMAGE: u32 = 113;
 // ---------------------------------------------------------------------------
 //
 // A style operation's `a` word is a `u16` style opcode (see `style.rs`).
-// A component method, callback, or slot operation's `a` word is the packed
-// UTF-8 range of its name. `flags` classifies the argument carried in `b`:
+// A component method's `a` word is its [`method_code`]. A callback or slot
+// operation's `a` word is the packed UTF-8 range of its name. `flags`
+// classifies the argument carried in `b`:
 //
 // * [`ARG_NONE`]: no argument, `b == 0`;
 // * [`ARG_NUMBER`]: the low 32 bits of `b` are an IEEE-754 `f32`;
@@ -348,7 +370,15 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C60);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C61);
+    }
+
+    /// The managed `MethodOps.Code` must produce the same values; a test there
+    /// pins the same literals.
+    #[test]
+    fn method_codes_are_stable() {
+        assert_eq!(method_code("label"), 0x39F7_FCEC_8FCB_623D);
+        assert_eq!(method_code("disabled"), 0x0FA3_391D_B68E_4425);
     }
 
     #[test]

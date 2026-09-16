@@ -450,6 +450,10 @@ public sealed class GpuiApplication
         internal int OnWindowClosed(int status)
         {
             Owner.ForgetSession(SessionId);
+            // The arenas own unmanaged buffers; release them with the window
+            // rather than leaving them to a finalizer that may never run.
+            _arena.Dispose();
+            _elementArena.Dispose();
             return status;
         }
 

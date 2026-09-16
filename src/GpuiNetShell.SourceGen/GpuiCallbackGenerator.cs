@@ -224,11 +224,18 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
                 .AppendLine();
         }
         builder.AppendLine();
-        builder.AppendLine("    /// <summary>Registers every [GpuiCallback] method. Call at the top of Render.</summary>");
+        builder.AppendLine("    private bool _gpuiCallbacksRegistered;");
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>Registers every [GpuiCallback] method once. Call at the top of Render.</summary>");
         builder.AppendLine(
             "    private void RegisterGeneratedCallbacks(ref global::GpuiNetShell.Rendering.RenderContext ui)"
         );
         builder.AppendLine("    {");
+        builder.AppendLine("        if (_gpuiCallbacksRegistered)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        _gpuiCallbacksRegistered = true;");
         foreach (CallbackMethod method in model.Methods)
         {
             builder
@@ -254,16 +261,17 @@ public sealed class GpuiCallbackGenerator : IIncrementalGenerator
     private static string Registration(CallbackMethod method, string key) =>
         method.Kind switch
         {
-            CallbackKind.Action => $"ui.RegisterCallback({method.MethodName})",
+            CallbackKind.Action =>
+                $"ui.RegisterStableCallback({Literal(key)}, {method.MethodName})",
             CallbackKind.ActionBool =>
-                $"ui.RegisterCallback(value => {method.MethodName}(value.Boolean))",
+                $"ui.RegisterStableCallback({Literal(key)}, value => {method.MethodName}(value.Boolean))",
             CallbackKind.ActionNumber =>
-                $"ui.RegisterCallback(value => {method.MethodName}(value.Number))",
+                $"ui.RegisterStableCallback({Literal(key)}, value => {method.MethodName}(value.Number))",
             CallbackKind.ActionString =>
-                $"ui.RegisterCallback(value => {method.MethodName}(value.String ?? string.Empty))",
-            CallbackKind.Rows => $"ui.RegisterRows({method.MethodName})",
-            CallbackKind.Element => $"ui.RegisterElement({method.MethodName})",
-            CallbackKind.Measure => $"ui.RegisterMeasure({method.MethodName})",
+                $"ui.RegisterStableCallback({Literal(key)}, value => {method.MethodName}(value.String ?? string.Empty))",
+            CallbackKind.Rows => $"ui.RegisterStableRows({Literal(key)}, {method.MethodName})",
+            CallbackKind.Element => $"ui.RegisterStableElement({Literal(key)}, {method.MethodName})",
+            CallbackKind.Measure => $"ui.RegisterStableMeasure({Literal(key)}, {method.MethodName})",
             CallbackKind.EntityView =>
                 $"ui.RegisterEntityView<{method.StateType}>({Literal(key)}, {method.MethodName})",
             _ => "0",

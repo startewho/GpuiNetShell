@@ -120,6 +120,18 @@
 | 增强 | 每窗口标题栏可单独配置：`WindowOptions.UseCustomTitlebar`（`bool?`，`null` 继承父窗口设置，`true/false` 显式覆盖）；`OpenWindow(factory, options)` 重载；`Session.UseCustomTitlebar` 解析后按窗口下发 flags（含 always-show-scrollbars）。Sample 三个按钮：继承/自定义/系统，`--open-mixed` 一次开三种验证 | — | 7 | `…6C55` | Multi-Window | ✅ |
 | 修复 | DataTable 只显示表头：表体（`flex_grow_1`）在自动高度父列中塌缩；host 改为 `w_full().min_h(160)`，调用方 `.H(...)` 可覆盖 | — | 5 | `…6C3C` | Collections | ✅ |
 
+## 渲染与内存优化（P0–P5）
+
+- **P1 生命周期/缓冲**：`GpuiApplication.Session.OnWindowClosed` 释放两个 `RenderArena`（非托管缓冲），`RenderArena` 加 finalizer；`PublishBuffer` 改几何增长，避免逐帧 `AlignedFree/Alloc`。
+- **P2 按代准备**：新增 `PreparedNode`。`materialize::prepare` 在描述构建时（dirty）折叠每个节点的 style/payload/methods/slots/children；`materialize_node` 只借用，clean repaint 不再解析 ops、重建 payload、记录方法。
+- **P3 克隆/原子**：`NodeFactory`/`ElementCallback` 持 `Rc<FrozenComponentRegistry>`；`ComponentPayload` 由 `Arc` 改 `Rc`；`resolve_ops` 用 `std::mem::take` 去掉每样式克隆；`prepare` 借用方法名。
+- **P4 arena 编码**：`AppendUtf8` 直接编码进 `_utf8`（无 `byte[]` + `AddRange`）；`PublishBuffer` 用 `CollectionsMarshal.AsSpan`（去掉每帧 4 次 `ToArray()`）；不变名字（方法/回调/slot/enum/`on_click`）UTF-8 缓存；几何扩容。
+- **P5 事件/实体**：`EventRegistry` 复用 generation/scope 列表，`Register(Action)` 不再包闭包；生成回调改为**一次注册、稳定 token**（`RegisterStable*` + 生成器守卫）；`GalleryPage` 默认页 token 缓存。
+- **P5b 组件方法 opcode**：组件方法名不再上线，传 FNV-1a 64 位 `MethodOps` code；`FrozenComponentRegistry` 建 `code -> name` 表。`SCHEMA_HASH` → `…6C61`（`ABI_VERSION` 8 不变）。
+- **删除 `previous` 快照**：只保留 `current`，替换即退休旧代；快照内存减半。
+- **托管每帧分配**：基准测试 100 行（约 400 节点）从 **77,632 B/帧 → 21,576 B/帧（−72%）**。
+- **release DLL**：`[profile.release]` 加 `lto="fat"`/`codegen-units=1`/`strip="symbols"`；配合去除 inspector，36,299,264 → **30,938,112 字节（−14.8%）**。
+
 ## 样式（gpui style）覆盖
 
 - **无参样式**：由 `style.rs` 的 `style_vocabulary!` 声明为封闭的 `(名字, 直接调用)` 表，

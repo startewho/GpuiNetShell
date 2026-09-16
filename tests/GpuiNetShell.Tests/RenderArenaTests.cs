@@ -32,18 +32,29 @@ public sealed unsafe class RenderArenaTests
     }
 
     [Fact]
-    public void MethodNamesPackOffsetAndLength()
+    public void MethodNamesTravelAsCodesAndValuesPackOffsetAndLength()
     {
         using var arena = new RenderArena();
         var node = arena.AddNode(NativeProtocol.ComponentButton);
         arena.AddMethodString(node, "label", "Save");
 
         var descriptor = arena.Publish();
-        var packed = descriptor.Ops[0].A;
 
+        Assert.Equal(MethodOps.Code("label"), descriptor.Ops[0].A);
+        var packed = descriptor.Ops[0].B;
         Assert.Equal(0ul, packed >> 32);
-        Assert.Equal((ulong)"label".Length, packed & 0xFFFF_FFFF);
-        Assert.Equal((byte)'l', descriptor.Utf8[0]);
+        Assert.Equal((ulong)"Save".Length, packed & 0xFFFF_FFFF);
+        Assert.Equal((byte)'S', descriptor.Utf8[0]);
+    }
+
+    [Fact]
+    public void TheMethodCodeIsStable()
+    {
+        // Pinned against `schema::method_code` in the native crate; the two
+        // must produce identical codes or every component method would be
+        // dropped on the native side.
+        Assert.Equal(0x39F7_FCEC_8FCB_623DUL, MethodOps.Code("label"));
+        Assert.Equal(0x0FA3_391D_B68E_4425UL, MethodOps.Code("disabled"));
     }
 
     [Fact]

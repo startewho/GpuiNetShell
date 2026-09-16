@@ -23,9 +23,9 @@ use gpui::{
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
 use crate::context::{EntityHosts, HostContext, Invalidate};
-use crate::materialize::materialize;
+use crate::materialize::{materialize, prepare};
 use crate::registry::FrozenComponentRegistry;
-use crate::schema::STATUS_OK;
+use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK};
 use crate::snapshot::{RenderSnapshot, Snapshot};
 use gpui_component::ActiveTheme as _;
 
@@ -33,12 +33,9 @@ use gpui_component::ActiveTheme as _;
 pub struct ShellView {
     session_id: u64,
     callbacks: GpuiNetCallbacks,
-    registry: FrozenComponentRegistry,
+    registry: Rc<FrozenComponentRegistry>,
     /// The description the managed host last published.
     current: Option<RenderSnapshot>,
-    /// The snapshot this one replaced, held one generation longer so an event
-    /// dispatched against the previous frame still resolves.
-    previous: Option<RenderSnapshot>,
     revision: u64,
     dirty: bool,
     retired: bool,
@@ -55,14 +52,13 @@ impl ShellView {
     pub fn new(
         session_id: u64,
         callbacks: GpuiNetCallbacks,
-        registry: FrozenComponentRegistry,
+        registry: Rc<FrozenComponentRegistry>,
     ) -> Self {
         Self {
             session_id,
             callbacks,
             registry,
             current: None,
-            previous: None,
             revision: 0,
             dirty: true,
             retired: false,
@@ -104,11 +100,6 @@ impl ShellView {
         self.current.as_ref()
     }
 
-    /// The description the current one replaced, if any.
-    pub fn previous_snapshot(&self) -> Option<&RenderSnapshot> {
-        self.previous.as_ref()
-    }
-
     /// Why the most recent build failed, if it did.
     pub fn build_error(&self) -> Option<&str> {
         self.error.as_deref()
@@ -124,7 +115,6 @@ impl ShellView {
         self.retired = true;
         self.dirty = false;
         self.error = None;
-        self.previous = None;
         self.current = None;
     }
 
@@ -154,12 +144,18 @@ impl ShellView {
         }
 
         match Snapshot::decode(&arena, root) {
-            Ok(snapshot) => {
+            Ok(mut snapshot) => {
+                if let Err(message) = prepare(&self.registry, &mut snapshot) {
+                    self.error = Some(message);
+                    self.complete(generation, STATUS_INVALID_ARGUMENT);
+                    return;
+                }
                 let frozen =
                     RenderSnapshot::new(self.session_id, generation, snapshot, self.callbacks);
-                // Assigning through `previous` retires the snapshot before
-                // last, releasing its generation's callbacks.
-                self.previous = self.current.replace(frozen);
+                // Replacing `current` drops the snapshot it replaced, which
+                // retires that generation's callbacks immediately. Nothing in
+                // the host reads the previous description, so it is not kept.
+                self.current = Some(frozen);
                 self.revision = generation;
                 self.error = None;
                 self.complete(generation, STATUS_OK);

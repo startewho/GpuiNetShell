@@ -55,6 +55,7 @@ internal abstract class GalleryPage<TState> : GalleryPage
     where TState : class, new()
 {
     private Entity<TState>? _entity;
+    private ulong _pageToken;
 
     /// <summary>The page's entity; created on first render.</summary>
     protected Entity<TState> Entity =>
@@ -82,11 +83,17 @@ internal abstract class GalleryPage<TState> : GalleryPage
     /// overrides this to call <c>RegisterGeneratedCallbacks</c> and return the
     /// generated entity-view token instead.
     /// </summary>
-    protected virtual ulong RegisterPageCallbacks(ref RenderContext ui) =>
-        ui.RegisterEntityView<TState>(
-            GetType().FullName ?? GetType().Name,
-            (state, context, cx) => RenderState(state, context, cx)
-        );
+    protected virtual ulong RegisterPageCallbacks(ref RenderContext ui)
+    {
+        // The renderer is a stable method group, so register it once rather
+        // than allocating a replacement closure every frame.
+        return _pageToken != 0
+            ? _pageToken
+            : _pageToken = ui.RegisterEntityView<TState>(
+                GetType().FullName ?? GetType().Name,
+                (state, context, cx) => RenderState(state, context, cx)
+            );
+    }
 
     /// <summary>
     /// Describes this page's content from its entity state. Pages that register

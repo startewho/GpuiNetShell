@@ -12,7 +12,7 @@
 //! materializer.
 
 use std::any::Any;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -36,12 +36,16 @@ impl ComponentId {
 }
 
 /// An owned value created by a constructor or method recorder.
+///
+/// `Rc` rather than `Arc`: a payload is built and consumed on the GPUI thread
+/// within one generation and never crosses a thread, so the atomic refcount is
+/// pure overhead.
 #[derive(Clone)]
-pub struct ComponentPayload(Arc<dyn Any + Send + Sync>);
+pub struct ComponentPayload(Rc<dyn Any>);
 
 impl ComponentPayload {
     pub fn new<T: Any + Send + Sync>(value: T) -> Self {
-        Self(Arc::new(value))
+        Self(Rc::new(value))
     }
 
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
@@ -257,6 +261,32 @@ impl RecordedComponentMethod {
     }
 }
 
+/// A node's description resolved once per generation.
+///
+/// `materialize::prepare` fills one of these for every node when a snapshot is
+/// built, so a repaint — clean or dirty — borrows the style, payload, recorded
+/// methods, and child routing instead of re-resolving the node's ops and
+/// heap-allocating a payload per method on every frame.
+#[derive(Clone, Debug)]
+pub struct PreparedNode {
+    /// The folded style for the node.
+    pub style: StyleRefinement,
+    /// The constructor payload, built once.
+    pub payload: ComponentPayload,
+    /// The component methods recorded for this node, in declaration order.
+    pub methods: Vec<RecordedComponentMethod>,
+    /// Named slots, held as node ids so they materialize only when taken.
+    pub slots: Vec<(String, u32)>,
+    /// Ordinary child node ids (those not claimed by a slot).
+    pub children: Vec<u32>,
+    /// Shell behavior: `disabled`.
+    pub disabled: bool,
+    /// Shell behavior: `selected`.
+    pub selected: bool,
+    /// The `on_click` callback token, if one was bound.
+    pub on_click: Option<u64>,
+}
+
 /// One value carried back to a managed callback.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ComponentCallbackArgument {
@@ -340,7 +370,7 @@ impl ComponentCallback {
 /// table cell be rendered by managed code rather than a built-in text row.
 #[derive(Clone)]
 pub struct ElementCallback {
-    registry: FrozenComponentRegistry,
+    registry: Rc<FrozenComponentRegistry>,
     host: HostContext,
     token: u64,
 }
@@ -383,7 +413,8 @@ impl ElementCallback {
         window: &mut Window,
         cx: &mut App,
     ) -> Result<AnyElement, String> {
-        let snapshot = self.decode(arguments)?;
+        let mut snapshot = self.decode(arguments)?;
+        crate::materialize::prepare(&self.registry, &mut snapshot)?;
         let root = snapshot.root;
         let factory = NodeFactory::new(&self.registry, Rc::new(snapshot), &self.host);
         factory.build(root, window, cx)
@@ -428,14 +459,14 @@ pub type Row = Vec<String>;
 /// still be `'static`.
 #[derive(Clone)]
 pub struct NodeFactory {
-    registry: FrozenComponentRegistry,
+    registry: Rc<FrozenComponentRegistry>,
     snapshot: Rc<Snapshot>,
     host: HostContext,
 }
 
 impl NodeFactory {
     pub fn new(
-        registry: &FrozenComponentRegistry,
+        registry: &Rc<FrozenComponentRegistry>,
         snapshot: Rc<Snapshot>,
         host: &HostContext,
     ) -> Self {
@@ -447,6 +478,10 @@ impl NodeFactory {
     }
 
     pub fn registry(&self) -> &FrozenComponentRegistry {
+        &self.registry
+    }
+
+    pub fn registry_rc(&self) -> &Rc<FrozenComponentRegistry> {
         &self.registry
     }
 
@@ -593,7 +628,7 @@ impl<'a> MaterializeRequest<'a> {
     ) -> Result<ElementCallback, String> {
         match argument {
             ComponentArgument::Callback(token) => Ok(ElementCallback {
-                registry: self.factory.registry().clone(),
+                registry: self.factory.registry_rc().clone(),
                 host: self.factory.host().clone(),
                 token: *token,
             }),
@@ -945,8 +980,27 @@ impl ComponentRegistry {
 
     /// Publishes the catalog, consuming the builder.
     pub fn freeze(self) -> FrozenComponentRegistry {
+        // The `code -> name` table the decoder resolves a component method
+        // opcode through. Built once here so a method name never crosses the
+        // ABI.
+        let mut method_names: HashMap<u64, &'static str> = HashMap::new();
+        for descriptor in &self.descriptors {
+            for method in descriptor.methods() {
+                method_names
+                    .entry(crate::schema::method_code(method.name()))
+                    .or_insert(method.name());
+            }
+        }
+        // Shell behavior names that are not declared by a component.
+        for name in ["disabled", "selected"] {
+            method_names
+                .entry(crate::schema::method_code(name))
+                .or_insert(name);
+        }
+
         FrozenComponentRegistry {
             descriptors: self.descriptors,
+            method_names,
         }
     }
 }
@@ -962,6 +1016,7 @@ impl Default for ComponentRegistry {
 #[derive(Clone, Default)]
 pub struct FrozenComponentRegistry {
     descriptors: Vec<Arc<ComponentDescriptor>>,
+    method_names: HashMap<u64, &'static str>,
 }
 
 impl FrozenComponentRegistry {
@@ -971,6 +1026,12 @@ impl FrozenComponentRegistry {
 
     pub fn descriptor(&self, id: u32) -> Option<&ComponentDescriptor> {
         self.descriptors.get(id as usize).map(Arc::as_ref)
+    }
+
+    /// The method name a [`crate::schema::method_code`] resolves to, if the
+    /// catalog declares it (or it is a shell behavior name).
+    pub fn method_name(&self, code: u64) -> Option<&'static str> {
+        self.method_names.get(&code).copied()
     }
 }
 

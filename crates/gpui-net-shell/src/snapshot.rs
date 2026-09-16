@@ -11,6 +11,7 @@
 use std::rc::Rc;
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
+use crate::registry::PreparedNode;
 use crate::schema::*;
 use crate::style::StyleArg;
 
@@ -22,7 +23,8 @@ pub enum Op {
     /// A style method taking one argument, by opcode into [`crate::style`].
     ParamStyle(u16, StyleArg),
     /// A component behavior method with its arguments, in declaration order.
-    Method(String, Vec<StyleArg>),
+    /// The first field is the [`crate::schema::method_code`] of the method name.
+    Method(u64, Vec<StyleArg>),
     /// An event binding by name and callback token.
     Callback(String, u64),
     /// A named slot pointing at one child node.
@@ -39,10 +41,13 @@ pub struct Node {
 }
 
 /// An owned element description for one window render.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     pub root: u32,
     pub nodes: Vec<Node>,
+    /// The node descriptions resolved once by [`crate::materialize::prepare`].
+    /// Empty for a raw decode; a snapshot is prepared before it is materialized.
+    pub prepared: Vec<PreparedNode>,
 }
 
 impl Snapshot {
@@ -98,7 +103,11 @@ impl Snapshot {
         }
         detect_cycle(&nodes)?;
 
-        Ok(Self { root, nodes })
+        Ok(Self {
+            root,
+            nodes,
+            prepared: Vec::new(),
+        })
     }
 }
 
@@ -193,26 +202,26 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
         }
         OP_PARAM_STYLE => Ok(Op::ParamStyle(style_code(record)?, read_arg(record, utf8)?)),
         OP_METHOD => {
-            let name = read_name(record, utf8)?;
+            let code = record.a;
             match record.flags {
                 ARG_NONE => {
                     if record.b != 0 || record.c != 0 {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
-                    Ok(Op::Method(name, Vec::new()))
+                    Ok(Op::Method(code, Vec::new()))
                 }
                 ARG_NUMBER => {
                     if record.c != 0 {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
-                    Ok(Op::Method(name, vec![StyleArg::Number(number(record.b)?)]))
+                    Ok(Op::Method(code, vec![StyleArg::Number(number(record.b)?)]))
                 }
                 ARG_STRING => {
                     if record.c != 0 {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
                     Ok(Op::Method(
-                        name,
+                        code,
                         vec![StyleArg::String(read_word(utf8, record.b)?)],
                     ))
                 }
@@ -221,7 +230,7 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
                     Ok(Op::Method(
-                        name,
+                        code,
                         vec![StyleArg::Enum(read_word(utf8, record.b)?)],
                     ))
                 }
@@ -230,14 +239,14 @@ fn decode_op(record: &crate::abi::GpuiNetOp, utf8: &[u8]) -> Result<Op, i32> {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
                     let node = u32::try_from(record.b).map_err(|_| STATUS_INVALID_ARGUMENT)?;
-                    Ok(Op::Method(name, vec![StyleArg::Element(node)]))
+                    Ok(Op::Method(code, vec![StyleArg::Element(node)]))
                 }
                 ARG_STRING_CALLBACK => {
                     if record.c == 0 {
                         return Err(STATUS_INVALID_ARGUMENT);
                     }
                     Ok(Op::Method(
-                        name,
+                        code,
                         vec![
                             StyleArg::String(read_word(utf8, record.b)?),
                             StyleArg::Callback(record.c),
@@ -403,11 +412,11 @@ mod tests {
     fn decodes_styles_methods_and_callbacks() {
         let mut utf8 = String::new();
         let id = string_word("save", &mut utf8);
-        let label_name = string_word("label", &mut utf8);
         let label_value = string_word("Save", &mut utf8);
         let click = string_word("on_click", &mut utf8);
         let bytes = utf8.into_bytes();
         let center = crate::style::nullary_index("items_center").unwrap() as u64;
+        let label = crate::schema::method_code("label");
 
         let arena = RawArena {
             nodes: vec![GpuiNetNode {
@@ -421,7 +430,7 @@ mod tests {
                     node: 0,
                     code: OP_METHOD,
                     flags: ARG_STRING,
-                    a: label_name,
+                    a: label,
                     b: label_value,
                     c: 0,
                 },
@@ -451,7 +460,10 @@ mod tests {
         assert_eq!(
             snapshot.nodes[0].ops,
             vec![
-                Op::Method("label".into(), vec![StyleArg::String("Save".into())]),
+                Op::Method(
+                    crate::schema::method_code("label"),
+                    vec![StyleArg::String("Save".into())]
+                ),
                 Op::NullaryStyle(crate::style::nullary_index("items_center").unwrap()),
                 Op::Callback("on_click".into(), 7),
             ]
@@ -460,8 +472,8 @@ mod tests {
 
     #[test]
     fn decodes_numeric_methods_and_param_styles() {
-        let mut utf8 = String::new();
-        let size = string_word("size", &mut utf8);
+        let utf8 = String::new();
+        let size = crate::schema::method_code("size");
         let bytes = utf8.into_bytes();
         let padding = crate::style::param_index("p").unwrap() as u64;
 
@@ -496,8 +508,14 @@ mod tests {
         assert_eq!(
             snapshot.nodes[0].ops,
             vec![
-                Op::Method("size".into(), vec![StyleArg::Number(2.0)]),
-                Op::ParamStyle(crate::style::param_index("p").unwrap(), StyleArg::Number(12.0)),
+                Op::Method(
+                    crate::schema::method_code("size"),
+                    vec![StyleArg::Number(2.0)]
+                ),
+                Op::ParamStyle(
+                    crate::style::param_index("p").unwrap(),
+                    StyleArg::Number(12.0)
+                ),
             ]
         );
     }
@@ -517,8 +535,8 @@ mod tests {
             utf8: Vec::new(),
         };
         assert_eq!(
-            Snapshot::decode(&arena.descriptor(), 0),
-            Err(STATUS_BAD_INDEX)
+            Snapshot::decode(&arena.descriptor(), 0).err(),
+            Some(STATUS_BAD_INDEX)
         );
 
         arena.children.clear();
@@ -551,7 +569,10 @@ mod tests {
             ],
             utf8: Vec::new(),
         };
-        assert_eq!(Snapshot::decode(&arena.descriptor(), 0), Err(STATUS_CYCLE));
+        assert_eq!(
+            Snapshot::decode(&arena.descriptor(), 0).err(),
+            Some(STATUS_CYCLE)
+        );
     }
 
     #[test]
@@ -568,8 +589,8 @@ mod tests {
             utf8: vec![b'a', b'b'],
         };
         assert_eq!(
-            Snapshot::decode(&arena.descriptor(), 0),
-            Err(STATUS_TRUNCATED)
+            Snapshot::decode(&arena.descriptor(), 0).err(),
+            Some(STATUS_TRUNCATED)
         );
     }
 
@@ -592,15 +613,15 @@ mod tests {
             utf8: Vec::new(),
         };
         assert_eq!(
-            Snapshot::decode(&arena.descriptor(), 0),
-            Err(STATUS_INVALID_ARGUMENT)
+            Snapshot::decode(&arena.descriptor(), 0).err(),
+            Some(STATUS_INVALID_ARGUMENT)
         );
     }
 
     #[test]
     fn zero_length_arena_is_an_empty_error_not_a_crash() {
         let arena = GpuiNetArena::empty();
-        assert_eq!(Snapshot::decode(&arena, 0), Err(STATUS_BAD_INDEX));
+        assert_eq!(Snapshot::decode(&arena, 0).err(), Some(STATUS_BAD_INDEX));
     }
 
     #[test]
@@ -630,6 +651,7 @@ mod tests {
         let snapshot = Snapshot {
             root: 0,
             nodes: Vec::new(),
+            prepared: Vec::new(),
         };
 
         let frozen = RenderSnapshot::new(11, 7, snapshot, callbacks);

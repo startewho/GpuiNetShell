@@ -27,12 +27,15 @@ gpui-net-shell native host  (Rust)
 
 The split mirrors `gpui-shell`: a description is published only when state
 moves, and clean repaints replay the retained snapshot in Rust without entering
-managed code. Styling is a **closed opcode vocabulary**, not runtime
-reflection: the managed side sends a `u16` opcode for each style call
-(`items_center`, `size_full`, `p`, `gap`, `bg`, …) and Rust maps it to a direct
-GPUI style-method call. The vocabulary is declared once in `style.rs` and
-mirrored in `StyleOps.cs`; a test keeps the two in step, and the native crate
-no longer enables `gpui-base/inspector`.
+managed code. A built description is **prepared once**: each node's ops are
+folded into a `PreparedNode` (style, payload, recorded methods, child routing),
+so a repaint only builds GPUI elements. Styling is a **closed opcode
+vocabulary**, not runtime reflection: the managed side sends a `u16` opcode for
+each style call (`items_center`, `size_full`, `p`, `gap`, `bg`, …) and Rust maps
+it to a direct GPUI style-method call. Component method names travel as numeric
+codes rather than strings. The style vocabulary is declared once in `style.rs`
+and mirrored in `StyleOps.cs`; a test keeps the two in step, and the native
+crate no longer enables `gpui-base/inspector`.
 
 Each published render is a frozen `RenderSnapshot` that owns its generation.
 The native `ShellView` keeps the current and previous snapshots; when one is

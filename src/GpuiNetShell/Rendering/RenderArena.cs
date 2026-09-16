@@ -107,7 +107,7 @@ internal sealed unsafe class RenderArena : IDisposable
 
     /// <summary>Records a component behavior method by name.</summary>
     internal void AddMethod(int node, string method)
-        => AddOp(node, NativeProtocol.OpMethod, NativeProtocol.ArgNone, PackString(method));
+        => AddOp(node, NativeProtocol.OpMethod, NativeProtocol.ArgNone, MethodOps.Code(method));
 
     /// <summary>Records a component behavior method taking a number argument.</summary>
     internal void AddMethodNumber(int node, string method, double value)
@@ -115,7 +115,7 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpMethod,
             NativeProtocol.ArgNumber,
-            PackString(method),
+            MethodOps.Code(method),
             BitConverter.SingleToUInt32Bits((float)value)
         );
 
@@ -125,7 +125,7 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpMethod,
             NativeProtocol.ArgString,
-            PackString(method),
+            MethodOps.Code(method),
             PackString(value)
         );
 
@@ -135,8 +135,8 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpMethod,
             NativeProtocol.ArgEnum,
-            PackString(method),
-            PackString(value)
+            MethodOps.Code(method),
+            PackEnum(value)
         );
 
     /// <summary>
@@ -149,7 +149,7 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpMethod,
             NativeProtocol.ArgElement,
-            PackString(method),
+            MethodOps.Code(method),
             (ulong)childNode
         );
 
@@ -159,14 +159,14 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpMethod,
             NativeProtocol.ArgStringCallback,
-            PackString(method),
+            MethodOps.Code(method),
             PackString(value),
             token
         );
 
     /// <summary>Records an event binding by name and callback token.</summary>
     internal void AddCallback(int node, string name, ulong token)
-        => AddOp(node, NativeProtocol.OpCallback, NativeProtocol.ArgNone, PackString(name), token);
+        => AddOp(node, NativeProtocol.OpCallback, NativeProtocol.ArgNone, PackName(name), token);
 
     /// <summary>Records a named slot pointing at a child node.</summary>
     internal void AddSlot(int node, string name, int child)
@@ -174,7 +174,7 @@ internal sealed unsafe class RenderArena : IDisposable
             node,
             NativeProtocol.OpSlot,
             NativeProtocol.ArgNumber,
-            PackString(name),
+            PackName(name),
             (ulong)child
         );
 
@@ -215,14 +215,27 @@ internal sealed unsafe class RenderArena : IDisposable
         Free(ref _opsBuffer, ref _opsCapacity);
         Free(ref _childrenBuffer, ref _childrenCapacity);
         Free(ref _utf8Buffer, ref _utf8Capacity);
+        GC.SuppressFinalize(this);
     }
 
+    ~RenderArena() => Dispose();
+
+    /// <summary>
+    /// Appends a dynamic value (a label, color, length, or number) as UTF-8 and
+    /// returns its packed `(offset, length)`. The bytes are encoded straight into
+    /// the arena's buffer with no intermediate array.
+    /// </summary>
     private (uint Offset, uint Length) AppendUtf8(string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        var offset = (uint)_utf8.Count;
-        _utf8.AddRange(bytes);
-        return (offset, (uint)bytes.Length);
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        if (byteCount == 0)
+        {
+            return ((uint)_utf8.Count, 0);
+        }
+        var offset = _utf8.Count;
+        CollectionsMarshal.SetCount(_utf8, offset + byteCount);
+        Encoding.UTF8.GetBytes(value.AsSpan(), CollectionsMarshal.AsSpan(_utf8).Slice(offset, byteCount));
+        return ((uint)offset, (uint)byteCount);
     }
 
     private ulong PackString(string value)
@@ -231,29 +244,76 @@ internal sealed unsafe class RenderArena : IDisposable
         return ((ulong)offset << 32) | length;
     }
 
+    /// <summary>
+    /// Appends an invariant name (a method, callback, slot, or enum literal).
+    /// Names come from a closed set of compile-time strings, so their UTF-8 is
+    /// cached once and copied in; only the first frame pays for the encode.
+    /// </summary>
+    private ulong PackName(string value)
+    {
+        if (!NameUtf8.TryGetValue(value, out var bytes))
+        {
+            bytes = Encoding.UTF8.GetBytes(value);
+            NameUtf8[value] = bytes;
+        }
+        return AppendBytes(bytes);
+    }
+
+    /// <summary>Appends an invariant enum literal; see <see cref="PackName"/>.</summary>
+    private ulong PackEnum(string value) => PackName(value);
+
+    private ulong AppendBytes(byte[] bytes)
+    {
+        if (bytes.Length == 0)
+        {
+            return ((ulong)_utf8.Count) << 32;
+        }
+        var offset = _utf8.Count;
+        CollectionsMarshal.SetCount(_utf8, offset + bytes.Length);
+        bytes.CopyTo(CollectionsMarshal.AsSpan(_utf8).Slice(offset, bytes.Length));
+        return ((ulong)offset << 32) | (uint)bytes.Length;
+    }
+
+    private static readonly Dictionary<string, byte[]> NameUtf8 = new(StringComparer.Ordinal);
+
     private static void PublishBuffer<T>(List<T> source, ref byte* buffer, ref nuint capacity)
         where T : unmanaged
     {
         var required = (nuint)(source.Count * sizeof(T));
-        if (required > capacity)
-        {
-            var next = required < 256 ? (nuint)256 : required;
-            if (buffer != null)
-            {
-                NativeMemory.AlignedFree(buffer);
-            }
-            buffer = (byte*)NativeMemory.AlignedAlloc(next, Alignment);
-            capacity = next;
-        }
+        EnsureCapacity(ref buffer, ref capacity, required);
 
         if (required > 0)
         {
-            var values = source.ToArray();
-            fixed (T* pointer = values)
+            fixed (T* pointer = CollectionsMarshal.AsSpan(source))
             {
                 Buffer.MemoryCopy(pointer, buffer, (long)capacity, (long)required);
             }
         }
+    }
+
+    /// <summary>
+    /// Grows a native buffer geometrically, so a tree that grows or oscillates
+    /// across the exact needed size does not reallocate every frame.
+    /// </summary>
+    private static void EnsureCapacity(ref byte* buffer, ref nuint capacity, nuint required)
+    {
+        if (required <= capacity)
+        {
+            return;
+        }
+
+        var next = capacity == 0 ? (nuint)256 : capacity;
+        while (next < required)
+        {
+            next = next < (nuint)4_194_304 ? next * 2 : next + (nuint)4_194_304;
+        }
+
+        if (buffer != null)
+        {
+            NativeMemory.AlignedFree(buffer);
+        }
+        buffer = (byte*)NativeMemory.AlignedAlloc(next, Alignment);
+        capacity = next;
     }
 
     private static void Free(ref byte* buffer, ref nuint capacity)

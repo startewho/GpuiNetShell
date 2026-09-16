@@ -28,9 +28,9 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(NativeProtocol.OpCallback, descriptor.Ops[2].Code);
 
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("label", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal(MethodOps.Code("label"), descriptor.Ops[0].A);
         Assert.Equal("Save", DecodePacked(descriptor.Ops[0].B, utf8));
-        Assert.Equal("primary", DecodePacked(descriptor.Ops[1].A, utf8));
+        Assert.Equal(MethodOps.Code("primary"), descriptor.Ops[1].A);
         Assert.Equal("on_click", DecodePacked(descriptor.Ops[2].A, utf8));
         Assert.Equal(0, calls);
     }
@@ -123,9 +123,9 @@ public sealed unsafe class RenderContextTests
         Assert.Equal(3u, descriptor.OpsLen);
 
         var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
-        Assert.Equal("options", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal(MethodOps.Code("options"), descriptor.Ops[0].A);
         Assert.Equal("Light\nDark", DecodePacked(descriptor.Ops[0].B, utf8));
-        Assert.Equal("tokens", DecodePacked(descriptor.Ops[2].A, utf8));
+        Assert.Equal(MethodOps.Code("tokens"), descriptor.Ops[2].A);
     }
 
     [Fact]

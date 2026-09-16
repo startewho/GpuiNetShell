@@ -75,6 +75,29 @@ public sealed class RenderContext
     /// <summary>Registers a row-snapshot provider and returns its token.</summary>
     public ulong RegisterRows(Func<string> provider) => _events.RegisterRows(provider);
 
+    /// <summary>
+    /// Registers a parameterless callback under a stable key, replacing any
+    /// previous registration for that key and returning a token that outlives
+    /// snapshot generations. This is what a source-generated callback uses so it
+    /// registers once instead of every frame.
+    /// </summary>
+    public ulong RegisterStableCallback(string key, Action handler) =>
+        _events.RegisterStable(key, handler);
+
+    /// <summary>Registers a typed callback under a stable key; see <see cref="RegisterStableCallback(string, Action)"/>.</summary>
+    public ulong RegisterStableCallback(string key, Action<EventValue> handler) =>
+        _events.RegisterStable(key, handler);
+
+    /// <summary>Registers a row-snapshot provider under a stable key.</summary>
+    public ulong RegisterStableRows(string key, Func<string> provider) =>
+        _events.RegisterStableRows(key, provider);
+
+    /// <summary>Registers an element renderer under a stable key.</summary>
+    public ulong RegisterStableElement(
+        string key,
+        Func<RenderContext, IReadOnlyList<string>, Element> renderer
+    ) => _events.RegisterStableElement(key, renderer);
+
     /// <summary>Declares a button. <paramref name="id"/> is its stable identity.</summary>
     public ButtonElement Button(string id)
     {
@@ -1132,12 +1155,18 @@ public sealed class RenderContext
     {
         ArgumentNullException.ThrowIfNull(measure);
         return _events.RegisterElement(
-            (context, arguments) =>
-            {
-                var width = ParseLength(arguments, 0);
-                var height = ParseLength(arguments, 1);
-                return context.Text(measure(width, height));
-            }
+            (context, arguments) => context.Text(measure(ParseLength(arguments, 0), ParseLength(arguments, 1)))
+        );
+    }
+
+    /// <summary>Registers a canvas measure callback under a stable key.</summary>
+    public ulong RegisterStableMeasure(string key, Func<double, double, string> measure)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(measure);
+        return _events.RegisterStableElement(
+            key,
+            (context, arguments) => context.Text(measure(ParseLength(arguments, 0), ParseLength(arguments, 1)))
         );
     }
 

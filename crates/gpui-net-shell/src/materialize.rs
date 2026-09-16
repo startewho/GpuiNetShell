@@ -6,14 +6,17 @@
 //! registered [`ComponentDescriptor`], whose materializer produces the element.
 //! The runtime never names a concrete component.
 
+use std::rc::Rc;
+
 use gpui::{AnyElement, App, StyleRefinement, Window};
 
 use crate::context::HostContext;
 use crate::registry::{
     ArgumentSchema, ChildElement, ComponentArgument, ComponentDescriptor, ComponentPayload,
-    FrozenComponentRegistry, MaterializeRequest, NodeFactory, RecordedComponentMethod,
+    FrozenComponentRegistry, MaterializeRequest, NodeFactory, PreparedNode,
+    RecordedComponentMethod,
 };
-use crate::snapshot::{Node, Op, RenderSnapshot};
+use crate::snapshot::{Node, Op, RenderSnapshot, Snapshot};
 use crate::style::{apply_nullary, apply_param, StyleArg};
 
 /// Behavior collected from a node's ops, applied when the component is built.
@@ -22,13 +25,56 @@ struct Behavior {
     disabled: bool,
     selected: bool,
     on_click: Option<u64>,
-    /// Recorded component methods, in declaration order.
-    methods: Vec<(String, Vec<StyleArg>)>,
+    /// Recorded component methods, in declaration order, as `(method code, args)`.
+    methods: Vec<(u64, Vec<StyleArg>)>,
+}
+
+/// Resolves every node of `snapshot` once, storing a [`PreparedNode`] per node.
+///
+/// Called when a description is built — a dirty render or an element callback —
+/// never on a clean repaint. Materialization then only borrows the result, so a
+/// repaint does not re-resolve ops, rebuild payloads, or re-record methods.
+pub fn prepare(registry: &FrozenComponentRegistry, snapshot: &mut Snapshot) -> Result<(), String> {
+    let mut prepared = Vec::with_capacity(snapshot.nodes.len());
+    for node in &snapshot.nodes {
+        let descriptor = registry
+            .descriptor(node.component)
+            .ok_or_else(|| format!("component {} is not registered", node.component))?;
+        let (style, behavior) = resolve_ops(node, descriptor, registry);
+        let payload = build_payload(descriptor, node)?;
+        let methods = record_methods(descriptor, &behavior.methods, registry);
+
+        let mut slots: Vec<(String, u32)> = Vec::new();
+        for op in &node.ops {
+            if let Op::Slot(name, child) = op {
+                slots.push((name.clone(), *child));
+            }
+        }
+        let children = node
+            .children
+            .iter()
+            .copied()
+            .filter(|child| !slots.iter().any(|(_, id)| id == child))
+            .collect();
+
+        prepared.push(PreparedNode {
+            style,
+            payload,
+            methods,
+            slots,
+            children,
+            disabled: behavior.disabled,
+            selected: behavior.selected,
+            on_click: behavior.on_click,
+        });
+    }
+    snapshot.prepared = prepared;
+    Ok(())
 }
 
 /// Materializes a frozen snapshot through the catalog.
 pub fn materialize(
-    registry: &FrozenComponentRegistry,
+    registry: &Rc<FrozenComponentRegistry>,
     snapshot: &RenderSnapshot,
     host: &HostContext,
     window: &mut Window,
@@ -38,18 +84,21 @@ pub fn materialize(
     materialize_node(&factory, snapshot.root(), window, cx)
 }
 
-/// Materializes one node, and recursively its ordinary children.
-///
-/// Named-slot children are left as node ids in the request so a component only
-/// pays for them when it takes the slot.
+/// Materializes one node, and recursively its ordinary children, from the
+/// description resolved by [`prepare`].
 pub(crate) fn materialize_node(
     factory: &NodeFactory,
     id: u32,
     window: &mut Window,
     cx: &mut App,
 ) -> Result<AnyElement, String> {
-    let nodes = &factory.snapshot().nodes;
-    let node = nodes
+    let snapshot = factory.snapshot();
+    let prepared = snapshot
+        .prepared
+        .get(id as usize)
+        .ok_or_else(|| format!("node {id} was not prepared"))?;
+    let node = snapshot
+        .nodes
         .get(id as usize)
         .ok_or_else(|| format!("node {id} is outside the snapshot"))?;
     let descriptor = factory
@@ -57,26 +106,13 @@ pub(crate) fn materialize_node(
         .descriptor(node.component)
         .ok_or_else(|| format!("component {} is not registered", node.component))?;
 
-    let (refinement, behavior) = resolve_ops(node, descriptor);
-    let payload = build_payload(descriptor, node)?;
-    let methods = record_methods(descriptor, &behavior.methods);
-
     // A child referenced by a `Slot` op is delivered by name, not as an
-    // ordinary child, and materializes only when the component takes it.
-    let mut slots: Vec<(String, u32)> = Vec::new();
-    for op in &node.ops {
-        if let Op::Slot(name, child) = op {
-            slots.push((name.clone(), *child));
-        }
-    }
-
-    let mut children = Vec::with_capacity(node.children.len());
-    for child in &node.children {
-        if slots.iter().any(|(_, id)| id == child) {
-            continue;
-        }
+    // ordinary child; `prepared.children` already excludes them.
+    let mut children = Vec::with_capacity(prepared.children.len());
+    for child in &prepared.children {
         let element = materialize_node(factory, *child, window, cx)?;
-        let component = nodes
+        let component = snapshot
+            .nodes
             .get(*child as usize)
             .and_then(|child| factory.registry().descriptor(child.component))
             .map_or("Unknown", |descriptor| descriptor.name());
@@ -85,15 +121,15 @@ pub(crate) fn materialize_node(
 
     let request = MaterializeRequest::new(
         descriptor.name(),
-        &payload,
-        &methods,
+        &prepared.payload,
+        &prepared.methods,
         factory.clone(),
-        refinement,
+        prepared.style.clone(),
         children,
-        slots,
-        behavior.disabled,
-        behavior.selected,
-        behavior.on_click,
+        prepared.slots.clone(),
+        prepared.disabled,
+        prepared.selected,
+        prepared.on_click,
         window,
         cx,
     );
@@ -170,13 +206,17 @@ fn split_arguments(
         .collect())
 }
 
-/// Turns recorded method names into owned payloads, dropping unknown names.
+/// Turns recorded method codes into owned payloads, dropping unknown ones.
 fn record_methods(
     descriptor: &ComponentDescriptor,
-    methods: &[(String, Vec<StyleArg>)],
+    methods: &[(u64, Vec<StyleArg>)],
+    registry: &FrozenComponentRegistry,
 ) -> Vec<RecordedComponentMethod> {
     let mut recorded = Vec::with_capacity(methods.len());
-    for (name, arguments) in methods {
+    for (code, arguments) in methods {
+        let Some(name) = registry.method_name(*code) else {
+            continue;
+        };
         let Some(method) = descriptor.method(name) else {
             continue;
         };
@@ -231,7 +271,11 @@ fn coerce_argument(argument: &StyleArg, schema: Option<ArgumentSchema>) -> Compo
 /// descriptor does not declare falls back to shell behavior (`disabled`,
 /// `selected`). Without this, a component whose own method is called `selected`
 /// — `Tabs`, `Combobox` — would never receive it.
-fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinement, Behavior) {
+fn resolve_ops(
+    node: &Node,
+    descriptor: &ComponentDescriptor,
+    registry: &FrozenComponentRegistry,
+) -> (StyleRefinement, Behavior) {
     let mut refinement = StyleRefinement::default();
     let mut behavior = Behavior::default();
 
@@ -241,26 +285,31 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
                 refinement = apply_nullary(*code, refinement);
             }
             Op::ParamStyle(code, arg) => {
-                if let Ok(next) = apply_param(*code, arg, refinement.clone()) {
+                // Move the refinement through the call instead of cloning it.
+                let current = std::mem::take(&mut refinement);
+                if let Ok(next) = apply_param(*code, arg, current) {
                     refinement = next;
                 }
             }
-            Op::Method(name, args) => {
-                if descriptor.method(name).is_some() {
-                    behavior.methods.push((name.clone(), args.clone()));
-                } else {
-                    match name.as_str() {
-                        "disabled" => {
+            Op::Method(code, args) => {
+                let name = registry.method_name(*code);
+                let declared = name.and_then(|name| descriptor.method(name)).is_some();
+                if !declared {
+                    match name {
+                        Some("disabled") => {
                             behavior.disabled =
-                                args.first().map(StyleArg::is_truthy).unwrap_or(true)
+                                args.first().map(StyleArg::is_truthy).unwrap_or(true);
+                            continue;
                         }
-                        "selected" => {
+                        Some("selected") => {
                             behavior.selected =
-                                args.first().map(StyleArg::is_truthy).unwrap_or(true)
+                                args.first().map(StyleArg::is_truthy).unwrap_or(true);
+                            continue;
                         }
-                        _ => behavior.methods.push((name.clone(), args.clone())),
+                        _ => {}
                     }
                 }
+                behavior.methods.push((*code, args.clone()));
             }
             Op::Callback(name, token) => {
                 if name == "on_click" {
@@ -268,9 +317,10 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
                 } else {
                     // A callback passed as a component method argument, such as
                     // `Radio.on_change` or `Popover.on_open_change`.
-                    behavior
-                        .methods
-                        .push((name.clone(), vec![StyleArg::Callback(*token)]));
+                    behavior.methods.push((
+                        crate::schema::method_code(name),
+                        vec![StyleArg::Callback(*token)],
+                    ));
                 }
             }
             Op::Slot(..) => {}
@@ -284,7 +334,7 @@ fn resolve_ops(node: &Node, descriptor: &ComponentDescriptor) -> (StyleRefinemen
 mod tests {
     use super::*;
     use crate::components;
-    use crate::schema::{COMPONENT_BUTTON, COMPONENT_DIV};
+    use crate::schema::{method_code, COMPONENT_BUTTON, COMPONENT_DIV};
 
     fn node(component: u32, data: &str, ops: Vec<Op>) -> Node {
         Node {
@@ -304,21 +354,22 @@ mod tests {
                 COMPONENT_BUTTON,
                 "save",
                 vec![
-                    Op::Method("disabled".into(), vec![StyleArg::Number(1.0)]),
-                    Op::Method("label".into(), vec![StyleArg::String("Save".into())]),
-                    Op::Method("primary".into(), Vec::new()),
+                    Op::Method(method_code("disabled"), vec![StyleArg::Number(1.0)]),
+                    Op::Method(method_code("label"), vec![StyleArg::String("Save".into())]),
+                    Op::Method(method_code("primary"), Vec::new()),
                     Op::Callback("on_click".into(), 42),
                 ],
             ),
             descriptor,
+            &frozen,
         );
         assert!(behavior.disabled);
         assert_eq!(behavior.on_click, Some(42));
         assert_eq!(
             behavior.methods,
             vec![
-                ("label".into(), vec![StyleArg::String("Save".into())]),
-                ("primary".into(), Vec::new()),
+                (method_code("label"), vec![StyleArg::String("Save".into())]),
+                (method_code("primary"), Vec::new()),
             ]
         );
     }
@@ -331,14 +382,18 @@ mod tests {
             &node(
                 crate::schema::COMPONENT_TABS,
                 "pages",
-                vec![Op::Method("selected".into(), vec![StyleArg::Number(1.0)])],
+                vec![Op::Method(
+                    method_code("selected"),
+                    vec![StyleArg::Number(1.0)],
+                )],
             ),
             descriptor,
+            &frozen,
         );
         assert!(!behavior.selected);
         assert_eq!(
             behavior.methods,
-            vec![("selected".into(), vec![StyleArg::Number(1.0)])]
+            vec![(method_code("selected"), vec![StyleArg::Number(1.0)])]
         );
     }
 
@@ -359,6 +414,7 @@ mod tests {
                 ],
             ),
             descriptor,
+            &frozen,
         );
         assert_eq!(refinement.align_items, Some(gpui::AlignItems::Center));
         assert_eq!(refinement.padding.top, Some(gpui::px(16.0).into()));
@@ -371,9 +427,10 @@ mod tests {
         let recorded = record_methods(
             descriptor,
             &[
-                ("label".into(), vec![StyleArg::String("Save".into())]),
-                ("not_a_method".into(), Vec::new()),
+                (method_code("label"), vec![StyleArg::String("Save".into())]),
+                (method_code("not_a_method"), Vec::new()),
             ],
+            &frozen,
         );
         assert_eq!(recorded.len(), 1);
         assert_eq!(recorded[0].name(), "label");
@@ -388,5 +445,44 @@ mod tests {
         assert!(payload
             .downcast_ref::<components::button::IdPayload>()
             .is_some());
+    }
+
+    #[test]
+    fn prepare_resolves_nodes_and_routes_slots() {
+        let frozen = components::catalog();
+        let mut snapshot = Snapshot {
+            root: 0,
+            nodes: vec![
+                Node {
+                    component: COMPONENT_DIV,
+                    data: String::new(),
+                    ops: vec![
+                        Op::NullaryStyle(crate::style::nullary_index("items_center").unwrap()),
+                        Op::Slot("content".into(), 1),
+                    ],
+                    children: vec![1],
+                },
+                Node {
+                    component: crate::schema::COMPONENT_TEXT,
+                    data: "hi".into(),
+                    ops: Vec::new(),
+                    children: Vec::new(),
+                },
+            ],
+            prepared: Vec::new(),
+        };
+
+        prepare(&frozen, &mut snapshot).unwrap();
+
+        assert_eq!(snapshot.prepared.len(), 2);
+        assert_eq!(
+            snapshot.prepared[0].style.align_items,
+            Some(gpui::AlignItems::Center)
+        );
+        assert_eq!(snapshot.prepared[0].slots, vec![("content".to_string(), 1)]);
+        assert!(
+            snapshot.prepared[0].children.is_empty(),
+            "a slot child is not an ordinary child"
+        );
     }
 }

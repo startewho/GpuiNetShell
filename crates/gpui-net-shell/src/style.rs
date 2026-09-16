@@ -672,15 +672,30 @@ mod tests {
                 "`{name}` did not apply"
             );
         }
-        assert!(apply_param(param_index("text_align").unwrap(), &String("center".into()), default()).is_ok());
-        assert!(apply_param(param_index("text_overflow").unwrap(), &String("…".into()), default()).is_ok());
+        assert!(apply_param(
+            param_index("text_align").unwrap(),
+            &String("center".into()),
+            default()
+        )
+        .is_ok());
+        assert!(apply_param(
+            param_index("text_overflow").unwrap(),
+            &String("…".into()),
+            default()
+        )
+        .is_ok());
         assert!(apply_param(
             param_index("text_decoration_color").unwrap(),
             &String("#ff0000".into()),
             default()
         )
         .is_ok());
-        assert!(apply_param(param_index("text_align").unwrap(), &String("middle".into()), default()).is_err());
+        assert!(apply_param(
+            param_index("text_align").unwrap(),
+            &String("middle".into()),
+            default()
+        )
+        .is_err());
         assert!(apply_param(param_index("col_span").unwrap(), &Number(1.5), default()).is_err());
     }
 
@@ -728,12 +743,7 @@ mod tests {
 
     #[test]
     fn an_unknown_parametric_opcode_is_an_error() {
-        assert!(apply_param(
-            u16::MAX,
-            &StyleArg::Number(1.),
-            StyleRefinement::default()
-        )
-        .is_err());
+        assert!(apply_param(u16::MAX, &StyleArg::Number(1.), StyleRefinement::default()).is_err());
     }
 
     #[test]
