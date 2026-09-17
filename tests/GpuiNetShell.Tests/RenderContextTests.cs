@@ -36,6 +36,61 @@ public sealed unsafe class RenderContextTests
     }
 
     [Fact]
+    public void DivRecordsStableElementIdAndGenericOnClickCallback()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Div(ui.Text("row")).OnClick("row-1", () => { });
+
+        var descriptor = arena.Publish();
+        Assert.Equal(2u, descriptor.NodesLen);
+        Assert.Equal((uint)NativeProtocol.ComponentDiv, descriptor.Nodes[1].Component);
+        Assert.Equal(2u, descriptor.OpsLen);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
+        Assert.Equal(MethodOps.Code("element_id"), descriptor.Ops[0].A);
+        Assert.Equal("row-1", DecodePacked(descriptor.Ops[0].B, utf8));
+        Assert.Equal(NativeProtocol.OpCallback, descriptor.Ops[1].Code);
+        Assert.Equal("on_click", DecodePacked(descriptor.Ops[1].A, utf8));
+    }
+
+    [Fact]
+    public void DivRecordsOnlyTheSubscribedStatelessEvents()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        // A stateless event needs no element id and writes only its callback.
+        ui.Div().OnMouseMove(_ => { }).OnMouseUp(_ => { });
+
+        var descriptor = arena.Publish();
+        Assert.Equal(1u, descriptor.NodesLen);
+        Assert.Equal(2u, descriptor.OpsLen);
+
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal("on_mouse_move", DecodePacked(descriptor.Ops[0].A, utf8));
+        Assert.Equal("on_mouse_up", DecodePacked(descriptor.Ops[1].A, utf8));
+    }
+
+    [Fact]
+    public void DivRecordsAnElementIdOnlyForStatefulEvents()
+    {
+        using var arena = new RenderArena();
+        var ui = new RenderContext(arena, new EventRegistry(), () => { });
+
+        ui.Div().OnHover("hover-1", _ => { });
+
+        var descriptor = arena.Publish();
+        var utf8 = new ReadOnlySpan<byte>(descriptor.Utf8, checked((int)descriptor.Utf8Len));
+        Assert.Equal(NativeProtocol.OpMethod, descriptor.Ops[0].Code);
+        Assert.Equal(MethodOps.Code("element_id"), descriptor.Ops[0].A);
+        Assert.Equal("hover-1", DecodePacked(descriptor.Ops[0].B, utf8));
+        Assert.Equal("on_hover", DecodePacked(descriptor.Ops[1].A, utf8));
+    }
+
+    [Fact]
     public void ContainerRecordsChildEdgesAndStyleCalls()
     {
         using var arena = new RenderArena();

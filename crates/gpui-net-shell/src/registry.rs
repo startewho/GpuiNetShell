@@ -23,6 +23,7 @@ use gpui::{
 };
 
 use crate::context::HostContext;
+use crate::element_events::ElementEvents;
 use crate::snapshot::Snapshot;
 
 /// A registered component's position in the registry.
@@ -283,8 +284,8 @@ pub struct PreparedNode {
     pub disabled: bool,
     /// Shell behavior: `selected`.
     pub selected: bool,
-    /// The `on_click` callback token, if one was bound.
-    pub on_click: Option<u64>,
+    /// The element events the managed host subscribed to, if any.
+    pub events: ElementEvents,
 }
 
 /// One value carried back to a managed callback.
@@ -533,7 +534,7 @@ pub struct MaterializeRequest<'a> {
     slots: Vec<(String, u32)>,
     disabled: bool,
     selected: bool,
-    on_click: Option<u64>,
+    events: &'a ElementEvents,
     window: &'a mut Window,
     cx: &'a mut App,
 }
@@ -550,7 +551,7 @@ impl<'a> MaterializeRequest<'a> {
         slots: Vec<(String, u32)>,
         disabled: bool,
         selected: bool,
-        on_click: Option<u64>,
+        events: &'a ElementEvents,
         window: &'a mut Window,
         cx: &'a mut App,
     ) -> Self {
@@ -564,7 +565,7 @@ impl<'a> MaterializeRequest<'a> {
             slots,
             disabled,
             selected,
-            on_click,
+            events,
             window,
             cx,
         }
@@ -594,8 +595,14 @@ impl<'a> MaterializeRequest<'a> {
         self.selected
     }
 
+    /// The element events the node subscribed to.
+    pub fn events(&self) -> &ElementEvents {
+        self.events
+    }
+
+    /// The `on_click` handler token, if the node subscribed to a click.
     pub fn on_click(&self) -> Option<u64> {
-        self.on_click
+        self.events.get(crate::element_events::ElementEvent::Click)
     }
 
     /// Resolves a callback argument recorded by a component method into an

@@ -131,13 +131,35 @@ routes them out of the ordinary children in `prepare`.
   `HostContext`; cloning it is cheap (Rc bumps). Bound the number of clones per
   node.
 - `MaterializeRequest` exposes: `payload`, `methods`, `style`, `host`,
-  `disabled`, `selected`, `on_click`, `resolve_callback`,
+  `disabled`, `selected`, `events`/`on_click`, `resolve_callback`,
   `resolve_element_callback`, `resolve_element`, `resolve_rows`,
   `take_children*`, `take_slot*`, `use_keyed_state`, `update_entity`,
   `with_window_app`, `finish`.
 - `resolve_rows` reuses `HostContext.row_scratch` and caches `Rc<Vec<Row>>` per
   callback token in `HostContext.row_cache` (cleared when a description is
   built). Do not allocate a fresh buffer per call.
+
+## Element events (`Div`)
+
+`src/element_events.rs` exposes GPUI `Div` events to the managed host, opt-in
+per event. A `Callback` op whose name is an `ElementEvent` wire name
+(`on_click`, `on_mouse_down`, `on_hover`, `on_scroll_wheel`, …, matching the
+GPUI method name) is an element event; any other callback name is a component
+method callback. `resolve_ops` classifies them into `PreparedNode.events`.
+
+- Only subscribed events are bound (`bind_stateless`/`bind_stateful`), so an
+  unsubscribed event has no listener and no ABI traffic.
+- `ElementEvent::needs_element_id` is true for click/aux-click/hover; a `Div`
+  with one of those must carry a managed `element_id` (a method op) that is
+  stable across frames, or materialization fails.
+- `ElementEvent::auto_invalidate` is false for `on_mouse_move` and
+  `on_scroll_wheel` so a handler does not rebuild the window per event.
+- Payloads are tab-separated UTF-8 sent through the existing `invoke` callback
+  (`event_events.rs` encoders + `PointerEvent`/`ScrollEvent`/`KeyEvent` in the
+  managed `Events/ElementEvents.cs`); `on_click` stays parameterless via `click`.
+- `AnyElement` has no such methods: only `Div`/`Stateful<Div>` (and `Img`,
+  `Svg`, `UniformList`) implement `InteractiveElement`. A generic wrapper for
+  arbitrary elements is deliberately deferred.
 
 ## HostContext
 

@@ -128,11 +128,12 @@
 - **P4 arena 编码**：`AppendUtf8` 直接编码进 `_utf8`（无 `byte[]` + `AddRange`）；`PublishBuffer` 用 `CollectionsMarshal.AsSpan`（去掉每帧 4 次 `ToArray()`）；不变名字（方法/回调/slot/enum/`on_click`）UTF-8 缓存；几何扩容。
 - **P5 事件/实体**：`EventRegistry` 复用 generation/scope 列表，`Register(Action)` 不再包闭包；生成回调改为**一次注册、稳定 token**（`RegisterStable*` + 生成器守卫）；`GalleryPage` 默认页 token 缓存。
 - **P5b 组件方法 opcode**：组件方法名不再上线，传 FNV-1a 64 位 `MethodOps` code；`FrozenComponentRegistry` 建 `code -> name` 表。`SCHEMA_HASH` → `…6C61`（`ABI_VERSION` 8 不变）。
-- **删除 `previous` 快照**：只保留 `current`，替换即退休旧代；快照内存减半。
+- **`previous` 快照（曾删除，后恢复）**：一度只保留 `current`、替换即退休旧代，但 `ContentHost` 会晚一帧重新物化，屏幕上仍是旧代元素树，旧代 token 被提前退休后点击会丢。现已恢复保留一代 `previous`，作为该窗口的宽限期。
 - **P6 组件专项**：`VirtualListView` 缓存统一尺寸向量（仅 `item_count`/`item_size` 变化时重建），`item_sizes`/`row_menu` 改 `Rc` 共享，行菜单不再逐行 clone；`CanvasElement` 的 `commands`/`regions` 改 `Rc`，`click`/`hover` keyed id 与每个 `HitRegion` 的 `SharedString` 在构建期算好，paint 不再 `format!`/分配；`resolve_rows` 复用 buffer 并按 token 缓存 `Rc<Vec<Row>>`（构建新描述时清空），`List`/`Select`/`VirtualList` 不再每次重绘回调托管。
 - **P7 保留子树/增量重绘**：内容物化移入保留的 `ContentHost` 实体，只有推入新描述时才重渲染；`prepare` 为描述计算结构指纹（屏蔽回调 token，因为 token 每代都变但不改变界面），`rebuild` 在指纹相同且无错误时**保留已显示描述与其 generation**（token 继续有效），改为 retire 新 generation。这样冗余 `Invalidate()`（界面未变）不做任何原生物化。仍**未做**的是「变化描述逐节点 diff、只重建变化子树」——需要节点级稳定结构键（React key 语义），当前描述不带。
+- **Div 元素事件（v1，Div-only）**：托管 `Div` 可按需订阅 GPUI 元素事件（`on_click`/`on_aux_click`/`on_hover`/`on_mouse_down|up|move|down_out|up_out`/`on_mouse_pressure`/`on_scroll_wheel`/`on_key_down|up`），只有订阅的事件才写 op、才注册 GPUI 监听；事件名即 GPUI 方法名。新增 `element_events.rs`（枚举/线名/负载编码/绑定 helper）与 `Events/ElementEvents.cs`（负载类型 + 解码）。有状态事件（click/aux_click/hover）需要稳定的 `element_id`（原 `click_id` 重命名）；move/scroll 不自动重绘。`SCHEMA_HASH` → `…6C62`（`ABI_VERSION` 8 不变）。
 - **托管每帧分配**：基准测试 100 行（约 400 节点）从 **77,632 B/帧 → 21,576 B/帧（−72%）**。
-- **release DLL**：`[profile.release]` 加 `lto="fat"`/`codegen-units=1`/`strip="symbols"`；配合去除 inspector，36,299,264 → **30,938,112 字节（−14.8%）**。
+- **release DLL**：`[profile.release]` 加 `lto="fat"`/`codegen-units=1`/`strip="symbols"`；配合去除 inspector，36,299,264 → **30,985,216 字节**。
 
 ## 样式（gpui style）覆盖
 

@@ -11,6 +11,7 @@ use std::rc::Rc;
 use gpui::{AnyElement, App, StyleRefinement, Window};
 
 use crate::context::HostContext;
+use crate::element_events::{ElementEvent, ElementEvents};
 use crate::registry::{
     ArgumentSchema, ChildElement, ComponentArgument, ComponentDescriptor, ComponentPayload,
     FrozenComponentRegistry, MaterializeRequest, NodeFactory, PreparedNode,
@@ -24,7 +25,8 @@ use crate::style::{apply_nullary, apply_param, StyleArg};
 struct Behavior {
     disabled: bool,
     selected: bool,
-    on_click: Option<u64>,
+    /// Element events the node subscribed to, resolved once.
+    events: ElementEvents,
     /// Recorded component methods, in declaration order, as `(method code, args)`.
     methods: Vec<(u64, Vec<StyleArg>)>,
 }
@@ -66,7 +68,7 @@ pub fn prepare(registry: &FrozenComponentRegistry, snapshot: &mut Snapshot) -> R
             children,
             disabled: behavior.disabled,
             selected: behavior.selected,
-            on_click: behavior.on_click,
+            events: behavior.events,
         });
     }
     snapshot.prepared = prepared;
@@ -130,7 +132,7 @@ pub(crate) fn materialize_node(
         prepared.slots.clone(),
         prepared.disabled,
         prepared.selected,
-        prepared.on_click,
+        &prepared.events,
         window,
         cx,
     );
@@ -313,8 +315,9 @@ fn resolve_ops(
                 behavior.methods.push((*code, args.clone()));
             }
             Op::Callback(name, token) => {
-                if name == "on_click" {
-                    behavior.on_click = Some(*token);
+                if let Some(event) = ElementEvent::from_wire_name(name) {
+                    // An element event the managed host subscribed to.
+                    behavior.events.push(event, *token);
                 } else {
                     // A callback passed as a component method argument, such as
                     // `Radio.on_change` or `Popover.on_open_change`.
@@ -365,7 +368,7 @@ mod tests {
             &frozen,
         );
         assert!(behavior.disabled);
-        assert_eq!(behavior.on_click, Some(42));
+        assert_eq!(behavior.events.get(ElementEvent::Click), Some(42));
         assert_eq!(
             behavior.methods,
             vec![
@@ -396,6 +399,60 @@ mod tests {
             behavior.methods,
             vec![(method_code("selected"), vec![StyleArg::Number(1.0)])]
         );
+    }
+
+    #[test]
+    fn a_div_carries_the_generic_on_click_behavior() {
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(COMPONENT_DIV).unwrap();
+        let (_, behavior) = resolve_ops(
+            &node(COMPONENT_DIV, "", vec![Op::Callback("on_click".into(), 7)]),
+            descriptor,
+            &frozen,
+        );
+        assert_eq!(behavior.events.get(ElementEvent::Click), Some(7));
+        assert!(behavior.methods.is_empty());
+    }
+
+    #[test]
+    fn element_events_are_classified_and_other_callbacks_stay_methods() {
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(COMPONENT_DIV).unwrap();
+        let (_, behavior) = resolve_ops(
+            &node(
+                COMPONENT_DIV,
+                "",
+                vec![
+                    Op::Callback("on_mouse_move".into(), 1),
+                    Op::Callback("on_hover".into(), 2),
+                    Op::Callback("on_change".into(), 3),
+                ],
+            ),
+            descriptor,
+            &frozen,
+        );
+        assert_eq!(behavior.events.get(ElementEvent::MouseMove), Some(1));
+        assert_eq!(behavior.events.get(ElementEvent::Hover), Some(2));
+        assert!(behavior.events.needs_element_id());
+        // A non-event callback is recorded as a component method and dropped
+        // later because `Div` declares no `on_change`.
+        assert_eq!(behavior.methods.len(), 1);
+    }
+
+    #[test]
+    fn a_div_records_its_stable_element_id() {
+        let frozen = components::catalog();
+        let descriptor = frozen.descriptor(COMPONENT_DIV).unwrap();
+        let recorded = record_methods(
+            descriptor,
+            &[(
+                method_code("element_id"),
+                vec![StyleArg::String("row-1".into())],
+            )],
+            &frozen,
+        );
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].name(), "element_id");
     }
 
     #[test]

@@ -28,6 +28,7 @@ never per builder call, per frame, or per property.**
 | `Elements/` | `Element` base, one builder per component, `StyleExtensions`, `Length`, `PaintPrimitives`. |
 | `Entities/` | `Entity<T>`, `Context<T>`, `EntityRegistry`, `GlobalStore`, `UiDispatcher`. |
 | `Events/EventRegistry.cs` | Token → handler tables, generation retirement, stable/keyed registration. |
+| `Events/ElementEvents.cs` | `DivEvent` plus the typed payloads (`PointerEvent`, `ScrollEvent`, `KeyEvent`, `ClickEvent`, `PressureEvent`) decoded from the native payload. |
 | `View.cs` | Base view: `Render`, `RenderRoot`, `Invalidate`, `Notify`, `DispatchInput`, `AttachInvalidator`. |
 | `GpuiApplication.cs` | `Session` per window, `RenderInto`, the native callbacks, multi-window, overlays. |
 | `GpuiNativeHost.cs` | `AbiVersion`, `SchemaHash`, `Verify()`. |
@@ -117,9 +118,28 @@ Call it at the top of `Render` and hand the token to the element that should
 invoke the callback. Entity views use `RegisterEntityView` and render through
 `ui.Child(entity, token)`.
 
-## How to add a managed element / component page
+## Div element events
 
-1. Add the component id and any method codes in `NativeProtocol.cs`, matching
+`DivElement` can subscribe to GPUI element events: `OnClick`, `OnAuxClick`,
+`OnHover`, `OnMouseDown/Up/Move/DownOut/UpOut`, `OnMousePressure`, `OnScroll`,
+`OnKeyDown/Up`, plus a generic `On(id, DivEvent, Action<EventValue>)`.
+
+- **Opt-in**: each method writes exactly one `Op::Callback(name, token)`; the
+  native host binds a GPUI listener only for the subscribed events. Unsubscribed
+  events cost nothing.
+- **Stable id**: click, aux-click, and hover are keyed by GPUI on the element
+  id, so those methods take an `id` that must be unique in the window and
+  unchanged while rendered (the native side writes it as an `element_id` method
+  op). Stateless events take no id.
+- **Payloads** are decoded into `PointerEvent`/`ScrollEvent`/`KeyEvent`/
+  `ClickEvent`/`PressureEvent` (`Events/ElementEvents.cs`).
+- **Repaint**: discrete events repaint after the handler; `OnMouseMove` and
+  `OnScroll` do not, so call `Notify()`/`Invalidate()` from those handlers if
+  they change what `Render` reads.
+- Only `Div` supports these; `AnyElement` has no event methods, so other
+  components keep their dedicated callbacks.
+
+## How to add a managed element / component page1. Add the component id and any method codes in `NativeProtocol.cs`, matching
    `schema.rs` (never reorder ids).
 2. Add a builder in `Elements/` deriving from `Element`, and a factory in
    `RenderContext`.

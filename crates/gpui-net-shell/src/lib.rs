@@ -13,6 +13,7 @@
 mod abi;
 mod components;
 mod context;
+mod element_events;
 mod ffi;
 mod host;
 mod materialize;

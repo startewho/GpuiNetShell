@@ -57,8 +57,12 @@ mount, by an event binding, or by `View.Invalidate()` / `RenderContext.Notify()`
 `crates/gpui-net-shell/src/view.rs` mirrors `gpui-shell`'s `view.rs`. A
 `ShellView` entity owns:
 
-- `current` — the displayed `RenderSnapshot`. Replacing it drops the one it
-  replaced, which retires that generation's callbacks immediately;
+- `current` — the displayed `RenderSnapshot`;
+- `previous` — the description `current` replaced, held one generation longer.
+  The retained `ContentHost` re-materializes a frame after a swap, so the
+  on-screen tree can still reference the replaced generation's callback tokens
+  for one frame; `previous` keeps those tokens valid. Without it a click on the
+  not-yet-rebuilt tree resolves against a retired generation and is dropped;
 - `displayed_fingerprint` — the structural fingerprint of `current`. When a
   rebuild produces the same fingerprint, the displayed description (and its
   generation, and therefore its callbacks) is kept and the new generation is

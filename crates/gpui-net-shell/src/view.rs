@@ -42,6 +42,14 @@ pub struct ShellView {
     content: Entity<ContentHost>,
     /// The description the managed host last published and is now displayed.
     current: Option<RenderSnapshot>,
+    /// The description `current` replaced, held one generation longer.
+    ///
+    /// The retained `ContentHost` re-materializes a frame after `current` is
+    /// swapped, so the on-screen element tree can still reference the previous
+    /// generation's callback tokens for one frame. Keeping this snapshot alive
+    /// keeps those tokens valid; without it a click on the not-yet-rebuilt tree
+    /// resolves against a retired generation and is dropped.
+    previous: Option<RenderSnapshot>,
     /// The fingerprint of `current`, used to keep it when a rebuild produces
     /// the same interface.
     displayed_fingerprint: Option<u64>,
@@ -96,6 +104,7 @@ impl ShellView {
             registry,
             content,
             current: None,
+            previous: None,
             displayed_fingerprint: None,
             content_dirty: true,
             revision: 0,
@@ -140,6 +149,11 @@ impl ShellView {
         self.current.as_ref()
     }
 
+    /// The description the current one replaced, if any.
+    pub fn previous_snapshot(&self) -> Option<&RenderSnapshot> {
+        self.previous.as_ref()
+    }
+
     /// Why the most recent build failed, if it did.
     pub fn build_error(&self) -> Option<&str> {
         self.error.as_deref()
@@ -155,8 +169,9 @@ impl ShellView {
         self.retired = true;
         self.dirty = false;
         self.error = None;
-        self.current = None;
         self.displayed_fingerprint = None;
+        self.previous = None;
+        self.current = None;
     }
 
     /// Pulls a new description from the managed host.
@@ -216,10 +231,12 @@ impl ShellView {
 
                 let frozen =
                     RenderSnapshot::new(self.session_id, generation, snapshot, self.callbacks);
-                // Replacing `current` drops the snapshot it replaced, which
-                // retires that generation's callbacks immediately. Nothing in
-                // the host reads the previous description, so it is not kept.
-                self.current = Some(frozen);
+                // `previous` holds the description just replaced (and retires
+                // the one before it). The retained `ContentHost` rebuilds a
+                // frame later, so the on-screen tree may still reference the
+                // replaced generation's tokens for one frame; holding it keeps
+                // those tokens valid.
+                self.previous = self.current.replace(frozen);
                 self.displayed_fingerprint = Some(fingerprint);
                 // A new description retires every callback token, so the
                 // resolved-row cache for the old one is dead.

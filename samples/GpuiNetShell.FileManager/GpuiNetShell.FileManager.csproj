@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <!-- Release publishes a NativeAOT executable; Debug keeps hot reload. -->
+        <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+        <StartupHookSupport Condition="'$(Configuration)' == 'Debug'">true</StartupHookSupport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\GpuiNetShell\GpuiNetShell.csproj" />
+        <ProjectReference Include="..\..\src\GpuiNetShell.SourceGen\GpuiNetShell.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+</Project>

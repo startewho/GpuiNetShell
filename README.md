@@ -106,6 +106,8 @@ src/GpuiNetShell/              Managed runtime library
   Events/                        EventRegistry
   View.cs, GpuiApplication.cs
 samples/GpuiNetShell.Sample/   Tabbed component gallery (one page per component)
+samples/GpuiNetShell.FileManager/  Windows 11 style file manager (custom title bar,
+                               themeable accent, navigation tree, details / large-icon views)
 tests/GpuiNetShell.Tests/      Managed contract tests
 external/gpui-kit/             Pinned submodule (gpui-base/gpui-component)
 docs/                          Architecture and the Button route
@@ -139,6 +141,7 @@ a window.
 ```sh
 dotnet run --project samples/GpuiNetShell.Sample            # opens the window
 dotnet run --project samples/GpuiNetShell.Sample -- --check # ABI/schema check
+dotnet run --project samples/GpuiNetShell.FileManager       # file manager
 ```
 
 ## Small application

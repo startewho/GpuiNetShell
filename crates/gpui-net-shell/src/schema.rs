@@ -10,14 +10,16 @@
 //! declared method lists, which the native host maps to direct GPUI style
 //! calls. There is no runtime reflection. Component behavior is a generic
 //! `Method` whose `a` word is a [`method_code`], and event bindings are a
-//! generic `Callback` whose `a` word is a packed name.
+//! generic `Callback` whose `a` word is a packed name. A callback whose name is
+//! an [`crate::element_events::ElementEvent`] (`on_click`, `on_mouse_down`, …)
+//! is a `Div` element event; any other name is a component method callback.
 
 /// Protocol version negotiated through [`crate::abi::gpui_net_shell_get_api`].
 pub const ABI_VERSION: u32 = 8;
 
 /// Identifies the component/operation vocabulary below. Bump whenever a
 /// component id, operation code, or payload rule changes.
-pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C61;
+pub const SCHEMA_HASH: u64 = 0x6E65_7473_6865_6C62;
 
 /// Separates the string arguments of a multi-argument constructor inside one
 /// node's identity data. `Popover(id, label)` is the only current user.
@@ -370,7 +372,7 @@ mod tests {
     /// The managed host mirrors this literal; keep them in lockstep.
     #[test]
     fn schema_hash_is_pinned() {
-        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C61);
+        assert_eq!(SCHEMA_HASH, 0x6E65_7473_6865_6C62);
     }
 
     /// The managed `MethodOps.Code` must produce the same values; a test there
