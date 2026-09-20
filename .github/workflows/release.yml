@@ -26,6 +26,10 @@ env:
 jobs:
   release:
     runs-on: windows-latest
+    # The nuget.org profile name (not an email). Empty when trusted publishing
+    # is not configured yet, which keeps the login/push steps skipped.
+    env:
+      NUGET_USER: ${{ secrets.NUGET_USER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,14 +128,14 @@ jobs:
       # a trusted publishing policy on nuget.org for this repository and the
       # workflow file name (`release.yml`).
       - name: NuGet login (OIDC -> temp API key)
-        if: ${{ secrets.NUGET_USER != '' }}
+        if: env.NUGET_USER != ''
         id: nuget-login
         uses: NuGet/login@v1
         with:
-          user: ${{ secrets.NUGET_USER }}
+          user: ${{ env.NUGET_USER }}
 
       - name: Push packages to NuGet
-        if: ${{ secrets.NUGET_USER != '' }}
+        if: steps.nuget-login.outputs.NUGET_API_KEY != ''
         shell: pwsh
         run: |
           Get-ChildItem artifacts/nuget/*.nupkg | ForEach-Object {
