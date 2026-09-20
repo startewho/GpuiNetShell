@@ -55,6 +55,96 @@ internal static class FileSystemService
 
     /// <summary>The immediate subdirectories of a folder, for tree expansion.</summary>
     public static IReadOnlyList<TreeNode> ListSubdirectories(string path)
+    {
+        var nodes = new List<TreeNode>();
+        try
+        {
+            var info = new DirectoryInfo(path);
+            if (!info.Exists)
+            {
+                return nodes;
+            }
+            foreach (var child in info.EnumerateDirectories())
+            {
+                nodes.Add(
+                    new TreeNode
+                    {
+                        Id = child.FullName,
+                        Label = child.Name,
+                        Path = child.FullName,
+                    }
+                );
+            }
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            // An unreadable folder simply has no visible children.
+        }
+        return nodes;
+    }
+
+    /// <summary>
+    /// Recursively searches <paramref name="root"/> for entries whose name
+    /// contains <paramref name="query"/>, breadth-first, up to
+    /// <paramref name="maxResults"/> matches. Unreadable folders are skipped.
+    /// </summary>
+    public static IReadOnlyList<FileEntry> Search(string root, string query, int maxResults)
+    {
+        var results = new List<FileEntry>();
+        if (string.IsNullOrWhiteSpace(query) || string.IsNullOrWhiteSpace(root))
+        {
+            return results;
+        }
+
+        var queue = new Queue<string>();
+        queue.Enqueue(root);
+        while (queue.Count > 0 && results.Count < maxResults)
+        {
+            var directory = queue.Dequeue();
+            DirectoryInfo info;
+            try
+            {
+                info = new DirectoryInfo(directory);
+                if (!info.Exists)
+                {
+                    continue;
+                }
+            }
+            catch (Exception exception) when (IsExpected(exception))
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var item in info.EnumerateFileSystemInfos())
+                {
+                    if (results.Count >= maxResults)
+                    {
+                        break;
+                    }
+                    var entry = ToEntry(item);
+                    if (entry is null)
+                    {
+                        continue;
+                    }
+                    if (entry.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    {
+                        results.Add(entry);
+                    }
+                    if (entry.IsDirectory)
+                    {
+                        queue.Enqueue(entry.FullPath);
+                    }
+                }
+            }
+            catch (Exception exception) when (IsExpected(exception))
+            {
+                // Skip a folder we cannot enumerate and keep searching.
+            }
+        }
+        return results;
+    }
 
     /// <summary>Desktop, documents, downloads, and the other user folders that exist.</summary>
     public static IReadOnlyList<TreeNode> QuickAccess()

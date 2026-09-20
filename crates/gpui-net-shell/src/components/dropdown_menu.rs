@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use gpui::{AnyElement, IntoElement as _, Refineable as _, Styled as _};
 use gpui_component::{
-    button::Button,
+    button::{Button, ButtonVariants as _},
     menu::{DropdownMenu as _, PopupMenuItem},
 };
 
@@ -28,6 +28,12 @@ struct DropdownMenuPayload {
 struct MenuItemOp {
     label: String,
     callback: ComponentArgument,
+}
+
+#[derive(Clone)]
+enum DropdownMenuOp {
+    /// Use the ghost (bare) button treatment for the trigger.
+    Ghost,
 }
 
 struct DropdownMenuMaterializer;
@@ -50,8 +56,17 @@ impl ComponentMaterializer for DropdownMenuMaterializer {
             .filter_map(|method| method.payload().downcast_ref::<MenuItemOp>().cloned())
             .map(|item| Ok((item.label, request.resolve_callback(&item.callback)?)))
             .collect::<Result<Vec<_>, String>>()?;
+        let ghost = request.methods().any(|method| {
+            matches!(
+                method.payload().downcast_ref::<DropdownMenuOp>(),
+                Some(DropdownMenuOp::Ghost)
+            )
+        });
 
         let mut button = Button::new(payload.id).label(payload.label);
+        if ghost {
+            button = button.ghost();
+        }
         button.style().refine(&request.take_style());
         let menu = button.dropdown_menu(move |menu, _, _| {
             items.iter().fold(menu, |menu, (label, callback)| {
@@ -116,7 +131,12 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         ),
                     },
                 )
-                .with_documentation("Appends a command item in call order.")])
+                .with_documentation("Appends a command item in call order."),
+                    MethodDescriptor::new("ghost", Vec::new(), |_| {
+                        Ok(ComponentPayload::new(DropdownMenuOp::Ghost))
+                    })
+                    .with_documentation("Uses the ghost (bare) button treatment for the trigger."),
+                ])
                 .with_documentation(
                     "A button-triggered native popup menu containing closed command items.",
                 ),

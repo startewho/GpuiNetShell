@@ -332,31 +332,49 @@ impl ComponentCallback {
 
     fn dispatch(&self, arguments: &[ComponentCallbackArgument], cx: &mut App) {
         if let Some(invoke) = self.host.callbacks.invoke {
-            for argument in arguments {
-                let (kind, number, data, len) = match argument {
-                    ComponentCallbackArgument::Boolean(value) => (
-                        crate::schema::CALLBACK_VALUE_BOOLEAN,
-                        if *value { 1.0 } else { 0.0 },
-                        std::ptr::null(),
-                        0,
-                    ),
-                    ComponentCallbackArgument::Number(value) => (
-                        crate::schema::CALLBACK_VALUE_NUMBER,
-                        *value,
-                        std::ptr::null(),
-                        0,
-                    ),
-                    ComponentCallbackArgument::String(value) => (
-                        crate::schema::CALLBACK_VALUE_STRING,
-                        0.0,
-                        value.as_ptr(),
-                        value.len() as u32,
-                    ),
-                };
-                // SAFETY: the managed callback copies anything it retains before
-                // returning; `data` points at a live String for the call.
+            if arguments.is_empty() {
+                // A parameterless callback (a menu item, a parameterless
+                // `on_change`) still has to be delivered; without an argument
+                // there is nothing to iterate over, so send one value-less
+                // invoke. Otherwise the managed handler never runs.
+                // SAFETY: a value-less invoke carries no pointer.
                 unsafe {
-                    let _ = invoke(self.host.session_id, self.token, kind, number, data, len);
+                    let _ = invoke(
+                        self.host.session_id,
+                        self.token,
+                        crate::schema::CALLBACK_VALUE_NONE,
+                        0.0,
+                        std::ptr::null(),
+                        0,
+                    );
+                }
+            } else {
+                for argument in arguments {
+                    let (kind, number, data, len) = match argument {
+                        ComponentCallbackArgument::Boolean(value) => (
+                            crate::schema::CALLBACK_VALUE_BOOLEAN,
+                            if *value { 1.0 } else { 0.0 },
+                            std::ptr::null(),
+                            0,
+                        ),
+                        ComponentCallbackArgument::Number(value) => (
+                            crate::schema::CALLBACK_VALUE_NUMBER,
+                            *value,
+                            std::ptr::null(),
+                            0,
+                        ),
+                        ComponentCallbackArgument::String(value) => (
+                            crate::schema::CALLBACK_VALUE_STRING,
+                            0.0,
+                            value.as_ptr(),
+                            value.len() as u32,
+                        ),
+                    };
+                    // SAFETY: the managed callback copies anything it retains before
+                    // returning; `data` points at a live String for the call.
+                    unsafe {
+                        let _ = invoke(self.host.session_id, self.token, kind, number, data, len);
+                    }
                 }
             }
         }

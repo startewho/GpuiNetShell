@@ -11,6 +11,13 @@ public sealed class DropdownMenuElement : Element
     internal DropdownMenuElement(RenderContext ui, int index)
         : base(ui, index) { }
 
+    /// <summary>Uses the ghost (bare) button treatment for the trigger.</summary>
+    public DropdownMenuElement Ghost()
+    {
+        Arena.AddMethod(Index, "ghost");
+        return this;
+    }
+
     /// <summary>Appends a command item that runs <paramref name="handler"/>.</summary>
     public DropdownMenuElement Item(string label, Action handler)
     {

@@ -30,6 +30,7 @@ FileManagerView? view = null;
 application = new GpuiApplication(() => view!);
 view = new FileManagerView(application, initialPath);
 application.UseCustomTitlebar = true;
+application.WindowTitle = "文件资源管理器";
 application.AlwaysShowScrollbars = true;
 application.Run();
 return 0;

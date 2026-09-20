@@ -7,38 +7,21 @@ namespace GpuiNetShell.FileManager;
 /// repaints only the file manager subtree; every mutation ends in
 /// <c>Context.Notify()</c>.
 /// </summary>
+/// <remarks>
+/// Per-folder state (path, history, listing, selection, search) lives on
+/// <see cref="FileTab"/>; everything shared across tabs (sort, view, theme, the
+/// tree, breadcrumb caches) lives here. The read-only convenience properties
+/// below reflect the active tab so the render code stays unchanged.
+/// </remarks>
 internal sealed class FileManagerState
 {
-    private readonly List<string> _history = [];
-    private int _historyIndex = -1;
+    public List<FileTab> Tabs { get; } = [];
 
-    public string CurrentPath { get; set; } = string.Empty;
+    public int ActiveTabIndex { get; set; }
 
-    /// <summary>The address bar text; edits are committed with the Go button.</summary>
-    public string AddressText { get; set; } = string.Empty;
+    public FileTab ActiveTab => Tabs[Math.Clamp(ActiveTabIndex, 0, Tabs.Count - 1)];
 
-    public string SearchText { get; set; } = string.Empty;
-
-    /// <summary>Bumped on every search so a stale result set is ignored.</summary>
-    public int SearchSeq { get; set; }
-
-    /// <summary>Recursive search results for <see cref="SearchText"/>.</summary>
-    public List<FileEntry> SearchResults { get; } = [];
-
-    public List<FileEntry> Entries { get; } = [];
-
-    /// <summary>Entries after the search filter and sort; what the list renders.</summary>
-    public List<FileEntry> Visible { get; private set; } = [];
-
-    /// <summary>The breadcrumb whose folder dropdown is open, if any.</summary>
-    public string? OpenCrumb { get; set; }
-
-    /// <summary>Subfolders of a breadcrumb, loaded lazily when its dropdown opens.</summary>
-    public Dictionary<string, List<TreeNode>> CrumbChildren { get; } =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Breadcrumb paths whose subfolders have been loaded.</summary>
-    public HashSet<string> CrumbLoaded { get; } = new(StringComparer.OrdinalIgnoreCase);
+    // -- Shared settings ----------------------------------------------------
 
     public FileView View { get; set; } = FileView.Details;
 
@@ -46,11 +29,7 @@ internal sealed class FileManagerState
 
     public bool SortAscending { get; set; } = true;
 
-    public int SelectedIndex { get; set; } = -1;
-
-    public bool Loading { get; set; }
-
-    public string? Error { get; set; }
+    public int IconColumns { get; set; } = 6;
 
     public ThemeMode Mode { get; set; } = ThemeMode.System;
 
@@ -58,83 +37,125 @@ internal sealed class FileManagerState
 
     public string AccentHex { get; set; } = ThemePresets.Default.Hex;
 
-    public bool ThemeOpen { get; set; }
+    /// <summary>Whether the settings popover is open.</summary>
+    public bool SettingsOpen { get; set; }
 
-    /// <summary>Icons per row in the large-icon view.</summary>
-    public int IconColumns { get; set; } = 6;
+    /// <summary>Whether the second toolbar row (view options) is shown.</summary>
+    public bool ShowToolbar { get; set; }
 
     public List<TreeNode> TreeRoots { get; } = [];
+
+    /// <summary>Subfolders of a breadcrumb, loaded lazily by the view.</summary>
+    public Dictionary<string, List<TreeNode>> CrumbChildren { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Breadcrumb paths whose subfolders have been loaded.</summary>
+    public HashSet<string> CrumbLoaded { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public int LastClickIndex { get; set; } = -1;
 
     public long LastClickTicks { get; set; }
 
-    public bool CanGoBack => _historyIndex > 0;
+    // -- Active tab accessors (rendering) -----------------------------------
 
-    public bool CanGoForward => _historyIndex >= 0 && _historyIndex < _history.Count - 1;
+    public string CurrentPath => Tabs.Count > 0 ? ActiveTab.Path : string.Empty;
 
-    /// <summary>Installs a directory listing and recomputes the visible entries.</summary>
-    public void SetListing(string path, DirectoryListing listing)
+    public List<FileEntry> Visible => ActiveTab.Visible;
+
+    public string SearchText => ActiveTab.SearchText;
+
+    public bool CanGoBack => Tabs.Count > 0 && ActiveTab.CanGoBack;
+
+    public bool CanGoForward => Tabs.Count > 0 && ActiveTab.CanGoForward;
+
+    public int SelectedIndex
     {
-        CurrentPath = path;
-        AddressText = path;
-        Entries.Clear();
-        Entries.AddRange(listing.Entries);
-        SearchText = string.Empty;
-        SearchResults.Clear();
-        SelectedIndex = -1;
-        Error = listing.Error;
-        Recompute();
+        get => ActiveTab.SelectedIndex;
+        set => ActiveTab.SelectedIndex = value;
     }
 
-    /// <summary>Installs a recursive search result set, ignoring stale searches.</summary>
-    public void SetSearchResults(int seq, IReadOnlyList<FileEntry> results)
+    public bool Loading
     {
-        if (seq != SearchSeq)
+        get => ActiveTab.Loading;
+        set => ActiveTab.Loading = value;
+    }
+
+    public string? Error
+    {
+        get => ActiveTab.Error;
+        set => ActiveTab.Error = value;
+    }
+
+    // -- Tabs ---------------------------------------------------------------
+
+    /// <summary>Adds a tab, makes it active, and returns it.</summary>
+    public FileTab AddTab()
+    {
+        var tab = new FileTab();
+        Tabs.Add(tab);
+        ActiveTabIndex = Tabs.Count - 1;
+        return tab;
+    }
+
+    /// <summary>Closes a tab unless it is the last one, keeping a sensible active tab.</summary>
+    public void CloseTab(int index)
+    {
+        if (Tabs.Count <= 1 || index < 0 || index >= Tabs.Count)
         {
             return;
         }
-        SearchResults.Clear();
-        SearchResults.AddRange(results);
-        Recompute();
-    }
-
-    /// <summary>Rebuilds <see cref="Visible"/> from the filter and sort settings.</summary>
-    public void Recompute()
-    {
-        // While searching, the visible list is the recursive search result set;
-        // otherwise it is the current directory's listing.
-        var source = SearchText.Length > 0 ? SearchResults : Entries;
-        var filtered = new List<FileEntry>(source);
-
-        Comparison<FileEntry> comparison = SortKey switch
+        Tabs.RemoveAt(index);
+        if (ActiveTabIndex >= Tabs.Count)
         {
-            "modified" => (a, b) => a.Modified.CompareTo(b.Modified),
-            "type" => (a, b) =>
-                string.Compare(Formatting.TypeName(a), Formatting.TypeName(b), StringComparison.OrdinalIgnoreCase),
-            "size" => (a, b) => a.Size.CompareTo(b.Size),
-            _ => (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase),
-        };
-        filtered.Sort(
-            (a, b) =>
-            {
-                if (a.IsDirectory != b.IsDirectory)
-                {
-                    return a.IsDirectory ? -1 : 1;
-                }
-                var result = comparison(a, b);
-                return SortAscending ? result : -result;
-            }
-        );
-        Visible = filtered;
-
-        if (SelectedIndex >= Visible.Count)
+            ActiveTabIndex = Tabs.Count - 1;
+        }
+        else if (index < ActiveTabIndex)
         {
-            SelectedIndex = -1;
+            ActiveTabIndex--;
         }
     }
 
-    /// <summary>Toggles the sort key, or flips the direction when it is already active.</summary>
+    /// <summary>Makes <paramref name="index"/> active and recomputes its visible list.</summary>
+    public void SelectTab(int index)
+    {
+        if (index < 0 || index >= Tabs.Count)
+        {
+            return;
+        }
+        ActiveTabIndex = index;
+        Recompute(ActiveTab);
+    }
+
+    // -- Listing and search -------------------------------------------------
+
+    /// <summary>Installs a listing for <paramref name="tab"/> and recomputes it.</summary>
+    public void ApplyListing(FileTab tab, DirectoryListing listing, bool recordHistory)
+    {
+        tab.Loading = false;
+        if (listing.Error is not null && listing.Entries.Count == 0)
+        {
+            tab.Error = listing.Error;
+            return;
+        }
+        tab.SetListing(listing.Path, listing);
+        if (recordHistory)
+        {
+            tab.PushHistory(listing.Path);
+        }
+        Recompute(tab);
+    }
+
+    /// <summary>Installs a search result set for <paramref name="tab"/>.</summary>
+    public void ApplySearchResults(FileTab tab, int seq, IReadOnlyList<FileEntry> results)
+    {
+        tab.SetSearchResults(seq, results);
+        Recompute(tab);
+    }
+
+    /// <summary>Rebuilds <paramref name="tab"/>'s visible list with the shared sort.</summary>
+    public void Recompute(FileTab tab) => tab.Recompute(SortKey, SortAscending);
+
+    /// <summary>Toggles the sort key, or flips direction when it is active, and recomputes.</summary>
     public void SortBy(string key)
     {
         if (SortKey == key)
@@ -146,46 +167,6 @@ internal sealed class FileManagerState
             SortKey = key;
             SortAscending = true;
         }
-        Recompute();
-    }
-
-    public void PushHistory(string path)
-    {
-        if (
-            _historyIndex >= 0
-            && _historyIndex < _history.Count
-            && string.Equals(_history[_historyIndex], path, StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            return;
-        }
-        if (_historyIndex < _history.Count - 1)
-        {
-            _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
-        }
-        _history.Add(path);
-        _historyIndex = _history.Count - 1;
-    }
-
-    /// <summary>The previous path and the new history position, or null at the start.</summary>
-    public string? Back()
-    {
-        if (!CanGoBack)
-        {
-            return null;
-        }
-        _historyIndex--;
-        return _history[_historyIndex];
-    }
-
-    /// <summary>The next path and the new history position, or null at the end.</summary>
-    public string? Forward()
-    {
-        if (!CanGoForward)
-        {
-            return null;
-        }
-        _historyIndex++;
-        return _history[_historyIndex];
+        Recompute(ActiveTab);
     }
 }
