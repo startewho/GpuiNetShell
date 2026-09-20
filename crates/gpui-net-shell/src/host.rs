@@ -90,7 +90,9 @@ struct FileAssets;
 
 impl gpui::AssetSource for FileAssets {
     fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
-        if let Some(bytes) = gpui_kit_assets::Assets.load(path)? {
+        // The bundled source returns an error for a miss (not `Ok(None)`), so a
+        // miss must fall through to the filesystem rather than fail the load.
+        if let Ok(Some(bytes)) = gpui_kit_assets::Assets.load(path) {
             return Ok(Some(bytes));
         }
         if path.is_empty() {

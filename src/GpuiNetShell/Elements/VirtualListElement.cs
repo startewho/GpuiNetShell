@@ -69,6 +69,18 @@ public sealed class VirtualListElement : Element
         return this;
     }
 
+    /// <summary>Reports the middle-clicked item's index (for example to open it in a new tab).</summary>
+    public VirtualListElement OnMiddleClick(Action<int> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(
+            Index,
+            "on_middle_click",
+            Events.Register(value => handler((int)value.Number))
+        );
+        return this;
+    }
+
     /// <summary>
     /// Adds a row right-click menu (<see cref="ContextMenuItemElement"/> /
     /// <see cref="ContextMenuSeparatorElement"/>). Item callbacks receive the

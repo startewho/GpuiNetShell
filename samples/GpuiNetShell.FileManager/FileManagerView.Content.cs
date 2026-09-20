@@ -14,6 +14,7 @@ internal sealed partial class FileManagerView
     ) =>
         ui.Div(BuildBody(ui, state, cx))
             .Flex1()
+            .MinW(0)
             .MinH(0)
             .HFull()
             .Flex()
@@ -81,11 +82,15 @@ internal sealed partial class FileManagerView
                     .ItemSize(30)
                     .Vertical()
                     .Flex1()
+                    .MinW(0)
                     .MinH(0)
                     .OnSelect(index => OnEntryActivate(cx, state, index))
+                    .OnMiddleClick(index => OpenInNewTab(index))
                     .RowMenu(
                         ui.ContextMenuItem("打开")
                             .OnSelectStable("fm-row-open", row => OpenIndex(cx, state, row)),
+                        ui.ContextMenuItem("在新标签页中打开")
+                            .OnSelectStable("fm-row-newtab", row => OpenInNewTab(row)),
                         ui.ContextMenuItem("在文件资源管理器中显示")
                             .OnSelectStable("fm-row-reveal", row => RevealIndex(state, row)),
                         ui.ContextMenuSeparator(),
@@ -212,6 +217,7 @@ internal sealed partial class FileManagerView
             .Axis(ScrollAxis.Vertical)
             .Add(grid)
             .Flex1()
+            .MinW(0)
             .MinH(0)
             .WFull();
     }
@@ -253,6 +259,13 @@ internal sealed partial class FileManagerView
             "fm-icon-" + entry.FullPath,
             () => OnEntryActivate(cx, state, index)
         );
+        cell.OnMouseDown(pointer =>
+        {
+            if (pointer.Button == 2)
+            {
+                OpenInNewTab(index);
+            }
+        });
         return cell;
     }
 

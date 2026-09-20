@@ -53,7 +53,11 @@ internal sealed partial class FileManagerView
             .MinW(0)
             .Flex()
             .ItemsCenter()
-            .OverflowHidden();
+            .OverflowHidden()
+            // A wheel over the strip steps the selection one tab. The container
+            // catches it over the gaps; each chip catches it over itself (the
+            // chip occludes the container, so the wheel never reaches it there).
+            .OnScroll(HandleTabWheel);
     }
 
     /// <summary>How many whole tabs fit in the measured strip width.</summary>
@@ -65,6 +69,19 @@ internal sealed partial class FileManagerView
         }
         var per = TAB_CHIP_WIDTH + TAB_GAP;
         return Math.Clamp((int)((_tabStripWidth + TAB_GAP) / per), 1, state.Tabs.Count);
+    }
+
+    /// <summary>A wheel over a tab steps the selection one tab.</summary>
+    private void HandleTabWheel(Events.ScrollEvent scroll)
+    {
+        if (scroll.DeltaY > 0)
+        {
+            SelectRelative(1);
+        }
+        else if (scroll.DeltaY < 0)
+        {
+            SelectRelative(-1);
+        }
     }
 
     /// <summary>Previous/next tab, one at a time, keeping it in view.</summary>
@@ -197,6 +214,7 @@ internal sealed partial class FileManagerView
             chip.Bg(NeutralSelection);
         }
         chip.OnClick("fm-tab-" + index, () => SelectTab(index)).Occlude();
+        chip.OnScroll(HandleTabWheel);
 
         // Right-click menu: duplicate and the usual close variants. Stable keys
         // are unique per tab so an already-open menu's callbacks stay valid.

@@ -34,7 +34,8 @@ internal sealed partial class FileManagerView
                 IconButton(ui, "fm-refresh", "icons/refresh-cw.svg", true, () => Reload(cx, state)),
                 BuildAddressBar(ui, state, cx).Flex1().MinW(160),
                 ViewToggle(ui, "fm-view-details", state, cx, "☰", FileView.Details),
-                ViewToggle(ui, "fm-view-grid", state, cx, "▦", FileView.LargeIcons)
+                ViewToggle(ui, "fm-view-grid", state, cx, "▦", FileView.LargeIcons),
+                PreviewToggle(ui, state)
             )
             .Gap(6)
             .ItemsCenter()
@@ -89,6 +90,23 @@ internal sealed partial class FileManagerView
             button.Bg(NeutralSelection);
         }
         button.OnClick(id, () => SetView(view));
+        return button;
+    }
+
+    /// <summary>Toggles the right-hand preview pane.</summary>
+    private Element PreviewToggle(RenderContext ui, FileManagerState state)
+    {
+        var button = ui.Div(ui.Label("◫").TextSize(15))
+            .Size(32)
+            .Flex()
+            .ItemsCenter()
+            .JustifyCenter()
+            .Rounded(6);
+        if (state.ShowPreview)
+        {
+            button.Bg(NeutralSelection);
+        }
+        button.OnClick("fm-preview-toggle", TogglePreview);
         return button;
     }
 }

@@ -228,6 +228,38 @@ internal static class FileSystemService
         return info.Parent?.FullName;
     }
 
+    /// <summary>Reads up to <paramref name="maxBytes"/> of a text file for preview.</summary>
+    public static TextPreview ReadTextPreview(string path, int maxBytes)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists)
+            {
+                return new TextPreview(null, $"找不到文件：{path}", false);
+            }
+            if (info.Length > maxBytes)
+            {
+                using var limited = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite
+                );
+                var buffer = new byte[maxBytes];
+                var read = limited.Read(buffer, 0, buffer.Length);
+                var text = System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+                return new TextPreview(text, null, true);
+            }
+            var all = File.ReadAllText(path);
+            return new TextPreview(all, null, false);
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return new TextPreview(null, exception.Message, false);
+        }
+    }
+
     private static FileEntry? ToEntry(FileSystemInfo item)
     {
         try

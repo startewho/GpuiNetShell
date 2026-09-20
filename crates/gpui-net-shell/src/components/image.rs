@@ -7,10 +7,12 @@
 //!
 //! [`AssetSource`]: gpui::AssetSource
 
+use std::path::Path;
 use std::sync::Arc;
 
 use gpui::{
-    img, AnyElement, IntoElement as _, ObjectFit, Refineable as _, Styled as _, StyledImage as _,
+    img, AnyElement, ImageSource, IntoElement as _, ObjectFit, Refineable as _, Resource,
+    Styled as _, StyledImage as _,
 };
 
 use crate::registry::{
@@ -48,8 +50,19 @@ impl Fit {
     }
 }
 
-struct ImageMaterializer;
+/// Resolves an image source. An absolute path is treated as a filesystem path:
+/// gpui's `From<String>` would otherwise read `C:\...` as a URI scheme and try
+/// to fetch it. Other strings keep the default resolution (bundled asset path
+/// or URI).
+fn source_for(path: &str) -> ImageSource {
+    if Path::new(path).is_absolute() {
+        ImageSource::Resource(Resource::Path(Arc::from(Path::new(path))))
+    } else {
+        path.to_owned().into()
+    }
+}
 
+struct ImageMaterializer;
 impl ComponentMaterializer for ImageMaterializer {
     fn materialize(&self, mut request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let path = request
@@ -61,7 +74,7 @@ impl ComponentMaterializer for ImageMaterializer {
         if request.children_len() != 0 {
             return Err("Image does not accept children".to_string());
         }
-        let mut image = img(path);
+        let mut image = img(source_for(&path));
         for op in request
             .methods()
             .filter_map(|method| method.payload().downcast_ref::<ImageOp>())

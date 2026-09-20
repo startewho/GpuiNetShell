@@ -128,6 +128,7 @@ internal sealed partial class FileManagerView
                 c.Notify();
             }
         );
+        LoadPreview(cx, Entity.Read(), index);
         if (doubleClick)
         {
             OpenIndex(cx, state, index);
@@ -149,6 +150,35 @@ internal sealed partial class FileManagerView
         {
             OpenWithShell(entry.FullPath);
         }
+    }
+
+    /// <summary>
+    /// Opens the entry in a new tab (folders), or with the shell (files). Used by
+    /// a middle click and the row context menu.
+    /// </summary>
+    private void OpenInNewTab(int index)
+    {
+        var state = Entity.Read();
+        if (index < 0 || index >= state.Visible.Count)
+        {
+            return;
+        }
+        var entry = state.Visible[index];
+        if (!entry.IsDirectory)
+        {
+            OpenWithShell(entry.FullPath);
+            return;
+        }
+        Entity.Update(
+            (s, cx) =>
+            {
+                var tab = s.AddTab();
+                tab.Loading = true;
+                LoadTab(cx, tab, entry.FullPath, recordHistory: true);
+                cx.Notify();
+            }
+        );
+        EnsureTabVisible(Entity.Read().Tabs.Count - 1);
     }
 
     private static void RevealIndex(FileManagerState state, int index)

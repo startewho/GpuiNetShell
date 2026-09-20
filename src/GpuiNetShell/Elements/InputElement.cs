@@ -28,6 +28,13 @@ public sealed class InputElement : Element
         return this;
     }
 
+    /// <summary>Sets the control size; it also fixes the field height.</summary>
+    public InputElement Size(ControlSize size)
+    {
+        Arena.AddMethodEnum(Index, "size", SemanticSize.Name(size));
+        return this;
+    }
+
     /// <summary>Reports the new text after each edit.</summary>
     public InputElement OnChange(Action<string> handler)
     {

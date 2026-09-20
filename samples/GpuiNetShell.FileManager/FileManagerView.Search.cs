@@ -34,10 +34,9 @@ internal sealed partial class FileManagerView
                             .Value(state.SearchText)
                             .W(200)
                             .MaxW(320)
-                            .H(22)
+                            .Size(ControlSize.Small)
                             .OnChange(text => Update((s, c) => ApplySearch(s, c, text)))
                     )
-                    .Py(4)
                     .FlexShrink(0)
                     .Occlude(),
                 ui.Div(BuildSettingsButton(ui, state)).FlexShrink(0).Occlude()

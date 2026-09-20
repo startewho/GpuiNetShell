@@ -127,9 +127,14 @@ internal sealed partial class FileManagerView : View
     ) =>
         ui.VStack(
                 BuildToolbar(ui, state, cx),
-                ui.HStack(BuildTreePane(ui, state, cx), BuildContentPane(ui, state, cx))
+                ui.HStack(
+                        BuildTreePane(ui, state, cx),
+                        BuildContentPane(ui, state, cx),
+                        state.ShowPreview ? BuildPreviewPane(ui, state, cx) : ui.Div()
+                    )
                     .Gap(0)
                     .Flex1()
+                    .MinW(0)
                     .MinH(0),
                 BuildStatusBar(ui, state)
             )

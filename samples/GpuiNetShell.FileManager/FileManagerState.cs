@@ -53,6 +53,32 @@ internal sealed class FileManagerState
 
     public long LastClickTicks { get; set; }
 
+    // -- Preview ------------------------------------------------------------
+
+    /// <summary>Whether the right-hand preview pane is shown.</summary>
+    public bool ShowPreview { get; set; } = true;
+
+    /// <summary>The path the current preview state belongs to.</summary>
+    public string? PreviewPath { get; set; }
+
+    public string? PreviewText { get; set; }
+
+    public bool PreviewTruncated { get; set; }
+
+    public bool PreviewLoading { get; set; }
+
+    public string? PreviewError { get; set; }
+
+    /// <summary>Drops the preview so nothing stale is shown after a selection change.</summary>
+    public void ResetPreview()
+    {
+        PreviewPath = null;
+        PreviewText = null;
+        PreviewTruncated = false;
+        PreviewLoading = false;
+        PreviewError = null;
+    }
+
     // -- Active tab accessors (rendering) -----------------------------------
 
     public string CurrentPath => Tabs.Count > 0 ? ActiveTab.Path : string.Empty;
@@ -133,6 +159,7 @@ internal sealed class FileManagerState
             return;
         }
         ActiveTabIndex = index;
+        ResetPreview();
         Recompute(ActiveTab);
     }
 
@@ -142,6 +169,7 @@ internal sealed class FileManagerState
     public void ApplyListing(FileTab tab, DirectoryListing listing, bool recordHistory)
     {
         tab.Loading = false;
+        ResetPreview();
         if (listing.Error is not null && listing.Entries.Count == 0)
         {
             tab.Error = listing.Error;

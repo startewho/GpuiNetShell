@@ -11,6 +11,7 @@ use gpui::{
     Refineable as _, SharedString, Styled as _, Subscription,
 };
 use gpui_component::input::{Input, InputState};
+use gpui_component::{Sizable as _, Size};
 
 use super::common::nonempty_id;
 use super::input_events::{InputCallbacks, RetainedInputCallbacks};
@@ -28,6 +29,7 @@ enum InputOp {
     Placeholder(String),
     Value(String),
     Disabled(bool),
+    Size(Size),
     OnChange(ComponentArgument),
     OnFocus(ComponentArgument),
     OnBlur(ComponentArgument),
@@ -77,6 +79,10 @@ impl ComponentMaterializer for InputMaterializer {
                 _ => None,
             })
             .unwrap_or_else(|| request.disabled());
+        let size = operations.iter().rev().find_map(|op| match op {
+            InputOp::Size(value) => Some(*value),
+            _ => None,
+        });
         let callback_for = |pick: fn(&InputOp) -> Option<&ComponentArgument>| {
             operations
                 .iter()
@@ -130,6 +136,9 @@ impl ComponentMaterializer for InputMaterializer {
         let mut input = Input::new(&state);
         if disabled {
             input = input.disabled(true);
+        }
+        if let Some(size) = size {
+            input = input.with_size(size);
         }
         let mut wrapper = div().child(input);
         wrapper.style().refine(&style);
@@ -218,6 +227,17 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                         ArgumentSchema::Boolean,
                         |arg| match arg {
                             ComponentArgument::Boolean(value) => Some(InputOp::Disabled(*value)),
+                            _ => None,
+                        },
+                    ),
+                    method(
+                        "size",
+                        "Sets the control size; it also fixes the field height.",
+                        ArgumentSchema::Enum(&["xsmall", "small", "medium", "large"]),
+                        |arg| match arg {
+                            ComponentArgument::Enum(value) => {
+                                Some(InputOp::Size(Size::from_str(value)))
+                            }
                             _ => None,
                         },
                     ),

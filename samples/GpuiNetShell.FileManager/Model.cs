@@ -23,6 +23,9 @@ internal sealed record DirectoryListing(
     string? Error
 );
 
+/// <summary>The text read for a preview: content, an error, or a truncation flag.</summary>
+internal sealed record TextPreview(string? Text, string? Error, bool Truncated);
+
 /// <summary>
 /// One row of the navigation tree. A node with an empty <see cref="Path"/> is a
 /// synthetic group (Quick access, This PC); a real folder navigates when clicked.

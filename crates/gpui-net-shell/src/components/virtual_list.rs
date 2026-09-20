@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use gpui::{
     div, px, size, AnyElement, App, Axis, Context, ElementId, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Refineable as _, Render, ScrollStrategy, SharedString, Size,
-    StatefulInteractiveElement as _, Styled as _, Window,
+    MouseButton, ParentElement as _, Pixels, Refineable as _, Render, ScrollStrategy, SharedString,
+    Size, StatefulInteractiveElement as _, Styled as _, Window,
 };
 use gpui_base::{h_virtual_list, v_virtual_list, VirtualListScrollHandle};
 use gpui_component::menu::ContextMenuExt as _;
@@ -44,6 +44,7 @@ enum VirtualListOp {
     Axis(Axis),
     RenderItem(ComponentArgument),
     OnSelect(ComponentArgument),
+    OnMiddleClick(ComponentArgument),
     ScrollTo(usize),
     ScrollToken(u64),
 }
@@ -62,6 +63,7 @@ struct VirtualListView {
     uniform_sizes: Option<UniformSizes>,
     renderer: Option<ElementCallback>,
     on_select: Option<ComponentCallback>,
+    on_middle_click: Option<ComponentCallback>,
     row_menu: Rc<Vec<Entry>>,
     /// A one-shot scroll request, applied when `scroll_token` changes.
     scroll_target: Option<usize>,
@@ -80,6 +82,7 @@ impl VirtualListView {
             uniform_sizes: None,
             renderer: None,
             on_select: None,
+            on_middle_click: None,
             row_menu: Rc::new(Vec::new()),
             scroll_target: None,
             scroll_token: 0,
@@ -132,9 +135,11 @@ fn render_index(
 }
 
 /// Wraps one item with its click handler and row context menu.
+#[allow(clippy::too_many_arguments)]
 fn item_element(
     renderer: &Option<ElementCallback>,
     on_select: &Option<ComponentCallback>,
+    on_middle_click: &Option<ComponentCallback>,
     row_menu: &Rc<Vec<Entry>>,
     horizontal: bool,
     index: usize,
@@ -153,6 +158,17 @@ fn item_element(
         item = item.on_click(move |_, window, cx| {
             callback.invoke_with(
                 "VirtualList.on_select callback failed",
+                &[ComponentCallbackArgument::Number(index as f64)],
+                window,
+                cx,
+            );
+        });
+    }
+    if let Some(callback) = on_middle_click {
+        let callback = callback.clone();
+        item = item.on_mouse_down(MouseButton::Middle, move |_, window, cx| {
+            callback.invoke_with(
+                "VirtualList.on_middle_click callback failed",
                 &[ComponentCallbackArgument::Number(index as f64)],
                 window,
                 cx,
@@ -185,11 +201,16 @@ impl Render for VirtualListView {
         let handle = self.scroll_handle.clone();
         let renderer = self.renderer.clone();
         let on_select = self.on_select.clone();
+        let on_middle_click = self.on_middle_click.clone();
         let row_menu = self.row_menu.clone();
 
         let list = if matches!(self.axis, Axis::Horizontal) {
-            let (renderer, on_select, row_menu) =
-                (renderer.clone(), on_select.clone(), row_menu.clone());
+            let (renderer, on_select, on_middle_click, row_menu) = (
+                renderer.clone(),
+                on_select.clone(),
+                on_middle_click.clone(),
+                row_menu.clone(),
+            );
             h_virtual_list(
                 entity,
                 self.id.clone(),
@@ -197,14 +218,27 @@ impl Render for VirtualListView {
                 move |_view: &mut VirtualListView, range: Range<usize>, window, cx| {
                     range
                         .map(|index| {
-                            item_element(&renderer, &on_select, &row_menu, true, index, window, cx)
+                            item_element(
+                                &renderer,
+                                &on_select,
+                                &on_middle_click,
+                                &row_menu,
+                                true,
+                                index,
+                                window,
+                                cx,
+                            )
                         })
                         .collect::<Vec<_>>()
                 },
             )
         } else {
-            let (renderer, on_select, row_menu) =
-                (renderer.clone(), on_select.clone(), row_menu.clone());
+            let (renderer, on_select, on_middle_click, row_menu) = (
+                renderer.clone(),
+                on_select.clone(),
+                on_middle_click.clone(),
+                row_menu.clone(),
+            );
             v_virtual_list(
                 entity,
                 self.id.clone(),
@@ -212,7 +246,16 @@ impl Render for VirtualListView {
                 move |_view: &mut VirtualListView, range: Range<usize>, window, cx| {
                     range
                         .map(|index| {
-                            item_element(&renderer, &on_select, &row_menu, false, index, window, cx)
+                            item_element(
+                                &renderer,
+                                &on_select,
+                                &on_middle_click,
+                                &row_menu,
+                                false,
+                                index,
+                                window,
+                                cx,
+                            )
                         })
                         .collect::<Vec<_>>()
                 },
@@ -275,6 +318,15 @@ impl ComponentMaterializer for VirtualListMaterializer {
             })
             .map(|argument| request.resolve_callback(&argument))
             .transpose()?;
+        let on_middle_click = operations
+            .iter()
+            .rev()
+            .find_map(|op| match op {
+                VirtualListOp::OnMiddleClick(argument) => Some(argument.clone()),
+                _ => None,
+            })
+            .map(|argument| request.resolve_callback(&argument))
+            .transpose()?;
         let scroll = operations.iter().rev().find_map(|op| match op {
             VirtualListOp::ScrollTo(index) => Some(*index),
             _ => None,
@@ -330,6 +382,7 @@ impl ComponentMaterializer for VirtualListMaterializer {
             view.axis = axis;
             view.renderer = renderer;
             view.on_select = on_select;
+            view.on_middle_click = on_middle_click;
             view.row_menu = Rc::new(row_menu);
             if let Some(token) = scroll_token {
                 if token != view.scroll_token {
@@ -457,6 +510,7 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     )
                     .with_documentation("Renders one item with managed code, receiving its index."),
                     callback_method("on_select", VirtualListOp::OnSelect),
+                    callback_method("on_middle_click", VirtualListOp::OnMiddleClick),
                     MethodDescriptor::new(
                         "scroll_to",
                         vec![ArgumentDescriptor::new("index", ArgumentSchema::Number)],
