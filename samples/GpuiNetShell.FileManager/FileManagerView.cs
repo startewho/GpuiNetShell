@@ -34,16 +34,16 @@ internal sealed partial class FileManagerView : View
     /// </summary>
     private const string NeutralSelection = "#80808040";
 
-    private const double IconCellHeight = 108;
-
     /// <summary>How many recursive search matches are kept.</summary>
     private const int SearchLimit = 2000;
 
     private readonly GpuiApplication _application;
     private Entity<FileManagerState>? _entity;
     private bool _themeApplied;
-    /// <summary>A pending one-frame horizontal nudge of the tab strip, in pixels.</summary>
-    private int _tabScrollNudge;
+    /// <summary>The tab strip viewport width, measured from layout; 0 until known.</summary>
+    private double _tabStripWidth;
+    /// <summary>The first tab index shown when the strip is paginated.</summary>
+    private int _tabStart;
 
     public FileManagerView(GpuiApplication application, string? initialPath)
     {
@@ -80,6 +80,21 @@ internal sealed partial class FileManagerView : View
     /// <summary>The title bar carries the tabs, the search box, and settings.</summary>
     protected override Element? RenderTitleBar(ref RenderContext ui) =>
         BuildTitleBar(ui, Entity.Read());
+
+    /// <summary>
+    /// Measures the tab strip viewport. The grid of tabs is paginated so only
+    /// whole tabs are shown; the page size comes from this width.
+    /// </summary>
+    [GpuiCallback("MeasureTabStrip")]
+    private string MeasureTabStrip(double availableWidth, double availableHeight)
+    {
+        if (availableWidth > 1 && Math.Abs(availableWidth - _tabStripWidth) > 0.5)
+        {
+            _tabStripWidth = availableWidth;
+            Invalidate();
+        }
+        return "0\t0";
+    }
 
     /// <summary>Applies the configured accent once, after the window exists.</summary>
     private void EnsureTheme()

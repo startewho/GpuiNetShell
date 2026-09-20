@@ -530,7 +530,7 @@ impl Render for ShellView {
 
 /// Forwards one window input event to the managed host, if it subscribed.
 #[allow(clippy::too_many_arguments)]
-fn emit_input(
+pub(crate) fn emit_input(
     callbacks: GpuiNetCallbacks,
     session_id: u64,
     kind: u32,

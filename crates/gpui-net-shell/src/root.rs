@@ -32,9 +32,9 @@ use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::{ActiveTheme as _, Sizable as _};
 
 use crate::abi::GpuiNetCallbacks;
-use crate::view::ShellView;
+use crate::view::{emit_input, ShellView};
 
-actions!(gpui_net_shell_root, [Escape]);
+actions!(gpui_net_shell_root, [Escape, NextTab, PrevTab]);
 
 /// The key context the root installs.
 const CONTEXT: &str = "GpuiNetShellRoot";
@@ -239,6 +239,29 @@ impl Root {
         }
     }
 
+    /// Forwards a Ctrl+Tab / Ctrl+Shift+Tab as a synthetic managed key input.
+    fn forward_tab_shortcut(&mut self, shift: bool) {
+        let flags = if shift { 1 | 2 } else { 2 };
+        emit_input(
+            self.callbacks,
+            self.session_id,
+            crate::schema::INPUT_KEY_DOWN,
+            flags,
+            0.0,
+            0.0,
+            0.0,
+            "tab",
+        );
+    }
+
+    fn on_next_tab(&mut self, _: &NextTab, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.forward_tab_shortcut(false);
+    }
+
+    fn on_prev_tab(&mut self, _: &PrevTab, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.forward_tab_shortcut(true);
+    }
+
     /// The title bar's theme toggle: flips between light and dark.
     fn on_titlebar_theme(
         &mut self,
@@ -424,6 +447,8 @@ impl Render for Root {
             .id("gpui-net-shell-host")
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::on_escape))
+            .on_action(cx.listener(Self::on_next_tab))
+            .on_action(cx.listener(Self::on_prev_tab))
             .relative()
             .size_full()
             .bg(background)
@@ -440,6 +465,13 @@ fn install_key_bindings(cx: &mut App) {
         return;
     }
     cx.bind_keys([KeyBinding::new("escape", Escape, Some(CONTEXT))]);
+    // Ctrl+Tab is consumed by GPUI before it reaches a `on_key_down` handler, so
+    // bind it and forward a synthetic Tab keypress to the managed shortcut
+    // handler. Ctrl+Tab is next/forward, Ctrl+Shift+Tab previous/back.
+    cx.bind_keys([
+        KeyBinding::new("ctrl-tab", NextTab, Some(CONTEXT)),
+        KeyBinding::new("ctrl-shift-tab", PrevTab, Some(CONTEXT)),
+    ]);
     cx.set_global(KeyBindingsInstalled);
 }
 

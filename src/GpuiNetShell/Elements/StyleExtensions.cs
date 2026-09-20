@@ -128,6 +128,13 @@ public static class StyleExtensions
     public static T OverflowHidden<T>(this T element)
         where T : Element => element.Style("overflow_hidden");
 
+    /// <summary>
+    /// Lets flex children wrap onto new lines. With fixed-width cells this lays
+    /// out an adaptive grid whose column count follows the available width.
+    /// </summary>
+    public static T Wrap<T>(this T element)
+        where T : Element => element.Style("flex_wrap");
+
     // Width, height, size and min/max.
     public static T W<T>(this T element, int pixels)
         where T : Element => Px(element, "w", pixels);

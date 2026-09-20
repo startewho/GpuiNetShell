@@ -199,36 +199,21 @@ internal sealed partial class FileManagerView
         Context<FileManagerState> cx
     )
     {
-        var columns = Math.Max(1, state.IconColumns);
-        var rows = (state.Visible.Count + columns - 1) / columns;
-        return ui.VirtualList("fm-icons", rows)
-            .ItemSize(IconCellHeight)
-            .Vertical()
-            .Flex1()
-            .MinH(0)
-            .WFull()
-            .RenderItem((ctx, rowIndex) => IconRow(ctx, state, cx, rowIndex, columns));
-    }
-
-    private Element IconRow(
-        RenderContext ui,
-        FileManagerState state,
-        Context<FileManagerState> cx,
-        int rowIndex,
-        int columns
-    )
-    {
-        var cells = new List<Element>(columns);
-        for (var column = 0; column < columns; column++)
+        // A wrapping row of fixed-width cells: the column count follows the pane
+        // width, so the grid adapts to the window without knowing its size.
+        var cells = new List<Element>(state.Visible.Count);
+        for (var index = 0; index < state.Visible.Count; index++)
         {
-            var index = rowIndex * columns + column;
-            if (index >= state.Visible.Count)
-            {
-                break;
-            }
             cells.Add(IconCell(ui, state, cx, index));
         }
-        return ui.HStack(cells.ToArray()).Gap(0).WFull().ItemsStart().Px(4).Pt(4);
+
+        var grid = ui.HStack(cells.ToArray()).Wrap().Gap(2).Px(4).Pt(4).WFull();
+        return ui.Scroll("fm-grid")
+            .Axis(ScrollAxis.Vertical)
+            .Add(grid)
+            .Flex1()
+            .MinH(0)
+            .WFull();
     }
 
     private Element IconCell(

@@ -9,32 +9,42 @@ internal sealed partial class FileManagerView
 {
     private Element BuildTitleBar(RenderContext ui, FileManagerState state) =>
         ui.HStack(
-                // The strip hugs its chips and shrinks (clipping) when crowded,
-                // so the new-tab button stays right next to the last tab and the
-                // search box, settings, and window controls stay visible.
-                BuildTabs(ui, state).FlexShrink(1),
+                // `<` at the far left and `>` at the far right of the tab strip;
+                // either moves the selection one tab (the strip paginates so
+                // only whole tabs are shown).
+                TabNavButton(
+                    ui,
+                    "fm-tabs-prev",
+                    "‹",
+                    state.ActiveTabIndex > 0,
+                    () => SelectRelative(-1)
+                ),
+                BuildTabs(ui, state),
+                TabNavButton(
+                    ui,
+                    "fm-tabs-next",
+                    "›",
+                    state.ActiveTabIndex < state.Tabs.Count - 1,
+                    () => SelectRelative(1)
+                ),
                 BuildAddTab(ui),
-                BuildTabNav(ui, state),
-                // Empty space that fills the rest and drags the window.
-                ui.Div().Flex1().MinW(0),
                 ui.Div(
                         ui.Input("fm-titlebar-search")
                             .Placeholder("搜索所有文件")
                             .Value(state.SearchText)
-                            .W(240)
+                            .W(200)
                             .MaxW(320)
-                            .My(4)
+                            .H(22)
                             .OnChange(text => Update((s, c) => ApplySearch(s, c, text)))
                     )
+                    .Py(4)
                     .FlexShrink(0)
                     .Occlude(),
                 ui.Div(BuildSettingsButton(ui, state)).FlexShrink(0).Occlude()
             )
-            .Gap(8)
+            .Gap(6)
             .ItemsCenter()
             .WFull()
-            .HFull()
-            .MinW(0)
             .Px(8);
 
     /// <summary>

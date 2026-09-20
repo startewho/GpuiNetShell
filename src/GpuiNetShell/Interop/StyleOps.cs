@@ -40,6 +40,7 @@ internal static class StyleOps
         "relative",
         "absolute",
         "overflow_hidden",
+        "flex_wrap",
     ];
 
     /// <summary>Parametric style methods; index == <see cref="NativeProtocol.OpParamStyle"/> opcode.</summary>

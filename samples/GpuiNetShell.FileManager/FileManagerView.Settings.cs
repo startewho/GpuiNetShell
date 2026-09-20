@@ -56,12 +56,7 @@ internal sealed partial class FileManagerView
                 ui.HStack(swatches.ToArray()).Gap(8).ItemsCenter(),
                 ui.ColorPicker("fm-accent")
                     .Label("自定义强调色")
-                    .OnChange(hex => SetAccent(hex, key: null)),
-                ui.Separator(),
-                ui.Button("fm-toolbar-toggle")
-                    .Label("显示命令工具栏")
-                    .Selected(state.ShowToolbar)
-                    .OnClick(ToggleToolbar)
+                    .OnChange(hex => SetAccent(hex, key: null))
             )
             .Gap(10)
             .P(12)
@@ -78,13 +73,4 @@ internal sealed partial class FileManagerView
         var id = "fm-mode-" + mode;
         return ui.Button(id).Label(label).Selected(state.Mode == mode).OnClick(() => SetMode(mode));
     }
-
-    private void ToggleToolbar() =>
-        Update(
-            (s, c) =>
-            {
-                s.ShowToolbar = !s.ShowToolbar;
-                c.Notify();
-            }
-        );
 }

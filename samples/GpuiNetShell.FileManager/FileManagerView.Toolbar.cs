@@ -7,17 +7,15 @@ namespace GpuiNetShell.FileManager;
 internal sealed partial class FileManagerView
 {
     /// <summary>
-    /// The navigation row, with breadcrumbs. The second (command) row is
-    /// optional and hidden by default; it is toggled from the settings popover.
-    /// Search and settings live in the title bar.
+    /// The navigation row: history buttons, the address bar, and the view
+    /// toggles (list and grid). Search and settings live in the title bar.
     /// </summary>
     private Element BuildToolbar(
         RenderContext ui,
         FileManagerState state,
         Context<FileManagerState> cx
-    )
-    {
-        var locationRow = ui.HStack(
+    ) =>
+        ui.HStack(
                 IconButton(ui, "fm-back", "icons/arrow-left.svg", state.CanGoBack, () => GoBack(cx)),
                 IconButton(
                     ui,
@@ -34,48 +32,16 @@ internal sealed partial class FileManagerView
                     () => GoUp(cx, state)
                 ),
                 IconButton(ui, "fm-refresh", "icons/refresh-cw.svg", true, () => Reload(cx, state)),
-                BuildAddressBar(ui, state, cx).Flex1().MinW(160)
+                BuildAddressBar(ui, state, cx).Flex1().MinW(160),
+                ViewToggle(ui, "fm-view-details", state, cx, "☰", FileView.Details),
+                ViewToggle(ui, "fm-view-grid", state, cx, "▦", FileView.LargeIcons)
             )
             .Gap(6)
             .ItemsCenter()
-            .WFull();
-
-        var rows = new List<Element> { locationRow };
-        if (state.ShowToolbar)
-        {
-            rows.Add(
-                ui.HStack(
-                        ui.Div().Flex1(),
-                        ViewToggle(
-                            ui,
-                            "fm-view-details",
-                            state,
-                            cx,
-                            "icons/list.svg",
-                            FileView.Details
-                        ),
-                        ViewToggle(
-                            ui,
-                            "fm-view-icons",
-                            state,
-                            cx,
-                            "icons/layout-grid.svg",
-                            FileView.LargeIcons
-                        )
-                    )
-                    .Gap(6)
-                    .ItemsCenter()
-                    .WFull()
-            );
-        }
-
-        return ui.VStack(rows.ToArray())
-            .Gap(6)
-            .P(8)
             .WFull()
+            .P(8)
             .BorderB(1)
             .BorderColor(Divider);
-    }
 
     private static Element IconButton(
         RenderContext ui,
@@ -107,12 +73,12 @@ internal sealed partial class FileManagerView
         string id,
         FileManagerState state,
         Context<FileManagerState> cx,
-        string icon,
+        string glyph,
         FileView view
     )
     {
         var selected = state.View == view;
-        var button = ui.Div(ui.Icon(icon).Size(ControlSize.Medium))
+        var button = ui.Div(ui.Label(glyph).TextSize(15))
             .Size(32)
             .Flex()
             .ItemsCenter()

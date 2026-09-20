@@ -7,48 +7,105 @@ namespace GpuiNetShell.FileManager;
 /// <summary>The title bar tab strip: one chip per open folder, plus a new-tab button.</summary>
 internal sealed partial class FileManagerView
 {
-    /// <summary>How far a `<`/`>` click scrolls the tab strip.</summary>
-    private const int TAB_SCROLL_STEP = 180;
+    /// <summary>Fixed chip width, so a whole number of tabs fills the strip.</summary>
+    private const int TAB_CHIP_WIDTH = 130;
 
+    /// <summary>Gap between tab chips.</summary>
+    private const int TAB_GAP = 4;
+
+    /// <summary>
+    /// The tab strip. It shows only whole chips: the page size follows the
+    /// measured strip width, so no half tab is ever shown.
+    /// </summary>
     private Element BuildTabs(RenderContext ui, FileManagerState state)
     {
-        var chips = new List<Element>(state.Tabs.Count);
-        for (var index = 0; index < state.Tabs.Count; index++)
+        var count = state.Tabs.Count;
+        var page = TabPageSize(state);
+        var start = Math.Clamp(_tabStart, 0, Math.Max(0, count - 1));
+        // Keep the active tab on screen; the arrows move the selection, so the
+        // page follows it.
+        if (state.ActiveTabIndex < start)
+        {
+            start = state.ActiveTabIndex;
+        }
+        else if (state.ActiveTabIndex >= start + page)
+        {
+            start = state.ActiveTabIndex - page + 1;
+        }
+        start = Math.Clamp(start, 0, Math.Max(0, count - page));
+        _tabStart = start;
+
+        var end = Math.Min(count, start + page);
+        var chips = new List<Element>(Math.Max(0, end - start));
+        for (var index = start; index < end; index++)
         {
             chips.Add(BuildTab(ui, state, index));
         }
 
-        // A horizontal scroll area clips the chips when they exceed the strip and
-        // lets the `<`/`>` buttons reach the hidden ones.
-        var strip = ui.Scroll("fm-tabs").Axis(ScrollAxis.Horizontal);
-        if (_tabScrollNudge != 0)
-        {
-            strip.ScrollBy(_tabScrollNudge);
-            _tabScrollNudge = 0;
-        }
-        strip.Add(chips.ToArray());
-        return strip.FlexShrink(1).MinW(0);
-    }
-
-    /// <summary>Left/right buttons that scroll the tab strip.</summary>
-    private Element BuildTabNav(RenderContext ui, FileManagerState state)
-    {
-        if (state.Tabs.Count <= 1)
-        {
-            return ui.Div();
-        }
-        return ui.HStack(
-                NavButton(ui, "fm-tabs-left", "‹", () => NudgeTabs(-TAB_SCROLL_STEP)),
-                NavButton(ui, "fm-tabs-right", "›", () => NudgeTabs(TAB_SCROLL_STEP))
+        return ui.Div(
+                ui.HStack(chips.ToArray()).Gap(TAB_GAP).ItemsCenter().MinW(0),
+                // Absolute so it does not take space; it measures the strip and
+                // drives the page size.
+                ui.Canvas("fm-tab-measure").Absolute().Full().Measure(MeasureTabStripToken)
             )
-            .Gap(2)
+            .Relative()
+            .Flex1()
+            .MinW(0)
+            .Flex()
             .ItemsCenter()
-            .FlexShrink(0);
+            .OverflowHidden();
     }
 
-    private static Element NavButton(RenderContext ui, string id, string glyph, Action onClick)
+    /// <summary>How many whole tabs fit in the measured strip width.</summary>
+    private int TabPageSize(FileManagerState state)
     {
-        var button = ui.Div(ui.Label(glyph).TextSize(14))
+        if (_tabStripWidth <= 1 || state.Tabs.Count == 0)
+        {
+            return 1;
+        }
+        var per = TAB_CHIP_WIDTH + TAB_GAP;
+        return Math.Clamp((int)((_tabStripWidth + TAB_GAP) / per), 1, state.Tabs.Count);
+    }
+
+    /// <summary>Previous/next tab, one at a time, keeping it in view.</summary>
+    private void SelectRelative(int delta)
+    {
+        var state = Entity.Read();
+        var count = state.Tabs.Count;
+        if (count == 0)
+        {
+            return;
+        }
+        var target = Math.Clamp(state.ActiveTabIndex + delta, 0, count - 1);
+        if (target != state.ActiveTabIndex)
+        {
+            SelectTab(target);
+        }
+    }
+
+    /// <summary>Scrolls the page so <paramref name="index"/> is fully visible.</summary>
+    private void EnsureTabVisible(int index)
+    {
+        var page = TabPageSize(Entity.Read());
+        if (index < _tabStart)
+        {
+            _tabStart = index;
+        }
+        else if (index >= _tabStart + page)
+        {
+            _tabStart = index - page + 1;
+        }
+        if (_tabStart < 0)
+        {
+            _tabStart = 0;
+        }
+        Invalidate();
+    }
+
+    /// <summary>A `‹`/`›` tab button; dimmed with no action at an end.</summary>
+    private Element TabNavButton(RenderContext ui, string id, string glyph, bool enabled, Action onClick)
+    {
+        var button = ui.Div(ui.Label(glyph).TextSize(15))
             .Size(24)
             .Rounded(6)
             .Flex()
@@ -56,15 +113,15 @@ internal sealed partial class FileManagerView
             .JustifyCenter()
             .FlexShrink(0)
             .Occlude();
-        button.OnClick(id, onClick);
+        if (enabled)
+        {
+            button.OnClick(id, onClick);
+        }
+        else
+        {
+            button.Opacity(0.3);
+        }
         return button;
-    }
-
-    /// <summary>Requests a one-frame horizontal nudge of the tab strip.</summary>
-    private void NudgeTabs(int delta)
-    {
-        _tabScrollNudge += delta;
-        Invalidate();
     }
 
     /// <summary>
@@ -75,7 +132,7 @@ internal sealed partial class FileManagerView
     {
         var add = ui.Div(ui.Label("+").TextSize(14))
             .H(28)
-            .Px(12)
+            .Px(10)
             .Rounded(6)
             .Flex()
             .ItemsCenter()
@@ -123,16 +180,14 @@ internal sealed partial class FileManagerView
             close.OnClick("fm-tab-close-" + index, () => CloseTab(index));
         }
 
-        // `OverflowHidden` lets a chip shrink below its text so many tabs never
-        // push the new-tab button, the search box, or the window controls out.
-        // The active tab uses a neutral highlight, not the theme accent: the
-        // accent marks the selected folder in the list instead.
+        // A fixed width keeps the page size (and thus the number of whole tabs
+        // shown) predictable. The active tab uses a neutral highlight, not the
+        // theme accent: the accent marks the selected folder in the list instead.
         var chip = ui.HStack(body, close)
             .Gap(4)
             .ItemsCenter()
-            .MinW(0)
-            .MaxW(168)
-            .FlexShrink(1)
+            .W(TAB_CHIP_WIDTH)
+            .FlexShrink(0)
             .OverflowHidden()
             .H(28)
             .Px(8)
@@ -174,7 +229,7 @@ internal sealed partial class FileManagerView
                 cx.Notify();
             }
         );
-        Invalidate();
+        EnsureTabVisible(Entity.Read().Tabs.Count - 1);
     }
 
     private void DuplicateTab(int index)
@@ -196,10 +251,11 @@ internal sealed partial class FileManagerView
                 cx.Notify();
             }
         );
-        Invalidate();
+        EnsureTabVisible(Entity.Read().Tabs.Count - 1);
     }
 
-    private void CloseTab(int index) =>
+    private void CloseTab(int index)
+    {
         Update(
             (s, c) =>
             {
@@ -207,8 +263,11 @@ internal sealed partial class FileManagerView
                 c.Notify();
             }
         );
+        ClampTabStart();
+    }
 
-    private void CloseOtherTabs(int index) =>
+    private void CloseOtherTabs(int index)
+    {
         Update(
             (s, c) =>
             {
@@ -216,8 +275,11 @@ internal sealed partial class FileManagerView
                 c.Notify();
             }
         );
+        ClampTabStart();
+    }
 
-    private void SelectTab(int index) =>
+    private void SelectTab(int index)
+    {
         Update(
             (s, c) =>
             {
@@ -225,4 +287,23 @@ internal sealed partial class FileManagerView
                 c.Notify();
             }
         );
+        EnsureTabVisible(index);
+    }
+
+    /// <summary>Keeps the page start within range after the tab count changes.</summary>
+    private void ClampTabStart()
+    {
+        var count = Entity.Read().Tabs.Count;
+        var page = TabPageSize(Entity.Read());
+        var maxStart = Math.Max(0, count - page);
+        if (_tabStart > maxStart)
+        {
+            _tabStart = maxStart;
+        }
+        if (_tabStart < 0)
+        {
+            _tabStart = 0;
+        }
+        Invalidate();
+    }
 }

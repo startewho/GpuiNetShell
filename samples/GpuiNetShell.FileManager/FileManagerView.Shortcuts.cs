@@ -53,19 +53,17 @@ internal sealed partial class FileManagerView
     }
 
     /// <summary>Moves the active tab by <paramref name="delta"/>, wrapping around.</summary>
-    private void CycleTab(int delta) =>
-        Update(
-            (s, c) =>
-            {
-                if (s.Tabs.Count == 0)
-                {
-                    return;
-                }
-                var count = s.Tabs.Count;
-                s.SelectTab((((s.ActiveTabIndex + delta) % count) + count) % count);
-                c.Notify();
-            }
-        );
+    private void CycleTab(int delta)
+    {
+        var state = Entity.Read();
+        var count = state.Tabs.Count;
+        if (count == 0)
+        {
+            return;
+        }
+        var target = (((state.ActiveTabIndex + delta) % count) + count) % count;
+        SelectTab(target);
+    }
 
     private void SelectTabByNumber(int index)
     {

@@ -134,6 +134,7 @@ style_vocabulary! {
         relative,
         absolute,
         overflow_hidden,
+        flex_wrap,
     }
     // Every parametric method the managed surface can emit; `font_family` is
     // carried for completeness even though no builder exposes it yet.
@@ -576,6 +577,7 @@ mod tests {
                 "relative",
                 "absolute",
                 "overflow_hidden",
+                "flex_wrap",
             ]
         );
         assert_eq!(param_names().len(), 77);

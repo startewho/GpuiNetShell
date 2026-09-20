@@ -40,9 +40,6 @@ internal sealed class FileManagerState
     /// <summary>Whether the settings popover is open.</summary>
     public bool SettingsOpen { get; set; }
 
-    /// <summary>Whether the second toolbar row (view options) is shown.</summary>
-    public bool ShowToolbar { get; set; }
-
     public List<TreeNode> TreeRoots { get; } = [];
 
     /// <summary>Subfolders of a breadcrumb, loaded lazily by the view.</summary>
