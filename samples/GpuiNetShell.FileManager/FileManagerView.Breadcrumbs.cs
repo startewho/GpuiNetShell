@@ -54,7 +54,11 @@ internal sealed partial class FileManagerView
             for (var i = 0; i < count; i++)
             {
                 var child = children[i];
-                menu.Item(child.Label, () => NavigateTo(cx, child.Path, true));
+                menu.ItemStable(
+                    "fm-crumb:" + child.Path,
+                    child.Label,
+                    () => NavigateTo(cx, child.Path, true)
+                );
             }
         }
         return menu;

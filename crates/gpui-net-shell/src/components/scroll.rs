@@ -10,8 +10,9 @@
 use std::sync::Arc;
 
 use gpui::{
-    div, px, AnyElement, ElementId, InteractiveElement as _, IntoElement as _, ParentElement as _,
-    Refineable as _, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _,
+    div, point, px, AnyElement, ElementId, InteractiveElement as _, IntoElement as _,
+    ParentElement as _, Refineable as _, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _,
 };
 use gpui_base::{InteractiveElementExt as _, Scrollbar, ScrollbarAxis, ScrollbarMode};
 
@@ -29,22 +30,31 @@ enum AxisOp {
     Axis(ScrollbarAxis),
     Mode(ScrollbarMode),
     ViewportFromLayout(bool),
+    /// A one-shot horizontal offset nudge for a `Scroll` (`scroll_by`).
+    By(f32),
 }
 
 fn resolve_ops<'a>(
     ops: impl Iterator<Item = &'a AxisOp>,
-) -> (Option<ScrollbarAxis>, Option<ScrollbarMode>, bool) {
+) -> (
+    Option<ScrollbarAxis>,
+    Option<ScrollbarMode>,
+    bool,
+    Option<f32>,
+) {
     let mut axis = None;
     let mut mode = None;
     let mut viewport_from_layout = false;
+    let mut by = None;
     for op in ops {
         match op {
             AxisOp::Axis(value) => axis = Some(*value),
             AxisOp::Mode(value) => mode = Some(*value),
             AxisOp::ViewportFromLayout(value) => viewport_from_layout = *value,
+            AxisOp::By(value) => by = Some(*value),
         }
     }
-    (axis, mode, viewport_from_layout)
+    (axis, mode, viewport_from_layout, by)
 }
 
 fn id_payload(arguments: &[ComponentArgument]) -> Result<ComponentPayload, String> {
@@ -115,6 +125,23 @@ fn viewport_from_layout_method() -> MethodDescriptor {
     .with_documentation("Uses this element's layout bounds as the native viewport.")
 }
 
+fn scroll_by_method() -> MethodDescriptor {
+    MethodDescriptor::new(
+        "scroll_by",
+        vec![ArgumentDescriptor::new("pixels", ArgumentSchema::Number)],
+        |args| match args {
+            [ComponentArgument::Number(value)] => {
+                Ok(ComponentPayload::new(AxisOp::By(*value as f32)))
+            }
+            _ => Err("Scroll.scroll_by expects one number".into()),
+        },
+    )
+    .with_documentation(
+        "Nudges the scroll area horizontally by a pixel amount. Emit it only on the frame \
+         a nudge is requested; the offset persists on the retained handle.",
+    )
+}
+
 struct ScrollMaterializer;
 
 impl ComponentMaterializer for ScrollMaterializer {
@@ -125,7 +152,7 @@ impl ComponentMaterializer for ScrollMaterializer {
             .ok_or_else(|| "Scroll received an incompatible payload".to_string())?
             .0
             .clone();
-        let (axis, _, _) = resolve_ops(
+        let (axis, _, _, by) = resolve_ops(
             request
                 .methods()
                 .filter_map(|method| method.payload().downcast_ref::<AxisOp>()),
@@ -137,6 +164,15 @@ impl ComponentMaterializer for ScrollMaterializer {
         let key = ElementId::Name(SharedString::from(id));
         let entity = request.use_keyed_state(key.clone(), |_, _| ScrollHandle::default());
         let handle = request.with_window_app(|_, cx| entity.read(cx).clone());
+
+        if let Some(by) = by {
+            // The tracked offset is negative as the view scrolls toward the end,
+            // so a positive nudge subtracts. The offset must stay non-positive;
+            // the layout pass clamps the far end once the content size is known.
+            let current = handle.offset();
+            let target = (current.x - px(by)).min(px(0.0));
+            handle.set_offset(point(target, current.y));
+        }
 
         let mut area = div()
             .id(key)
@@ -164,7 +200,7 @@ impl ComponentMaterializer for ScrollbarMaterializer {
             .ok_or_else(|| "Scrollbar received an incompatible payload".to_string())?
             .0
             .clone();
-        let (axis, mode, viewport_from_layout) = resolve_ops(
+        let (axis, mode, viewport_from_layout, _) = resolve_ops(
             request
                 .methods()
                 .filter_map(|method| method.payload().downcast_ref::<AxisOp>()),
@@ -201,7 +237,7 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                     vec![ArgumentDescriptor::new("id", ArgumentSchema::String)],
                     id_payload,
                 )])
-                .with_methods(vec![axis_method()])
+                .with_methods(vec![axis_method(), scroll_by_method()])
                 .with_documentation(
                     "A scrollable area; a Scrollbar of the same id drives it. Defaults to \
                      vertical scrolling and accepts ordinary children and shell style.",
@@ -241,9 +277,17 @@ mod tests {
             AxisOp::Mode(ScrollbarMode::Always),
             AxisOp::ViewportFromLayout(false),
         ];
-        let (axis, mode, viewport) = resolve_ops(ops.iter());
+        let (axis, mode, viewport, by) = resolve_ops(ops.iter());
         assert_eq!(axis, Some(ScrollbarAxis::Vertical));
         assert_eq!(mode, Some(ScrollbarMode::Always));
         assert!(!viewport);
+        assert_eq!(by, None);
+    }
+
+    #[test]
+    fn a_scroll_by_nudge_is_carried() {
+        let ops = [AxisOp::By(-180.0)];
+        let (_, _, _, by) = resolve_ops(ops.iter());
+        assert_eq!(by, Some(-180.0));
     }
 }

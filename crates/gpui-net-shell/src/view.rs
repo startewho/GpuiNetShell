@@ -18,8 +18,8 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, px, AnyElement, App, Context, Entity, IntoElement, MouseButton, Render, ScrollDelta,
-    Window,
+    div, px, AnyElement, App, Context, Entity, FocusHandle, IntoElement, MouseButton, Render,
+    ScrollDelta, Window,
 };
 
 use crate::abi::{GpuiNetArena, GpuiNetCallbacks};
@@ -40,6 +40,10 @@ pub struct ShellView {
     /// The retained content subtree. Materialization happens there, not in
     /// `ShellView::render`, so GPUI can reuse the built tree.
     content: Entity<ContentHost>,
+    /// The root's focus handle. Key events dispatch along the path to the
+    /// focused node only, so the shell root is focused on mount; otherwise a
+    /// window with nothing focused would never deliver keys to the host.
+    focus_handle: FocusHandle,
     /// The description the managed host last published and is now displayed.
     current: Option<RenderSnapshot>,
     /// The description `current` replaced, held one generation longer.
@@ -94,6 +98,7 @@ impl ShellView {
         let entity_hosts = EntityHosts::default();
         let row_scratch = new_row_scratch();
         let row_cache = new_row_cache();
+        let focus_handle = cx.focus_handle();
         let content = cx.new(|_cx| ContentHost {
             session_id,
             callbacks,
@@ -110,6 +115,7 @@ impl ShellView {
             callbacks,
             registry,
             content,
+            focus_handle,
             current: None,
             previous: None,
             titlebar: None,
@@ -361,7 +367,7 @@ impl Render for ContentHost {
 }
 
 impl Render for ShellView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.retired {
             return div().into_any_element();
         }
@@ -382,8 +388,15 @@ impl Render for ShellView {
         let content = self.content.clone().into_any_element();
         let callbacks = self.callbacks;
         let session = self.session_id;
+        // Focus the shell root so keyboard events dispatch along a path that
+        // includes this view; with nothing focused they only reach the window
+        // root and never reach the host.
+        if window.focused(cx).is_none() {
+            window.focus(&self.focus_handle, cx);
+        }
         div()
             .id("gpui-net-shell-root")
+            .track_focus(&self.focus_handle)
             .size_full()
             .bg(cx.theme().background)
             .on_mouse_down(MouseButton::Left, move |event, _, _| {

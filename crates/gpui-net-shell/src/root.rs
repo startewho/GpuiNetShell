@@ -39,6 +39,14 @@ actions!(gpui_net_shell_root, [Escape]);
 /// The key context the root installs.
 const CONTEXT: &str = "GpuiNetShellRoot";
 
+/// Space the title bar spends outside the managed content: the component's left
+/// padding plus the window controls (`TITLE_BAR_HEIGHT`-wide buttons). The
+/// managed row needs a definite width, and this is how much it cannot use.
+#[cfg(target_os = "macos")]
+const BAR_HORIZONTAL_INSET: f32 = 80.0;
+#[cfg(not(target_os = "macos"))]
+const BAR_HORIZONTAL_INSET: f32 = 12.0 + 3.0 * 34.0;
+
 /// Paint priority of the sheet layer: above content, below the effects.
 const SHEET_PRIORITY: usize = 8;
 
@@ -366,8 +374,30 @@ impl Render for Root {
             None
         };
         let titlebar = if let Some(element) = managed {
+            // The component's bar carries `window_control_area(Drag)`, so the
+            // platform drags the window from any point the managed content does
+            // not claim. The content marks its interactive regions with
+            // `Div.occlude` (see the managed `DivElement.Occlude`), which blocks
+            // the drag hitbox only under those regions: controls get clicks,
+            // the gaps between them still drag.
+            //
+            // A percentage width or `flex_1` does not constrain the managed row
+            // here, so a crowded tab strip would overflow instead of shrinking.
+            // Give it a definite pixel width: the window minus the bar's left
+            // padding and the window controls.
+            let bar_width = (window.bounds().size.width - px(BAR_HORIZONTAL_INSET)).max(px(0.0));
             gpui_component::TitleBar::new()
-                .child(div().flex_1().h_full().flex().items_center().child(element))
+                .bg(cx.theme().title_bar)
+                .child(
+                    div()
+                        .w(bar_width)
+                        .h_full()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .overflow_hidden()
+                        .child(element),
+                )
         } else {
             gpui_component::TitleBar::new()
                 .child(div().text_sm().child(self.title.clone()))
@@ -377,6 +407,7 @@ impl Render for Root {
                         .items_center()
                         .justify_end()
                         .gap_2()
+                        .occlude()
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .child(
                             Button::new("titlebar-theme-toggle")

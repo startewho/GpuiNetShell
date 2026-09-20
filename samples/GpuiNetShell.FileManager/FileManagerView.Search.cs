@@ -9,19 +9,32 @@ internal sealed partial class FileManagerView
 {
     private Element BuildTitleBar(RenderContext ui, FileManagerState state) =>
         ui.HStack(
-                BuildTabs(ui, state).Flex1().MinW(0),
-                ui.Input("fm-titlebar-search")
-                    .Placeholder("搜索所有文件")
-                    .Value(state.SearchText)
-                    .W(240)
-                    .MaxW(320)
-                    .My(4)
-                    .OnChange(text => Update((s, c) => ApplySearch(s, c, text))),
-                BuildSettingsButton(ui, state)
+                // The strip hugs its chips and shrinks (clipping) when crowded,
+                // so the new-tab button stays right next to the last tab and the
+                // search box, settings, and window controls stay visible.
+                BuildTabs(ui, state).FlexShrink(1),
+                BuildAddTab(ui),
+                BuildTabNav(ui, state),
+                // Empty space that fills the rest and drags the window.
+                ui.Div().Flex1().MinW(0),
+                ui.Div(
+                        ui.Input("fm-titlebar-search")
+                            .Placeholder("搜索所有文件")
+                            .Value(state.SearchText)
+                            .W(240)
+                            .MaxW(320)
+                            .My(4)
+                            .OnChange(text => Update((s, c) => ApplySearch(s, c, text)))
+                    )
+                    .FlexShrink(0)
+                    .Occlude(),
+                ui.Div(BuildSettingsButton(ui, state)).FlexShrink(0).Occlude()
             )
             .Gap(8)
             .ItemsCenter()
             .WFull()
+            .HFull()
+            .MinW(0)
             .Px(8);
 
     /// <summary>

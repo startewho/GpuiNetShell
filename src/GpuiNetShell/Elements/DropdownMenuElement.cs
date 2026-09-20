@@ -26,4 +26,17 @@ public sealed class DropdownMenuElement : Element
         Arena.AddMethodStringCallback(Index, "item", label, token);
         return this;
     }
+
+    /// <summary>
+    /// Appends a command item registered under a stable key, so a callback
+    /// captured by an already-open menu stays valid across generations.
+    /// </summary>
+    public DropdownMenuElement ItemStable(string key, string label, Action handler)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(handler);
+        var token = Events.RegisterStable(key, handler);
+        Arena.AddMethodStringCallback(Index, "item", label, token);
+        return this;
+    }
 }

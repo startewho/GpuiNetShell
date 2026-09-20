@@ -39,6 +39,7 @@ internal static class StyleOps
         "font_bold",
         "relative",
         "absolute",
+        "overflow_hidden",
     ];
 
     /// <summary>Parametric style methods; index == <see cref="NativeProtocol.OpParamStyle"/> opcode.</summary>

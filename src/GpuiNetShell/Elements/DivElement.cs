@@ -37,6 +37,18 @@ public sealed class DivElement : Element
     }
 
     /// <summary>
+    /// Blocks the mouse from elements painted behind this Div. On Windows the
+    /// title bar is a single window-drag region; a control that does not occlude
+    /// is treated as part of the caption and never receives a click. Occluding a
+    /// control leaves the bar's gaps draggable.
+    /// </summary>
+    public DivElement Occlude()
+    {
+        Arena.AddMethod(Index, "occlude");
+        return this;
+    }
+
+    /// <summary>
     /// Binds left-click activation (press and release). <paramref name="id"/> is
     /// a stable identity that GPUI keys the click's press/release state by, so a
     /// per-frame value would never complete a click. The handler runs on the

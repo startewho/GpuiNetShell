@@ -11,7 +11,7 @@ namespace GpuiNetShell.FileManager;
 internal sealed partial class FileManagerView
 {
     private Element BuildSettingsButton(RenderContext ui, FileManagerState state) =>
-        ui.Popover("fm-settings", "设置")
+        ui.Popover("fm-settings", "⚙")
             .Open(state.SettingsOpen)
             .CardAnchor(PopoverAnchor.BottomRight)
             .OverlayClosable()

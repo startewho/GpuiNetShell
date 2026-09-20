@@ -25,6 +25,8 @@ use crate::registry::{
 enum DivOp {
     /// The stable element id GPUI keys element-event state by.
     ElementId(String),
+    /// Block the mouse from elements behind this one (`InteractiveElement::occlude`).
+    Occlude,
 }
 
 struct DivMaterializer;
@@ -33,17 +35,26 @@ impl ComponentMaterializer for DivMaterializer {
     fn materialize(&self, mut request: MaterializeRequest<'_>) -> Result<AnyElement, String> {
         let style = request.take_style();
         let children = request.take_children();
-        let element_id = request.methods().find_map(|method| {
-            method
-                .payload()
-                .downcast_ref::<DivOp>()
-                .map(|DivOp::ElementId(id)| id.clone())
-        });
+        let mut element_id = None;
+        let mut occlude = false;
+        for method in request.methods() {
+            match method.payload().downcast_ref::<DivOp>() {
+                Some(DivOp::ElementId(id)) => element_id = Some(id.clone()),
+                Some(DivOp::Occlude) => occlude = true,
+                None => {}
+            }
+        }
         let events = request.events().clone();
 
         let mut element = div();
         element.style().refine(&style);
         element.extend(children);
+        if occlude {
+            // Blocking the title bar's drag hitbox underneath is what lets the
+            // managed controls receive clicks on Windows without giving up the
+            // rest of the bar as a drag region.
+            element = element.occlude();
+        }
 
         if events.is_empty() {
             return Ok(element.into_any_element());
@@ -68,19 +79,32 @@ pub(super) fn register(registry: &mut ComponentRegistry) {
                 .with_constructors(vec![ConstructorDescriptor::new("Div", Vec::new(), |_| {
                     Ok(ComponentPayload::new(()))
                 })])
-                .with_methods(vec![MethodDescriptor::new(
-                    "element_id",
-                    vec![ArgumentDescriptor::new("id", ArgumentSchema::String)],
-                    |arguments| match arguments {
-                        [ComponentArgument::String(id)] => {
-                            Ok(ComponentPayload::new(DivOp::ElementId(id.clone())))
+                .with_methods(vec![
+                    MethodDescriptor::new(
+                        "element_id",
+                        vec![ArgumentDescriptor::new("id", ArgumentSchema::String)],
+                        |arguments| match arguments {
+                            [ComponentArgument::String(id)] => {
+                                Ok(ComponentPayload::new(DivOp::ElementId(id.clone())))
+                            }
+                            _ => Err("Div.element_id(id) expects a string".into()),
+                        },
+                    )
+                    .with_documentation(
+                        "Stable identity GPUI keys a Div's element-event state by across frames.",
+                    ),
+                    MethodDescriptor::new("occlude", Vec::new(), |arguments| {
+                        if arguments.is_empty() {
+                            Ok(ComponentPayload::new(DivOp::Occlude))
+                        } else {
+                            Err("Div.occlude() takes no arguments".into())
                         }
-                        _ => Err("Div.element_id(id) expects a string".into()),
-                    },
-                )
-                .with_documentation(
-                    "Stable identity GPUI keys a Div's element-event state by across frames.",
-                )])
+                    })
+                    .with_documentation(
+                        "Block the mouse from elements behind this Div; the title bar uses it \
+                         to keep its drag hitbox from swallowing managed controls.",
+                    ),
+                ])
                 .with_documentation("A plain container; styling and children are the shell's."),
         )
         .expect("the built-in Div descriptor is valid");

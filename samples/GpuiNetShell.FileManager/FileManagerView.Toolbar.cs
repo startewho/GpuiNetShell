@@ -87,6 +87,7 @@ internal sealed partial class FileManagerView
     {
         var button = ui.Div(ui.Icon(icon).Size(ControlSize.Medium))
             .Size(32)
+            .Flex()
             .ItemsCenter()
             .JustifyCenter()
             .Rounded(6);
@@ -111,15 +112,15 @@ internal sealed partial class FileManagerView
     )
     {
         var selected = state.View == view;
-        var glyph = ui.Icon(icon).Size(ControlSize.Medium);
+        var button = ui.Div(ui.Icon(icon).Size(ControlSize.Medium))
+            .Size(32)
+            .Flex()
+            .ItemsCenter()
+            .JustifyCenter()
+            .Rounded(6);
         if (selected)
         {
-            glyph.Color("#ffffff");
-        }
-        var button = ui.Div(glyph).Size(32).ItemsCenter().JustifyCenter().Rounded(6);
-        if (selected)
-        {
-            button.Bg(state.AccentHex);
+            button.Bg(NeutralSelection);
         }
         button.OnClick(id, () => SetView(view));
         return button;

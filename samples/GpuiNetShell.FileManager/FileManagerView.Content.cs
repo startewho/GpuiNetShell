@@ -84,11 +84,13 @@ internal sealed partial class FileManagerView
                     .MinH(0)
                     .OnSelect(index => OnEntryActivate(cx, state, index))
                     .RowMenu(
-                        ui.ContextMenuItem("打开").OnSelect(row => OpenIndex(cx, state, row)),
+                        ui.ContextMenuItem("打开")
+                            .OnSelectStable("fm-row-open", row => OpenIndex(cx, state, row)),
                         ui.ContextMenuItem("在文件资源管理器中显示")
-                            .OnSelect(row => RevealIndex(state, row)),
+                            .OnSelectStable("fm-row-reveal", row => RevealIndex(state, row)),
                         ui.ContextMenuSeparator(),
-                        ui.ContextMenuItem("刷新").OnSelect(_ => Reload(cx, state))
+                        ui.ContextMenuItem("刷新")
+                            .OnSelectStable("fm-row-refresh", () => Reload(cx, state))
                     )
                     .RenderItem((ctx, index) => DetailsRow(ctx, state, index))
             )

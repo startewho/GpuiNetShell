@@ -30,6 +30,35 @@ public sealed class ContextMenuItemElement : Element
     }
 
     /// <summary>
+    /// Runs when the item is selected, registering under a stable key so a
+    /// callback captured by an already-open menu stays valid across
+    /// generations. The key must be stable for this item site.
+    /// </summary>
+    public ContextMenuItemElement OnSelectStable(string key, Action handler)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(Index, "on_select", Events.RegisterStable(key, handler));
+        return this;
+    }
+
+    /// <summary>
+    /// Runs when the item is selected, receiving the right-clicked row index,
+    /// under a stable key (see <see cref="OnSelectStable(string, Action)"/>).
+    /// </summary>
+    public ContextMenuItemElement OnSelectStable(string key, Action<int> handler)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(
+            Index,
+            "on_select",
+            Events.RegisterStable(key, value => handler((int)value.Number))
+        );
+        return this;
+    }
+
+    /// <summary>
     /// Runs when the item is selected, receiving the right-clicked row index
     /// (used by <see cref="DataTableElement.RowMenu"/>).
     /// </summary>

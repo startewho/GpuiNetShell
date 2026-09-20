@@ -160,6 +160,14 @@ protected override Element? RenderTitleBar(ref RenderContext ui) =>
   `GpuiApplication.WindowTitle` or per-window `WindowOptions.Title`; the default
   is `GpuiApplication.DefaultWindowTitle`.
 - The title bar root is republished every render, so it can show live state.
+  Note that `RenderTitleBar` runs from the **main** snapshot, not an entity
+  subtree: a state change that must update the title bar has to invalidate the
+  window (`View.Invalidate()`), not only notify the entity.
+- Menu and context-menu items are built once and can outlive a generation while
+  open. Use the stable registration helpers for their callbacks —
+  `ContextMenuItem.OnSelectStable(key, …)` and `DropdownMenu.ItemStable(key, …)`
+  — so an already-open menu still dispatches. Use a key unique to the item site
+  (include the tab/row/path when the handler captures it).
 
 ## How to add a managed element / component page1. Add the component id and any method codes in `NativeProtocol.cs`, matching
    `schema.rs` (never reorder ids).

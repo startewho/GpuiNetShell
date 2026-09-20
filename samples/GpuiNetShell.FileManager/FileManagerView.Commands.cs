@@ -88,7 +88,7 @@ internal sealed partial class FileManagerView
     }
 
     /// <summary>Lists <paramref name="path"/> off the UI thread into <paramref name="tab"/>.</summary>
-    private static void LoadTab(
+    private void LoadTab(
         Context<FileManagerState> cx,
         FileTab tab,
         string path,
@@ -102,6 +102,8 @@ internal sealed partial class FileManagerView
                 state.ApplyListing(tab, listing, recordHistory);
                 PreloadCrumbs(context, state, tab);
                 context.Notify();
+                // The tab title in the title bar reflects the new path.
+                Invalidate();
             }
         );
     }

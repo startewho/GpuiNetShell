@@ -115,6 +115,19 @@ internal sealed class FileManagerState
         }
     }
 
+    /// <summary>Closes every tab except <paramref name="index"/>, which becomes active.</summary>
+    public void CloseOtherTabs(int index)
+    {
+        if (Tabs.Count <= 1 || index < 0 || index >= Tabs.Count)
+        {
+            return;
+        }
+        var keep = Tabs[index];
+        Tabs.Clear();
+        Tabs.Add(keep);
+        ActiveTabIndex = 0;
+    }
+
     /// <summary>Makes <paramref name="index"/> active and recomputes its visible list.</summary>
     public void SelectTab(int index)
     {

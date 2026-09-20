@@ -18,6 +18,17 @@ public sealed class ScrollElement : Element
         return this;
     }
 
+    /// <summary>
+    /// Nudges the scroll position horizontally: a positive amount reveals later
+    /// content, a negative amount reveals earlier content. Emit it only on the
+    /// frame a nudge is requested; the offset persists on the retained handle.
+    /// </summary>
+    public ScrollElement ScrollBy(int pixels)
+    {
+        Arena.AddMethodNumber(Index, "scroll_by", pixels);
+        return this;
+    }
+
     public ScrollElement Add(params Element[] children)
     {
         ArgumentNullException.ThrowIfNull(children);

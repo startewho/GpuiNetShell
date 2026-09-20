@@ -28,6 +28,12 @@ internal sealed partial class FileManagerView : View
     /// <summary>A translucent separator that reads on both light and dark backgrounds.</summary>
     private const string Divider = "#80808055";
 
+    /// <summary>
+    /// A neutral highlight for a selected control (active tab, view toggle). The
+    /// theme accent is reserved for the selected folder in the file list.
+    /// </summary>
+    private const string NeutralSelection = "#80808040";
+
     private const double IconCellHeight = 108;
 
     /// <summary>How many recursive search matches are kept.</summary>
@@ -36,6 +42,8 @@ internal sealed partial class FileManagerView : View
     private readonly GpuiApplication _application;
     private Entity<FileManagerState>? _entity;
     private bool _themeApplied;
+    /// <summary>A pending one-frame horizontal nudge of the tab strip, in pixels.</summary>
+    private int _tabScrollNudge;
 
     public FileManagerView(GpuiApplication application, string? initialPath)
     {
@@ -55,6 +63,8 @@ internal sealed partial class FileManagerView : View
                 PreloadCrumbs(cx, state, tab);
             }
         );
+
+        OnInput(HandleShortcut);
     }
 
     private Entity<FileManagerState> Entity =>
@@ -83,8 +93,14 @@ internal sealed partial class FileManagerView : View
         _application.SetTheme(state.Mode, ThemePresets.Palette(state.AccentHex));
     }
 
-    private void Update(Action<FileManagerState, Context<FileManagerState>> update) =>
+    private void Update(Action<FileManagerState, Context<FileManagerState>> update)
+    {
         Entity.Update(update);
+        // The title bar (tabs, search, settings) is rendered from the main
+        // snapshot, not the entity subtree, so a state change must also
+        // invalidate the window for it to repaint.
+        Invalidate();
+    }
 
     // -- Page ---------------------------------------------------------------
 

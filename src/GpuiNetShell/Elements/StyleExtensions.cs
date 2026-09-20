@@ -120,6 +120,14 @@ public static class StyleExtensions
     public static T Absolute<T>(this T element)
         where T : Element => element.Style("absolute");
 
+    /// <summary>
+    /// Clips children to this element's bounds. Because the overflow is not
+    /// visible, the element's automatic minimum size is zero, so a flexible
+    /// child can shrink below its content instead of pushing its parent wider.
+    /// </summary>
+    public static T OverflowHidden<T>(this T element)
+        where T : Element => element.Style("overflow_hidden");
+
     // Width, height, size and min/max.
     public static T W<T>(this T element, int pixels)
         where T : Element => Px(element, "w", pixels);

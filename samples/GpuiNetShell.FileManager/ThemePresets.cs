@@ -26,9 +26,9 @@ internal static class ThemePresets
 
     /// <summary>
     /// The theme color overrides that paint the primary, focus ring, selection,
-    /// links, and the title bar with <paramref name="accentHex"/>. The title bar
-    /// is blended with the window background by the native host, so the text
-    /// stays readable in both light and dark themes.
+    /// and links with <paramref name="accentHex"/>. The title bar is deliberately
+    /// left neutral, so the accent marks only the selected folder in the file
+    /// list rather than the whole tab strip.
     /// </summary>
     public static IReadOnlyDictionary<string, string> Palette(string accentHex) =>
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -38,7 +38,5 @@ internal static class ThemePresets
             [ThemeColors.Ring] = accentHex,
             [ThemeColors.Selection] = accentHex,
             [ThemeColors.Link] = accentHex,
-            [ThemeColors.TitleBar] = accentHex,
-            [ThemeColors.TitleBarBorder] = accentHex,
         };
 }
