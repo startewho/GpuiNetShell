@@ -27,7 +27,7 @@ use crate::context::{
     new_row_cache, new_row_scratch, EntityHosts, HostContext, Invalidate, RowCache, RowScratch,
 };
 use crate::materialize::{materialize, prepare};
-use crate::registry::FrozenComponentRegistry;
+use crate::registry::{FrozenComponentRegistry, NodeFactory};
 use crate::schema::{STATUS_INVALID_ARGUMENT, STATUS_OK};
 use crate::snapshot::{RenderSnapshot, Snapshot};
 use gpui_component::ActiveTheme as _;
@@ -50,6 +50,13 @@ pub struct ShellView {
     /// keeps those tokens valid; without it a click on the not-yet-rebuilt tree
     /// resolves against a retired generation and is dropped.
     previous: Option<RenderSnapshot>,
+    /// Root node of the custom title bar content, if the view supplied one. The
+    /// title bar is materialized by `Root` from the same snapshot, on demand.
+    titlebar: Option<u32>,
+    /// The invalidation closure shared with the content host and title bar.
+    invalidate: Invalidate,
+    /// A reused buffer for `resolve_rows`.
+    row_scratch: RowScratch,
     /// The fingerprint of `current`, used to keep it when a rebuild produces
     /// the same interface.
     displayed_fingerprint: Option<u64>,
@@ -105,6 +112,9 @@ impl ShellView {
             content,
             current: None,
             previous: None,
+            titlebar: None,
+            invalidate,
+            row_scratch,
             displayed_fingerprint: None,
             content_dirty: true,
             revision: 0,
@@ -149,6 +159,24 @@ impl ShellView {
         self.current.as_ref()
     }
 
+    /// Materializes the custom title bar content from the current description.
+    /// `None` means the view supplied no title bar and `Root` should draw its
+    /// default one.
+    pub fn titlebar_element(&mut self, window: &mut Window, cx: &mut App) -> Option<AnyElement> {
+        let root = self.titlebar?;
+        let snapshot = self.current.as_ref()?;
+        let host = HostContext {
+            session_id: self.session_id,
+            callbacks: self.callbacks,
+            invalidate: self.invalidate.clone(),
+            entity_hosts: self.entity_hosts.clone(),
+            row_scratch: self.row_scratch.clone(),
+            row_cache: self.row_cache.clone(),
+        };
+        let factory = NodeFactory::new(&self.registry, snapshot.snapshot(), &host);
+        factory.build(root, window, cx).ok()
+    }
+
     /// The description the current one replaced, if any.
     pub fn previous_snapshot(&self) -> Option<&RenderSnapshot> {
         self.previous.as_ref()
@@ -170,6 +198,7 @@ impl ShellView {
         self.dirty = false;
         self.error = None;
         self.displayed_fingerprint = None;
+        self.titlebar = None;
         self.previous = None;
         self.current = None;
     }
@@ -210,6 +239,14 @@ impl ShellView {
                     return;
                 }
                 let fingerprint = snapshot.fingerprint();
+                let node_count = snapshot.nodes.len() as u32;
+                let titlebar = if arena.titlebar_root == crate::abi::NO_TITLEBAR_NODE
+                    || arena.titlebar_root >= node_count
+                {
+                    None
+                } else {
+                    Some(arena.titlebar_root)
+                };
 
                 // An unchanged interface keeps the displayed description, which
                 // also keeps its generation's callbacks alive for the retained
@@ -237,6 +274,7 @@ impl ShellView {
                 // replaced generation's tokens for one frame; holding it keeps
                 // those tokens valid.
                 self.previous = self.current.replace(frozen);
+                self.titlebar = titlebar;
                 self.displayed_fingerprint = Some(fingerprint);
                 // A new description retires every callback token, so the
                 // resolved-row cache for the old one is dead.

@@ -32,7 +32,7 @@ internal struct NativeChild
     public uint Child;
 }
 
-/// <summary>Mirrors <c>GpuiNetArena</c>. 64 bytes.</summary>
+/// <summary>Mirrors <c>GpuiNetArena</c>.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeArena
 {
@@ -48,6 +48,8 @@ internal unsafe struct NativeArena
     public byte* Utf8;
     public uint Utf8Len;
     public uint Pad3;
+    public uint TitlebarRoot;
+    public uint Pad4;
 }
 
 /// <summary>Mirrors <c>GpuiNetCallbacks</c>.</summary>
@@ -79,8 +81,9 @@ internal unsafe struct GpuiNetShellApi
     public delegate* unmanaged[Cdecl]<ulong, int> Invalidate;
     public delegate* unmanaged[Cdecl]<ulong, uint, int> Configure;
     public delegate* unmanaged[Cdecl]<ulong, uint, byte*, uint, int> SetTheme;
-    public delegate* unmanaged[Cdecl]<ulong, uint, long> OpenWindow;
+    public delegate* unmanaged[Cdecl]<ulong, uint, byte*, uint, long> OpenWindow;
     public delegate* unmanaged[Cdecl]<ulong, int> CloseWindow;
     public delegate* unmanaged[Cdecl]<ulong, ulong, int> NotifyEntity;
+    public delegate* unmanaged[Cdecl]<ulong, byte*, uint, int> SetWindowTitle;
     public ulong Reserved;
 }

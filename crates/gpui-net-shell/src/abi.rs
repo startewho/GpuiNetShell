@@ -62,7 +62,14 @@ pub struct GpuiNetArena {
     pub utf8: *const u8,
     pub utf8_len: u32,
     pub _pad3: u32,
+    /// Root node of the custom title bar content, or [`NO_TITLEBAR_NODE`] when
+    /// the view supplies no title bar.
+    pub titlebar_root: u32,
+    pub _pad4: u32,
 }
+
+/// A title-bar root that names no node.
+pub const NO_TITLEBAR_NODE: u32 = u32::MAX;
 
 impl GpuiNetArena {
     pub const fn empty() -> Self {
@@ -79,6 +86,8 @@ impl GpuiNetArena {
             utf8: std::ptr::null(),
             utf8_len: 0,
             _pad3: 0,
+            titlebar_root: NO_TITLEBAR_NODE,
+            _pad4: 0,
         }
     }
 }
@@ -197,17 +206,27 @@ pub struct GpuiNetShellApi {
         unsafe extern "C" fn(session_id: u64, mode: u32, colors: *const u8, colors_len: u32) -> i32,
     >,
     /// Opens a new top-level window from `parent_session` and returns its new
-    /// session id (> 0), or a negative status. The returned session is
-    /// independent: it renders through the same managed callbacks with its own
-    /// view factory, and is configured by a prior `configure(new_session, flags)`
-    /// or `open_window`'s own `flags`.
-    pub open_window: Option<unsafe extern "C" fn(parent_session: u64, flags: u32) -> i64>,
+    /// session id (> 0), or a negative status. `title` is the OS title
+    /// (UTF-8). The returned session is independent: it renders through the same
+    /// managed callbacks with its own view factory, and is configured by a prior
+    /// `configure(new_session, flags)` or `open_window`'s own `flags`.
+    pub open_window: Option<
+        unsafe extern "C" fn(
+            parent_session: u64,
+            flags: u32,
+            title: *const u8,
+            title_len: u32,
+        ) -> i64,
+    >,
     /// Closes `session`'s window. The managed host may keep the session alive
     /// until its view is dropped.
     pub close_window: Option<unsafe extern "C" fn(session_id: u64) -> i32>,
     /// Repaints the entity subtree identified by `entity_id` within `session`.
     /// The managed host calls this after an entity's state changes.
     pub notify_entity: Option<unsafe extern "C" fn(session_id: u64, entity_id: u64) -> i32>,
+    /// Sets the OS window title for `session` before it opens (UTF-8).
+    pub set_window_title:
+        Option<unsafe extern "C" fn(session_id: u64, title: *const u8, title_len: u32) -> i32>,
     pub _reserved: u64,
 }
 

@@ -18,6 +18,12 @@ public sealed class WindowOptions
     /// </summary>
     public bool? UseCustomTitlebar { get; set; }
 
+    /// <summary>
+    /// The OS window title (taskbar and Alt-Tab). <see langword="null"/>
+    /// inherits <see cref="GpuiApplication.WindowTitle"/>.
+    /// </summary>
+    public string? Title { get; set; }
+
     public WindowOptions() { }
 
     public WindowOptions(bool? useCustomTitlebar) => UseCustomTitlebar = useCustomTitlebar;

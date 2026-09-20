@@ -58,6 +58,15 @@ public sealed class GpuiApplication
     public bool UseCustomTitlebar { get; set; }
 
     /// <summary>
+    /// The OS window title (taskbar and Alt-Tab). Set before <see cref="Run"/>;
+    /// a per-window <see cref="WindowOptions.Title"/> overrides it.
+    /// </summary>
+    public string? WindowTitle { get; set; }
+
+    /// <summary>The title used when neither the application nor a window sets one.</summary>
+    public const string DefaultWindowTitle = "GpuiNetShell";
+
+    /// <summary>
     /// Keep scrollbars visible instead of auto-hiding them. Set before
     /// <see cref="Run"/>.
     /// </summary>
@@ -92,7 +101,12 @@ public sealed class GpuiApplication
     public GpuiApplication(Func<View> rootFactory)
     {
         ArgumentNullException.ThrowIfNull(rootFactory);
-        _primary = new Session(this, rootFactory, resolveCustomTitlebar(null));
+        _primary = new Session(
+            this,
+            rootFactory,
+            resolveCustomTitlebar(null),
+            ResolveTitle(null)
+        );
         lock (Gate)
         {
             _primary.SessionId = ++_nextSession;
@@ -106,6 +120,10 @@ public sealed class GpuiApplication
     /// </summary>
     private bool resolveCustomTitlebar(bool? explicitChoice) =>
         explicitChoice ?? UseCustomTitlebar;
+
+    /// <summary>Resolves a window title: per-window, then application, then default.</summary>
+    private string ResolveTitle(string? explicitTitle) =>
+        explicitTitle ?? WindowTitle ?? DefaultWindowTitle;
 
     /// <summary>The primary window's session id.</summary>
     public ulong SessionId => _primary.SessionId;
@@ -136,7 +154,12 @@ public sealed class GpuiApplication
     {
         ArgumentNullException.ThrowIfNull(rootFactory);
         var useCustomTitlebar = resolveCustomTitlebar(options?.UseCustomTitlebar);
-        var session = new Session(this, rootFactory, useCustomTitlebar);
+        var session = new Session(
+            this,
+            rootFactory,
+            useCustomTitlebar,
+            ResolveTitle(options?.Title)
+        );
         lock (Gate)
         {
             _children.Add(session);
@@ -178,7 +201,26 @@ public sealed class GpuiApplication
         {
             flags |= 2u;
         }
-        return api->OpenWindow(_primary.SessionId, flags);
+        var bytes = Encoding.UTF8.GetBytes(session.Title);
+        fixed (byte* title = bytes)
+        {
+            return api->OpenWindow(_primary.SessionId, flags, title, (uint)bytes.Length);
+        }
+    }
+
+    /// <summary>Records a session's OS window title before its window opens.</summary>
+    private unsafe void SetWindowTitle(ulong sessionId, string title)
+    {
+        var api = NativeMethods.GetApi(NativeProtocol.AbiVersion);
+        if (api == null || api->SetWindowTitle == null)
+        {
+            return;
+        }
+        var bytes = Encoding.UTF8.GetBytes(title);
+        fixed (byte* pointer = bytes)
+        {
+            _ = api->SetWindowTitle(sessionId, pointer, (uint)bytes.Length);
+        }
     }
 
     private readonly List<Session> _pendingOpen = [];
@@ -266,6 +308,7 @@ public sealed class GpuiApplication
             }
             _ = api->Configure(_primary.SessionId, flags);
         }
+        SetWindowTitle(_primary.SessionId, _primary.Title);
 
         _running = true;
 
@@ -426,11 +469,17 @@ public sealed class GpuiApplication
         private RenderContext _renderContext = null!;
         private View? _root;
 
-        internal Session(GpuiApplication owner, Func<View> rootFactory, bool useCustomTitlebar)
+        internal Session(
+            GpuiApplication owner,
+            Func<View> rootFactory,
+            bool useCustomTitlebar,
+            string title
+        )
         {
             Owner = owner;
             RootFactory = rootFactory;
             UseCustomTitlebar = useCustomTitlebar;
+            Title = title;
             _renderContext = new RenderContext(_arena, _events, () => Owner.InvalidateSession(SessionId));
         }
 
@@ -442,6 +491,9 @@ public sealed class GpuiApplication
 
         /// <summary>This window's resolved title-bar mode.</summary>
         internal bool UseCustomTitlebar { get; set; }
+
+        /// <summary>This window's OS title.</summary>
+        internal string Title { get; set; }
 
         internal EventRegistry Events => _events;
 
@@ -484,8 +536,10 @@ public sealed class GpuiApplication
 
             _renderContext.BeginRender();
             var element = _root.RenderRoot(ref _renderContext);
+            var titlebar = _root.RenderTitleBarRoot(ref _renderContext);
             _renderContext.EndRender();
 
+            _arena.SetTitlebarRoot(titlebar?.Index);
             *arena = _arena.Publish();
             *root = (uint)element.Index;
             return NativeProtocol.StatusOk;

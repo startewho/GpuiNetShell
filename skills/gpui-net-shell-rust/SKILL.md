@@ -161,9 +161,18 @@ method callback. `resolve_ops` classifies them into `PreparedNode.events`.
   `Svg`, `UniformList`) implement `InteractiveElement`. A generic wrapper for
   arbitrary elements is deliberately deferred.
 
-## HostContext
+## Custom title bar
 
-`HostContext { session_id, callbacks, invalidate, entity_hosts, row_scratch, row_cache }`
+The managed view may render the custom title bar content. `GpuiNetArena` carries
+`titlebar_root` (or [`NO_TITLEBAR_NODE`]); `ShellView::rebuild` validates it and
+`ShellView::titlebar_element` materializes it from the current snapshot on
+demand. `Root::render` wraps it in `gpui_component::TitleBar` (which draws the
+window controls and handles dragging); no managed content falls back to the
+default title + theme toggle. The OS window title is recorded separately by
+`host::set_window_title` / `open_window`'s title argument and applied to
+`WindowOptions.titlebar.title`. Adding fields here is an `ABI_VERSION` bump.
+
+## HostContext`HostContext { session_id, callbacks, invalidate, entity_hosts, row_scratch, row_cache }`
 is `Clone` and shared into payloads, factories, and callbacks. The
 `invalidate` closure is created once per `ShellView` (in `ShellView::new`), not
 per render. `without_invalidate()` returns a copy whose invalidate is a no-op

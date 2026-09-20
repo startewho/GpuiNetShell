@@ -60,6 +60,20 @@ fn window_configs() -> &'static Mutex<HashMap<u64, u32>> {
     CONFIGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Per-session OS window titles, set before the window opens.
+fn window_titles() -> &'static Mutex<HashMap<u64, String>> {
+    static TITLES: OnceLock<Mutex<HashMap<u64, String>>> = OnceLock::new();
+    TITLES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// The recorded title for `session`, or `None` when it was never set.
+fn session_title(session: u64) -> Option<String> {
+    window_titles()
+        .lock()
+        .ok()
+        .and_then(|titles| titles.get(&session).cloned())
+}
+
 /// Allocates child session ids. The primary session uses the managed
 /// application id; children start above it and never collide.
 fn next_session_id() -> u64 {
@@ -136,6 +150,14 @@ pub fn configure(session_id: u64, flags: u32) -> i32 {
     STATUS_OK
 }
 
+/// Records the OS window title for `session` before it opens.
+pub fn set_window_title(session_id: u64, title: String) -> i32 {
+    if let Ok(mut titles) = window_titles().lock() {
+        titles.insert(session_id, title);
+    }
+    STATUS_OK
+}
+
 /// Applies a theme (mode and optional color overrides) from any thread.
 pub fn set_theme(session_id: u64, mode: u32, colors: String) -> i32 {
     send(session_id, Command::SetTheme { mode, colors })
@@ -146,10 +168,13 @@ pub fn set_theme(session_id: u64, mode: u32, colors: String) -> i32 {
 /// Allocates the child session id, records its window options, then asks the
 /// parent window's task to open it on the GPUI thread. Returns the child
 /// session id, or a negative status.
-pub fn open_window(parent_session: u64, flags: u32) -> i64 {
+pub fn open_window(parent_session: u64, flags: u32, title: String) -> i64 {
     let session = next_session_id();
     if let Ok(mut configs) = window_configs().lock() {
         configs.insert(session, flags);
+    }
+    if let Ok(mut titles) = window_titles().lock() {
+        titles.insert(session, title);
     }
     match send(parent_session, Command::OpenChild { session, flags }) {
         STATUS_OK => session as i64,
@@ -303,9 +328,19 @@ fn open_managed_window(
     flags: u32,
 ) -> Result<(), String> {
     let custom_titlebar = flags & FLAG_CUSTOM_TITLEBAR != 0;
+    let title = session_title(session_id).unwrap_or_else(|| "GpuiNetShell".to_string());
     let registry = std::rc::Rc::new(crate::components::catalog());
     let view = cx.new(|cx| ShellView::new(session_id, callbacks, registry, cx));
-    let root = cx.new(|cx| Root::new(view, session_id, callbacks, custom_titlebar, cx));
+    let root = cx.new(|cx| {
+        Root::new(
+            view,
+            session_id,
+            callbacks,
+            custom_titlebar,
+            title.clone(),
+            cx,
+        )
+    });
     let weak_root = root.downgrade();
 
     let (sender, receiver) = async_channel::bounded(64);
@@ -319,11 +354,15 @@ fn open_managed_window(
         cx,
     );
     let base = if custom_titlebar {
-        gpui_component::TitleBar::window_options()
+        let mut options = gpui_component::TitleBar::window_options();
+        let mut titlebar = options.titlebar.take().unwrap_or_default();
+        titlebar.title = Some(title.clone().into());
+        options.titlebar = Some(titlebar);
+        options
     } else {
         WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some("GpuiNetShell".into()),
+                title: Some(title.clone().into()),
                 ..Default::default()
             }),
             ..Default::default()

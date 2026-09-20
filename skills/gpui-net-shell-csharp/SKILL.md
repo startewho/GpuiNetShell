@@ -139,6 +139,28 @@ invoke the callback. Entity views use `RegisterEntityView` and render through
 - Only `Div` supports these; `AnyElement` has no event methods, so other
   components keep their dedicated callbacks.
 
+## Custom title bar
+
+When a window is opened with `UseCustomTitlebar`, the view may render its own
+title bar content with a single region:
+
+```csharp
+protected override Element? RenderTitleBar(ref RenderContext ui) =>
+    ui.HStack(
+        ui.Label("My App").TextSize(12).Px(8),
+        ui.Button("settings").Icon(...).OnClick(...)
+    ).Full();
+```
+
+- Returning `null` (the default) keeps the built-in title bar: the window title
+  plus the light/dark toggle.
+- The content is one region; the native host draws the window controls
+  (min/max/close) and handles dragging around it.
+- The OS title (taskbar/Alt-Tab) is separate: set
+  `GpuiApplication.WindowTitle` or per-window `WindowOptions.Title`; the default
+  is `GpuiApplication.DefaultWindowTitle`.
+- The title bar root is republished every render, so it can show live state.
+
 ## How to add a managed element / component page1. Add the component id and any method codes in `NativeProtocol.cs`, matching
    `schema.rs` (never reorder ids).
 2. Add a builder in `Elements/` deriving from `Element`, and a factory in

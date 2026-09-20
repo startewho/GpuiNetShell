@@ -19,10 +19,26 @@ internal sealed class FileManagerState
 
     public string SearchText { get; set; } = string.Empty;
 
+    /// <summary>Bumped on every search so a stale result set is ignored.</summary>
+    public int SearchSeq { get; set; }
+
+    /// <summary>Recursive search results for <see cref="SearchText"/>.</summary>
+    public List<FileEntry> SearchResults { get; } = [];
+
     public List<FileEntry> Entries { get; } = [];
 
     /// <summary>Entries after the search filter and sort; what the list renders.</summary>
     public List<FileEntry> Visible { get; private set; } = [];
+
+    /// <summary>The breadcrumb whose folder dropdown is open, if any.</summary>
+    public string? OpenCrumb { get; set; }
+
+    /// <summary>Subfolders of a breadcrumb, loaded lazily when its dropdown opens.</summary>
+    public Dictionary<string, List<TreeNode>> CrumbChildren { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Breadcrumb paths whose subfolders have been loaded.</summary>
+    public HashSet<string> CrumbLoaded { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public FileView View { get; set; } = FileView.Details;
 
@@ -65,25 +81,31 @@ internal sealed class FileManagerState
         Entries.Clear();
         Entries.AddRange(listing.Entries);
         SearchText = string.Empty;
+        SearchResults.Clear();
         SelectedIndex = -1;
         Error = listing.Error;
+        Recompute();
+    }
+
+    /// <summary>Installs a recursive search result set, ignoring stale searches.</summary>
+    public void SetSearchResults(int seq, IReadOnlyList<FileEntry> results)
+    {
+        if (seq != SearchSeq)
+        {
+            return;
+        }
+        SearchResults.Clear();
+        SearchResults.AddRange(results);
         Recompute();
     }
 
     /// <summary>Rebuilds <see cref="Visible"/> from the filter and sort settings.</summary>
     public void Recompute()
     {
-        var filtered = new List<FileEntry>(Entries.Count);
-        foreach (var entry in Entries)
-        {
-            if (
-                SearchText.Length == 0
-                || entry.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                filtered.Add(entry);
-            }
-        }
+        // While searching, the visible list is the recursive search result set;
+        // otherwise it is the current directory's listing.
+        var source = SearchText.Length > 0 ? SearchResults : Entries;
+        var filtered = new List<FileEntry>(source);
 
         Comparison<FileEntry> comparison = SortKey switch
         {

@@ -113,6 +113,8 @@ pub struct Root {
     sheet: Option<ActiveSheet>,
     /// Draw a custom title bar above the content (the native one is hidden).
     custom_titlebar: bool,
+    /// The OS/display title, used by the default title bar.
+    title: String,
 }
 
 #[allow(dead_code)] // accessors used by tests and future integrations
@@ -122,6 +124,7 @@ impl Root {
         session_id: u64,
         callbacks: GpuiNetCallbacks,
         custom_titlebar: bool,
+        title: String,
         cx: &mut Context<Self>,
     ) -> Self {
         install_key_bindings(cx);
@@ -131,6 +134,7 @@ impl Root {
             callbacks,
             sheet: None,
             custom_titlebar,
+            title,
         }
     }
 
@@ -351,24 +355,39 @@ impl Render for Root {
         } else {
             gpui_component::IconName::Moon
         };
-        let titlebar = gpui_component::TitleBar::new()
-            .child(div().text_sm().child("GpuiNetShell"))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .gap_2()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(
-                        Button::new("titlebar-theme-toggle")
-                            .icon(theme_icon)
-                            .small()
-                            .ghost()
-                            .tooltip("Toggle light and dark")
-                            .on_click(cx.listener(Self::on_titlebar_theme)),
-                    ),
-            );
+
+        // A view may supply the title bar content; the native `TitleBar` still
+        // draws the window controls and handles dragging. With no managed
+        // content, the default title and theme toggle are drawn instead.
+        let managed = if self.custom_titlebar {
+            self.view
+                .update(cx, |view, cx| view.titlebar_element(window, cx))
+        } else {
+            None
+        };
+        let titlebar = if let Some(element) = managed {
+            gpui_component::TitleBar::new()
+                .child(div().flex_1().h_full().flex().items_center().child(element))
+        } else {
+            gpui_component::TitleBar::new()
+                .child(div().text_sm().child(self.title.clone()))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_end()
+                        .gap_2()
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .child(
+                            Button::new("titlebar-theme-toggle")
+                                .icon(theme_icon)
+                                .small()
+                                .ghost()
+                                .tooltip("Toggle light and dark")
+                                .on_click(cx.listener(Self::on_titlebar_theme)),
+                        ),
+                )
+        };
 
         div()
             .id("gpui-net-shell-host")

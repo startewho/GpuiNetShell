@@ -55,33 +55,6 @@ internal static class FileSystemService
 
     /// <summary>The immediate subdirectories of a folder, for tree expansion.</summary>
     public static IReadOnlyList<TreeNode> ListSubdirectories(string path)
-    {
-        var nodes = new List<TreeNode>();
-        try
-        {
-            var info = new DirectoryInfo(path);
-            if (!info.Exists)
-            {
-                return nodes;
-            }
-            foreach (var child in info.EnumerateDirectories())
-            {
-                nodes.Add(
-                    new TreeNode
-                    {
-                        Id = child.FullName,
-                        Label = child.Name,
-                        Path = child.FullName,
-                    }
-                );
-            }
-        }
-        catch (Exception exception) when (IsExpected(exception))
-        {
-            // An unreadable folder simply has no visible children.
-        }
-        return nodes;
-    }
 
     /// <summary>Desktop, documents, downloads, and the other user folders that exist.</summary>
     public static IReadOnlyList<TreeNode> QuickAccess()

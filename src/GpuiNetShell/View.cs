@@ -45,5 +45,16 @@ public abstract class View
     /// <summary>Describes this view's element tree for the current state.</summary>
     protected abstract Element Render(ref RenderContext ui);
 
+    /// <summary>
+    /// Describes the custom title bar content, or <see langword="null"/> to use
+    /// the default title bar. Only called when the window was opened with a
+    /// custom title bar; the native host still draws the window controls and
+    /// handles dragging around the returned element.
+    /// </summary>
+    protected virtual Element? RenderTitleBar(ref RenderContext ui) => null;
+
     internal Element RenderRoot(ref RenderContext ui) => Render(ref ui);
+
+    internal Element? RenderTitleBarRoot(ref RenderContext ui) =>
+        RenderTitleBar(ref ui);
 }

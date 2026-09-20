@@ -111,4 +111,20 @@ public sealed unsafe class RenderArenaTests
         Assert.Equal(0u, descriptor.NodesLen);
         Assert.Equal(0u, descriptor.OpsLen);
     }
+
+    [Fact]
+    public void TitlebarRootIsPublishedAndReset()
+    {
+        using var arena = new RenderArena();
+
+        // No title bar by default.
+        Assert.Equal(uint.MaxValue, arena.Publish().TitlebarRoot);
+
+        var node = arena.AddNode(NativeProtocol.ComponentDiv);
+        arena.SetTitlebarRoot(node);
+        Assert.Equal((uint)node, arena.Publish().TitlebarRoot);
+
+        arena.Reset();
+        Assert.Equal(uint.MaxValue, arena.Publish().TitlebarRoot);
+    }
 }

@@ -16,11 +16,14 @@ namespace GpuiNetShell.Rendering;
 internal sealed unsafe class RenderArena : IDisposable
 {
     private const int Alignment = 16;
+    private const uint NoTitlebarRoot = uint.MaxValue;
 
     private readonly List<NativeNode> _nodes = [];
     private readonly List<NativeOp> _ops = [];
     private readonly List<NativeChild> _children = [];
     private readonly List<byte> _utf8 = [];
+
+    private uint _titlebar = NoTitlebarRoot;
 
     private byte* _nodesBuffer;
     private nuint _nodesCapacity;
@@ -198,7 +201,17 @@ internal sealed unsafe class RenderArena : IDisposable
             ChildrenLen = (uint)_children.Count,
             Utf8 = _utf8Buffer,
             Utf8Len = (uint)_utf8.Count,
+            TitlebarRoot = _titlebar,
         };
+    }
+
+    /// <summary>
+    /// Records the root node of the custom title bar content.
+    /// <see langword="null"/> means the view supplied no title bar.
+    /// </summary>
+    internal void SetTitlebarRoot(int? root)
+    {
+        _titlebar = root is int index ? (uint)index : NoTitlebarRoot;
     }
 
     internal void Reset()
@@ -207,6 +220,7 @@ internal sealed unsafe class RenderArena : IDisposable
         _ops.Clear();
         _children.Clear();
         _utf8.Clear();
+        _titlebar = NoTitlebarRoot;
     }
 
     public void Dispose()

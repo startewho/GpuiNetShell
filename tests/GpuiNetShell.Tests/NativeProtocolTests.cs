@@ -13,6 +13,6 @@ public sealed class NativeProtocolTests
     [Fact]
     public void AbiVersionMatchesTheNativeLiteral()
     {
-        Assert.Equal(8u, NativeProtocol.AbiVersion);
+        Assert.Equal(9u, NativeProtocol.AbiVersion);
     }
 }
