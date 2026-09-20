@@ -1,0 +1,142 @@
+name: release
+
+# Fires on a version tag such as v0.1.0 or v0.2.0-pre.1. A GitHub "release"
+# created from a tag publishes that tag, which starts this run; a hyphen in the
+# version marks a pre-release.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (for example v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  # Required for NuGet trusted publishing: GitHub issues a short-lived OIDC
+  # token that nuget.org exchanges for a temporary API key (no stored secret).
+  id-token: write
+
+env:
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = $env:GITHUB_REF_NAME }
+          $version = $tag.TrimStart('v')
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version.Contains('-').ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing $tag (version $version)"
+
+      - name: Test native host
+        run: cargo test -p gpui-net-shell
+
+      - name: Test managed runtime
+        run: dotnet test GpuiNetShell.slnx -c Release
+
+      # One zip per sample: a self-contained win-x64 publish of the sample plus
+      # the native host the build copies alongside it.
+      - name: Publish samples
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Get-ChildItem samples -Directory | ForEach-Object {
+            $name = $_.Name
+            $out = Join-Path "staging" $name
+            dotnet publish $_.FullName -c Release -r win-x64 --self-contained true -o $out -p:Version=$version
+            if ($LASTEXITCODE -ne 0) { throw "publish failed for $name" }
+            Compress-Archive -Path (Join-Path $out "*") -DestinationPath "staging/$name-$version-win-x64.zip" -Force
+          }
+
+      # The Rust native host is packed first so the managed package can take a
+      # dependency on it from the local package folder.
+      - name: Pack NuGet packages
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path artifacts/nuget | Out-Null
+          $feed = ((Resolve-Path -LiteralPath "artifacts/nuget").Path) -replace '\\', '/'
+          dotnet pack src/GpuiNetShell.Native -c Release -o artifacts/nuget -p:Version=$version
+          if ($LASTEXITCODE -ne 0) { throw "packing GpuiNetShell.Native failed" }
+          dotnet pack src/GpuiNetShell -c Release -o artifacts/nuget -p:Version=$version `
+            -p:PackNativeReference=true -p:RestoreAdditionalProjectSources=$feed
+          if ($LASTEXITCODE -ne 0) { throw "packing GpuiNetShell failed" }
+
+      - name: Source archive
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          git archive --format=zip --output "artifacts/GpuiNetShell-$version-source.zip" $env:GITHUB_SHA
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: |
+            staging/*.zip
+            artifacts/**/*.nupkg
+            artifacts/*-source.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            staging/*.zip
+            artifacts/*-source.zip
+
+      # Trusted publishing: exchange the GitHub OIDC token for a temporary API
+      # key. NUGET_USER is the nuget.org profile name (not the email). Requires
+      # a trusted publishing policy on nuget.org for this repository and the
+      # workflow file name (`release.yml`).
+      - name: NuGet login (OIDC -> temp API key)
+        if: ${{ secrets.NUGET_USER != '' }}
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push packages to NuGet
+        if: ${{ secrets.NUGET_USER != '' }}
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/nuget/*.nupkg | ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" `
+              --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "pushing $($_.Name) failed" }
+          }

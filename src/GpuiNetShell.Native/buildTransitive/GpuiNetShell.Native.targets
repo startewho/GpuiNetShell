@@ -1,0 +1,15 @@
+<Project>
+    <!--
+      Copies the native host next to a consuming app. NuGet already resolves the
+      RID-specific asset (runtimes/win-x64/native) for a publish with a RID; this
+      also covers a plain build/run that has no RuntimeIdentifier set.
+    -->
+    <ItemGroup
+        Condition="$([MSBuild]::IsOSPlatform('Windows')) AND ('$(RuntimeIdentifier)' == '' OR '$(RuntimeIdentifier)' == 'win-x64')">
+        <None Include="$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\gpui_net_shell.dll">
+            <Link>gpui_net_shell.dll</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Visible>false</Visible>
+        </None>
+    </ItemGroup>
+</Project>

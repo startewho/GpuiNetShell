@@ -10,6 +10,15 @@
     </PropertyGroup>
 
     <PropertyGroup>
+        <PackageId>GpuiNetShell</PackageId>
+        <Description>C# host for the GPUI shell runtime: a managed View/Element API over a versioned C ABI, with the Rust native host shipped by GpuiNetShell.Native.</Description>
+        <PackageTags>gpui;gui;ui;native;shell;rust</PackageTags>
+        <RepositoryUrl>https://github.com/anomalyco/opencode</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <PropertyGroup>
         <RepositoryRoot>$(MSBuildThisFileDirectory)..\..</RepositoryRoot>
         <!-- Match the native host to the managed configuration: Release uses a
              release cargo build, everything else the debug host. -->
@@ -29,6 +38,22 @@
         <None Include="$(NativeOutputDir)\gpui_net_shell.dll" Condition="Exists('$(NativeOutputDir)\gpui_net_shell.dll')">
             <Link>gpui_net_shell.dll</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </None>
+    </ItemGroup>
+
+    <!-- The package ships the source generator as an analyzer. -->
+    <ItemGroup>
+        <ProjectReference Include="..\GpuiNetShell.SourceGen\GpuiNetShell.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <None Include="..\GpuiNetShell.SourceGen\bin\$(Configuration)\netstandard2.0\GpuiNetShell.SourceGen.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+        <None Include="$(RepositoryRoot)\README.md" Pack="true" PackagePath="\" Visible="false" />
+    </ItemGroup>
+
+    <!-- The released package depends on the matching native package. Kept behind
+         a property so an ordinary local build never restores it; the release
+         workflow packs GpuiNetShell.Native first and passes
+         -p:PackNativeReference=true with a local package source. -->
+    <ItemGroup Condition="'$(PackNativeReference)' == 'true'">
+        <PackageReference Include="GpuiNetShell.Native" Version="$(Version)" IncludeAssets="all" PrivateAssets="none" />
     </ItemGroup>
 </Project>

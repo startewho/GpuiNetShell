@@ -3,6 +3,10 @@ target/
 **/bin/
 **/obj/
 
+# Release artifacts
+artifacts/
+staging/
+
 # IDE
 .vs/
 .vscode/

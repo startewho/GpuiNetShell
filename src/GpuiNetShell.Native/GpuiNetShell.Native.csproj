@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <PackageId>GpuiNetShell.Native</PackageId>
+        <Description>Native GPUI host (Rust) for GpuiNetShell. Ships gpui_net_shell for the win-x64 runtime.</Description>
+        <!-- A native-only package: no managed assembly, no framework dependencies
+             of its own. Everything lives under runtimes/ and buildTransitive/. -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+        <!-- NU5128: no lib/ref assembly, which is intended for a native package. -->
+        <NoWarn>$(NoWarn);NU5128</NoWarn>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryRoot>$(MSBuildThisFileDirectory)..\..</RepositoryRoot>
+        <NativeOutputDir>$(RepositoryRoot)\target\release</NativeOutputDir>
+    </PropertyGroup>
+
+    <!-- Build the release host if it is missing so a bare `dotnet pack` works. -->
+    <Target Name="BuildNativeForPack" BeforeTargets="BeforePack"
+            Condition="!Exists('$(NativeOutputDir)\gpui_net_shell.dll')">
+        <Exec Command="cargo build -p gpui-net-shell --release" WorkingDirectory="$(RepositoryRoot)" />
+    </Target>
+
+    <ItemGroup>
+        <None Include="$(NativeOutputDir)\gpui_net_shell.dll"
+              Pack="true"
+              PackagePath="runtimes/win-x64/native/"
+              Visible="false" />
+        <None Include="buildTransitive/GpuiNetShell.Native.targets"
+              Pack="true"
+              PackagePath="buildTransitive/"
+              Visible="false" />
+        <None Include="$(RepositoryRoot)\README.md"
+              Pack="true"
+              PackagePath="\"
+              Visible="false" />
+    </ItemGroup>
+</Project>

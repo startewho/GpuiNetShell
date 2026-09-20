@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Lint
+        run: cargo clippy -p gpui-net-shell --tests -- -D warnings
+
+      - name: Test native host
+        run: cargo test -p gpui-net-shell
+
+      - name: Build managed runtime
+        run: dotnet build GpuiNetShell.slnx -c Release
+
+      - name: Test managed runtime
+        run: dotnet test GpuiNetShell.slnx -c Release --no-build
+
+      - name: ABI/schema check
+        run: dotnet run --project samples/GpuiNetShell.FileManager -c Release -- --check

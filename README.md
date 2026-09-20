@@ -176,3 +176,38 @@ internal sealed class CounterView : View
 
 `OnClick` runs on the native application thread; the host requests a re-render
 after it returns, so the handler only mutates state.
+
+## Releasing
+
+`.github/workflows/release.yml` runs on any `v*` tag (and on manual dispatch).
+A tag with a hyphen in the version (`v0.2.0-pre.1`) is published as a
+pre-release. Each run:
+
+1. builds and tests the native host and the managed runtime;
+2. publishes every project under `samples/` as a self-contained `win-x64`
+   build and attaches one zip per sample to the GitHub release;
+3. attaches a `GpuiNetShell-<version>-source.zip` of the repository;
+4. packs and pushes two NuGet packages:
+   - `GpuiNetShell.Native` — the Rust host (`gpui_net_shell`) for `win-x64`,
+     with a `buildTransitive` target that copies it next to a consuming app;
+   - `GpuiNetShell` — the managed runtime plus the `GpuiNetShell.SourceGen`
+     analyzer, depending on the matching `GpuiNetShell.Native`.
+
+Publishing to nuget.org uses **trusted publishing** (OIDC), so no long-lived
+API key is stored. Set it up once:
+
+1. On nuget.org: **Trusted Publishing → Add policy** with
+   *Repository Owner*, *Repository*, and **Workflow File** `release.yml`
+   (the file name only, without the `.github/workflows/` path).
+2. In the GitHub repo: add a repository secret `NUGET_USER` set to your
+   nuget.org profile name (not your email).
+3. Make sure the repository allows the `id-token: write` permission the
+   workflow requests.
+
+The workflow runs `NuGet/login@v1`, which exchanges the GitHub OIDC token for a
+temporary API key (valid for one hour) right before the push. If `NUGET_USER`
+is not set, the release still builds and attaches everything to the GitHub
+release; the login and push steps are skipped.
+
+To cut a release: `git tag v0.1.0 && git push origin v0.1.0` (or create a
+release for a new tag in the GitHub UI).
