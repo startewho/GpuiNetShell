@@ -29,7 +29,7 @@ never per builder call, per frame, or per property.**
 | `Entities/` | `Entity<T>`, `Context<T>`, `EntityRegistry`, `GlobalStore`, `UiDispatcher`. |
 | `Events/EventRegistry.cs` | Token → handler tables, generation retirement, stable/keyed registration. |
 | `Events/ElementEvents.cs` | `DivEvent` plus the typed payloads (`PointerEvent`, `ScrollEvent`, `KeyEvent`, `ClickEvent`, `PressureEvent`) decoded from the native payload. |
-| `View.cs` | Base view: `Render`, `RenderRoot`, `Invalidate`, `Notify`, `DispatchInput`, `AttachInvalidator`. |
+| `View.cs` | Base view: `Render`, `RenderTitleBar`, `RenderRoot`, `Invalidate`, `OnInput`, `DispatchInput`, `AttachInvalidator`. |
 | `GpuiApplication.cs` | `Session` per window, `RenderInto`, the native callbacks, multi-window, overlays. |
 | `GpuiNativeHost.cs` | `AbiVersion`, `SchemaHash`, `Verify()`. |
 | `HotReload.cs`, `WindowOptions.cs`, `ThemeMode.cs` | Hot reload hooks, per-window options, theme mode. |
@@ -59,8 +59,11 @@ never per builder call, per frame, or per property.**
    `RegisterEntityView`/`RegisterPersistentElement` (which **reuse** their token
    on re-registration) are not.
 5. **The managed side never blocks the GPUI thread.** Handlers run on the
-   application thread; after they return the host marks the view dirty. Do not
-   call `Notify()` during `Render` (it throws, matching gpui).
+   application thread. Repaints are explicit and local: a component callback or
+   a discrete `Div` event invalidates the window after the handler returns, but
+   mutating `Entity<T>` state repaints nothing until the handler calls
+   `Context<T>.Notify()`, which repaints only that entity's retained subtree. Do
+   not notify during `Render` (it throws, matching gpui).
 
 ## The render arena
 
@@ -133,9 +136,11 @@ invoke the callback. Entity views use `RegisterEntityView` and render through
   op). Stateless events take no id.
 - **Payloads** are decoded into `PointerEvent`/`ScrollEvent`/`KeyEvent`/
   `ClickEvent`/`PressureEvent` (`Events/ElementEvents.cs`).
-- **Repaint**: discrete events repaint after the handler; `OnMouseMove` and
-  `OnScroll` do not, so call `Notify()`/`Invalidate()` from those handlers if
-  they change what `Render` reads.
+- **Repaint**: a discrete Div event invalidates the window after the handler;
+  `OnMouseMove` and `OnScroll` do not. Whatever the event, if the handler
+  changes `Entity<T>` state, call `Context<T>.Notify()` to repaint that subtree
+  (reserve `View.Invalidate()` for state outside an entity, such as the custom
+  title bar).
 - Only `Div` supports these; `AnyElement` has no event methods, so other
   components keep their dedicated callbacks.
 

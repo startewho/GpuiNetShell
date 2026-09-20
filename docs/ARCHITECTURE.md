@@ -245,10 +245,15 @@ snapshot is not rebuilt just because an overlay opened.
 element tree; `ButtonElement.OnClick` registers a handler in the
 `EventRegistry` and writes a callback token into the arena.
 
-When the native button activates, the materialized closure calls the managed
-`click` callback with the token. The handler runs on the GPUI thread; after it
-returns, the host marks the view dirty and notifies it. No queue is required
-because callbacks are delivered synchronously on the application thread.
+When the native control activates, the materialized closure calls the managed
+callback with the token. The handler runs on the GPUI thread, and repaints are
+explicit and scoped. A component callback or a discrete `Div` event marks the
+whole view dirty after the handler returns; `OnMouseMove`/`OnScroll` do not.
+Mutating `Entity<T>` state, by contrast, repaints nothing until the handler
+calls `Context<T>.Notify()`: that routes through the `notify_entity` ingress and
+repaints only the entity's retained subtree, because an entity host's element
+render callback runs `without_invalidate`. No queue is required because
+callbacks are delivered synchronously on the application thread.
 
 Managed event handlers run inside a C callback and never let an exception cross
 the boundary: each managed callback catches and returns an error status.

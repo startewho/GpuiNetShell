@@ -1,13 +1,19 @@
 # GpuiNetShell
 
+![file manage](assets/theme-split.png)
+
 GpuiNetShell is a C# host for a GPUI shell runtime. It replaces the JavaScript
 application layer of `gpui-shell`/`component-shell` with C#: the managed host
 owns state and describes an interface, and a Rust native host owns the GPUI
 application, window, event loop, validation, and materialization behind a
 versioned C ABI.
 
-The first vertical slice is **Button**, end to end: a C# declaration becomes a
-real `gpui-component` button that calls back into managed code on activation.
+The managed host declares an element tree in `View.Render`; the native host
+materializes it into real `gpui-component` elements and calls back into managed
+code on interaction. The element surface spans the component catalog (buttons,
+inputs, trees, virtual lists, data tables, editors, menus, overlays, motion,
+canvas painting, …) and the repository ships two samples: a component gallery
+and a Windows 11 style file manager.
 
 ## How it fits together
 
@@ -91,7 +97,7 @@ crates/gpui-net-shell/         Native host (cdylib + rlib)
   src/snapshot.rs                arena decode + RenderSnapshot
   src/style.rs                   closed style vocabulary; direct GPUI calls
   src/registry.rs                ComponentRegistry / Descriptor / Materializer
-  src/components/                Div, Text, Button, Label, Badge, Progress, Combobox, Radio, Tabs, Scroll, Scrollbar, Resizable, Popover
+  src/components/                one module per component in the catalog
   src/context.rs                 HostContext: session, callbacks, invalidate
   src/materialize.rs             op resolution + registry dispatch
   src/view.rs                    ShellView: dirty/current/previous + rebuild
@@ -102,15 +108,16 @@ src/GpuiNetShell/              Managed runtime library
   Interop/                       layouts, P/Invoke, managed callbacks
   Rendering/                     RenderArena, RenderContext
   Entities/                      Entity<T>, Context<T>, EntityRegistry, GlobalStore, UiDispatcher
-  Elements/                      Element, ButtonElement, TextElement, DivElement
-  Events/                        EventRegistry
+  Elements/                      Element, one builder per component, StyleExtensions
+  Events/                        EventRegistry, element-event payloads
   View.cs, GpuiApplication.cs
 samples/GpuiNetShell.Sample/   Tabbed component gallery (one page per component)
 samples/GpuiNetShell.FileManager/  Windows 11 style file manager (custom title bar,
-                               themeable accent, navigation tree, details / large-icon views)
+                               themeable accent, navigation tree, details / grid views,
+                               preview pane)
 tests/GpuiNetShell.Tests/      Managed contract tests
 external/gpui-kit/             Pinned submodule (gpui-base/gpui-component)
-docs/                          Architecture and the Button route
+docs/                          Architecture, the Button route, entity/canvas design notes
 ```
 
 ## Requirements
@@ -146,25 +153,58 @@ dotnet run --project samples/GpuiNetShell.FileManager       # file manager
 
 ## Small application
 
+State lives in an `Entity<TState>` and the content is rendered from it through
+an entity-view callback, so a `Context<TState>.Notify()` repaints only that
+subtree instead of the whole window.
+
 ```csharp
 using GpuiNetShell;
 using GpuiNetShell.Elements;
+using GpuiNetShell.Entities;
 using GpuiNetShell.Rendering;
 
-var application = new GpuiApplication(() => new CounterView());
+GpuiApplication? application = null;
+application = new GpuiApplication(() => new CounterView(application!));
 application.Run();
 
-internal sealed class CounterView : View
+internal sealed class CounterState
 {
-    private int _count;
+    public int Count { get; set; }
+}
 
-    protected override Element Render(ref RenderContext ui) =>
+[GpuiCallbacks]
+internal sealed partial class CounterView : View
+{
+    private readonly GpuiApplication _application;
+    private Entity<CounterState>? _entity;
+
+    public CounterView(GpuiApplication application) => _application = application;
+
+    private Entity<CounterState> Entity =>
+        _entity ??= _application.New<CounterState>(_ => new CounterState());
+
+    protected override Element Render(ref RenderContext ui)
+    {
+        // Registers this class's [GpuiCallback] methods once, then renders the
+        // entity subtree through its generated token.
+        RegisterGeneratedCallbacks(ref ui);
+        return ui.Child(Entity, PageToken);
+    }
+
+    // An entity view: state in, elements out. The generator infers this kind
+    // from the (TState, RenderContext, Context<TState>) signature.
+    [GpuiCallback("Page")]
+    private Element RenderPage(CounterState state, RenderContext ui, Context<CounterState> cx) =>
         ui.VStack(
-                ui.Text($"Count: {_count}").TextSize(24),
+                ui.Text($"Count: {state.Count}").TextSize(24),
                 ui.Button("increment")
                     .Label("Increment")
                     .Primary()
-                    .OnClick(() => _count++)
+                    .OnClick(() => Entity.Update((s, cx) =>
+                    {
+                        s.Count++;   // mutate the entity
+                        cx.Notify(); // the only thing that repaints this subtree
+                    }))
             )
             .Gap(12)
             .P(24)
@@ -174,40 +214,12 @@ internal sealed class CounterView : View
 }
 ```
 
-`OnClick` runs on the native application thread; the host requests a re-render
-after it returns, so the handler only mutates state.
+`OnClick` runs on the native application thread. Mutating `Entity<TState>` does
+**not** repaint by itself: the handler must call `Context<TState>.Notify()`,
+which routes through the native `notify_entity` ingress and re-runs only this
+subtree's renderer. (A component callback may also invalidate the window, but
+that merely replays the retained snapshot without re-running the entity
+renderer, so the shown state would stay stale.) State outside an entity — such
+as the custom title bar, which is rendered from the main snapshot — instead
+needs `View.Invalidate()` to repaint the window.
 
-## Releasing
-
-`.github/workflows/release.yml` runs on any `v*` tag (and on manual dispatch).
-A tag with a hyphen in the version (`v0.2.0-pre.1`) is published as a
-pre-release. Each run:
-
-1. builds and tests the native host and the managed runtime;
-2. publishes every project under `samples/` as a self-contained `win-x64`
-   build and attaches one zip per sample to the GitHub release;
-3. attaches a `GpuiNetShell-<version>-source.zip` of the repository;
-4. packs and pushes two NuGet packages:
-   - `GpuiNetShell.Native` — the Rust host (`gpui_net_shell`) for `win-x64`,
-     with a `buildTransitive` target that copies it next to a consuming app;
-   - `GpuiNetShell` — the managed runtime plus the `GpuiNetShell.SourceGen`
-     analyzer, depending on the matching `GpuiNetShell.Native`.
-
-Publishing to nuget.org uses **trusted publishing** (OIDC), so no long-lived
-API key is stored. Set it up once:
-
-1. On nuget.org: **Trusted Publishing → Add policy** with
-   *Repository Owner*, *Repository*, and **Workflow File** `release.yml`
-   (the file name only, without the `.github/workflows/` path).
-2. In the GitHub repo: add a repository secret `NUGET_USER` set to your
-   nuget.org profile name (not your email).
-3. Make sure the repository allows the `id-token: write` permission the
-   workflow requests.
-
-The workflow runs `NuGet/login@v1`, which exchanges the GitHub OIDC token for a
-temporary API key (valid for one hour) right before the push. If `NUGET_USER`
-is not set, the release still builds and attaches everything to the GitHub
-release; the login and push steps are skipped.
-
-To cut a release: `git tag v0.1.0 && git push origin v0.1.0` (or create a
-release for a new tag in the GitHub UI).

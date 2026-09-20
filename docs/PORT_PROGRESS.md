@@ -8,7 +8,7 @@
 - 组件 id = 注册顺序索引。**新组件一律追加**，既有 id 不再移动。
 - 每批会 bump `SCHEMA_HASH`（`crates/gpui-net-shell/src/schema.rs` 与
   `src/GpuiNetShell/Interop/NativeProtocol.cs` 同步）。
-- `ABI_VERSION` 在回调/记录布局变化时 bump；目前为 **4**。
+- `ABI_VERSION` 在回调/记录布局变化时 bump；目前为 **9**。
 - 每批验收：`cargo test` / `cargo fmt --check` / `cargo clippy -D warnings` /
   `dotnet build` / `dotnet test` / `--check`，并在 Sample 增加对应页面。
 
