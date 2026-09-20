@@ -26,7 +26,7 @@ internal sealed partial class FileManagerView
                     .P(8),
                 ui.Scroll("fm-tree").Flex1().MinH(0).Axis(ScrollAxis.Vertical).Add(rows.ToArray())
             )
-            .W(240)
+            .WFull()
             .HFull()
             .Flex()
             .FlexColumn()

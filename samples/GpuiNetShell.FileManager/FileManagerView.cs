@@ -127,16 +127,29 @@ internal sealed partial class FileManagerView : View
     ) =>
         ui.VStack(
                 BuildToolbar(ui, state, cx),
-                ui.HStack(
-                        BuildTreePane(ui, state, cx),
-                        BuildContentPane(ui, state, cx),
-                        state.ShowPreview ? BuildPreviewPane(ui, state, cx) : ui.Div()
-                    )
-                    .Gap(0)
-                    .Flex1()
-                    .MinW(0)
-                    .MinH(0),
+                BuildSplitPane(ui, state, cx),
                 BuildStatusBar(ui, state)
             )
             .Full();
+
+    /// <summary>
+    /// The tree, the content, and the optional preview in a draggable split. A
+    /// `*` marks the flexible panel; the other sizes are the initial widths.
+    /// </summary>
+    private Element BuildSplitPane(
+        RenderContext ui,
+        FileManagerState state,
+        Context<FileManagerState> cx
+    )
+    {
+        var split = ui.Resizable("fm-split")
+            .Axis(ResizeAxis.Horizontal)
+            .Sizes(state.ShowPreview ? "240,*,320" : "240,*")
+            .Add(BuildTreePane(ui, state, cx), BuildContentPane(ui, state, cx));
+        if (state.ShowPreview)
+        {
+            split.Add(BuildPreviewPane(ui, state, cx));
+        }
+        return split.Flex1().MinW(0).MinH(0);
+    }
 }

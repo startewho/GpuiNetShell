@@ -149,7 +149,7 @@ internal sealed partial class FileManagerView
         var entry = state.Visible[index];
         var selected = index == state.SelectedIndex;
 
-        var name = ui.Label(entry.Name).TextSize(13);
+        var name = ui.Label(entry.Name).TextSize(13).LineClamp(1);
         var modified = ui.Label(Formatting.Date(entry.Modified)).TextSize(12);
         var type = ui.Label(Formatting.TypeName(entry)).TextSize(12);
         if (selected)
@@ -181,7 +181,7 @@ internal sealed partial class FileManagerView
                 ui.Icon(FileIcons.For(entry))
                     .Size(ControlSize.Medium)
                     .Color(selected ? "#ffffff" : IconColor(entry)),
-                ui.Div(name).Flex1().MinW(0),
+                ui.Div(name).Flex1().MinW(0).OverflowHidden(),
                 modified.W(150),
                 type.W(110),
                 sizeCell

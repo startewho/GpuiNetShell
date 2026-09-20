@@ -41,9 +41,7 @@ internal sealed partial class FileManagerView
         return ui.VStack(header, BuildPreviewBody(ui, state, entry))
             .Gap(8)
             .P(8)
-            .W(320)
-            .MinW(220)
-            .FlexShrink(0)
+            .WFull()
             .HFull()
             .BorderL(1)
             .BorderColor(Divider);
