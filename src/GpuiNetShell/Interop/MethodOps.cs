@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace GpuiNetShell.Interop;
 
 /// <summary>
@@ -9,30 +11,29 @@ namespace GpuiNetShell.Interop;
 /// </summary>
 /// <remarks>
 /// Codes are cached per name, so the steady-state cost is one dictionary lookup
-/// and no allocation.
+/// and no allocation. The cache is shared across sessions that may build frames
+/// on different threads, so it must be concurrent.
 /// </remarks>
 internal static class MethodOps
 {
     private const ulong OffsetBasis = 0xcbf2_9ce4_8422_2325;
     private const ulong Prime = 0x0000_0100_0000_01b3;
 
-    private static readonly Dictionary<string, ulong> Codes = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, ulong> Codes = new(StringComparer.Ordinal);
 
     /// <summary>The code for <paramref name="name"/>. Names are ASCII.</summary>
-    internal static ulong Code(string name)
-    {
-        if (Codes.TryGetValue(name, out var code))
-        {
-            return code;
-        }
-
-        var hash = OffsetBasis;
-        foreach (var character in name)
-        {
-            hash ^= (byte)character;
-            hash *= Prime;
-        }
-        Codes[name] = hash;
-        return hash;
-    }
+    internal static ulong Code(string name) =>
+        Codes.GetOrAdd(
+            name,
+            static value =>
+            {
+                var hash = OffsetBasis;
+                foreach (var character in value)
+                {
+                    hash ^= (byte)character;
+                    hash *= Prime;
+                }
+                return hash;
+            }
+        );
 }

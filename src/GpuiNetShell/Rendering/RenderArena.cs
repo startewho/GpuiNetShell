@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using GpuiNetShell.Interop;
@@ -263,15 +264,8 @@ internal sealed unsafe class RenderArena : IDisposable
     /// Names come from a closed set of compile-time strings, so their UTF-8 is
     /// cached once and copied in; only the first frame pays for the encode.
     /// </summary>
-    private ulong PackName(string value)
-    {
-        if (!NameUtf8.TryGetValue(value, out var bytes))
-        {
-            bytes = Encoding.UTF8.GetBytes(value);
-            NameUtf8[value] = bytes;
-        }
-        return AppendBytes(bytes);
-    }
+    private ulong PackName(string value) =>
+        AppendBytes(NameUtf8.GetOrAdd(value, static name => Encoding.UTF8.GetBytes(name)));
 
     /// <summary>Appends an invariant enum literal; see <see cref="PackName"/>.</summary>
     private ulong PackEnum(string value) => PackName(value);
@@ -288,7 +282,9 @@ internal sealed unsafe class RenderArena : IDisposable
         return ((ulong)offset << 32) | (uint)bytes.Length;
     }
 
-    private static readonly Dictionary<string, byte[]> NameUtf8 = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, byte[]> NameUtf8 = new(
+        StringComparer.Ordinal
+    );
 
     private static void PublishBuffer<T>(List<T> source, ref byte* buffer, ref nuint capacity)
         where T : unmanaged
