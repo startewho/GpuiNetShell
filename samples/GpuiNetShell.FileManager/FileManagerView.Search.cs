@@ -36,6 +36,8 @@ internal sealed partial class FileManagerView
                             .MaxW(320)
                             .Size(ControlSize.Small)
                             .OnChange(text => Update((s, c) => ApplySearch(s, c, text)))
+                            .OnFocus(() => _searchFocused = true)
+                            .OnBlur(() => _searchFocused = false)
                     )
                     .FlexShrink(0)
                     .Occlude(),

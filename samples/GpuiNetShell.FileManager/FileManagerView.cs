@@ -44,6 +44,11 @@ internal sealed partial class FileManagerView : View
     private double _tabStripWidth;
     /// <summary>The first tab index shown when the strip is paginated.</summary>
     private int _tabStart;
+    /// <summary>Whether the title-bar search box holds focus (arrow keys then edit text).</summary>
+    private bool _searchFocused;
+    /// <summary>The row the list should scroll to, and a token that triggers it.</summary>
+    private int _listScrollIndex;
+    private long _listScrollToken;
 
     public FileManagerView(GpuiApplication application, string? initialPath)
     {

@@ -188,30 +188,32 @@ internal sealed partial class FileManagerView
             return;
         }
         var path = state.Visible[index].FullPath;
-        try
-        {
-            Process.Start(
-                new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
-                {
-                    UseShellExecute = true,
-                }
-            );
-        }
-        catch (Exception)
-        {
-            // Shell launch is best-effort.
-        }
+        LaunchShell("explorer.exe", $"/select,\"{path}\"");
     }
 
-    private static void OpenWithShell(string path)
-    {
-        try
+    /// <summary>
+    /// Opens <paramref name="path"/> with its shell association. The launch runs
+    /// on a background thread: <c>UseShellExecute</c> calls <c>ShellExecuteEx</c>,
+    /// which may pump the message loop, and doing that inside a GPUI callback can
+    /// re-enter rendering and abort the host.
+    /// </summary>
+    private static void OpenWithShell(string path) => LaunchShell(path, null);
+
+    private static void LaunchShell(string fileName, string? arguments) =>
+        Task.Run(() =>
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-        }
-        catch (Exception)
-        {
-            // Shell launch is best-effort.
-        }
-    }
+            try
+            {
+                var startInfo = new ProcessStartInfo(fileName) { UseShellExecute = true };
+                if (arguments is not null)
+                {
+                    startInfo.Arguments = arguments;
+                }
+                Process.Start(startInfo);
+            }
+            catch (Exception)
+            {
+                // Shell launch is best-effort.
+            }
+        });
 }

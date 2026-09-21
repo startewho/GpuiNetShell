@@ -1,3 +1,4 @@
+using GpuiNetShell.Events;
 using GpuiNetShell.Rendering;
 
 namespace GpuiNetShell.Elements;
@@ -41,6 +42,22 @@ public sealed class InputElement : Element
         ArgumentNullException.ThrowIfNull(handler);
         var token = Events.Register(value => handler(value.String ?? string.Empty));
         Arena.AddCallback(Index, "on_change", token);
+        return this;
+    }
+
+    /// <summary>Runs when the field gains focus.</summary>
+    public InputElement OnFocus(Action handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(Index, "on_focus", Events.Register(handler));
+        return this;
+    }
+
+    /// <summary>Runs when the field loses focus.</summary>
+    public InputElement OnBlur(Action handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        Arena.AddCallback(Index, "on_blur", Events.Register(handler));
         return this;
     }
 }

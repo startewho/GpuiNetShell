@@ -42,6 +42,14 @@ internal sealed partial class FileManagerView
         {
             StepActiveTab(tab => tab.Forward());
         }
+        else if (!ctrl && !alt && !_searchFocused && key == "down")
+        {
+            MoveSelection(1);
+        }
+        else if (!ctrl && !alt && !_searchFocused && key == "up")
+        {
+            MoveSelection(-1);
+        }
         else if (alt && key == "up")
         {
             GoUpCommand();
@@ -50,6 +58,43 @@ internal sealed partial class FileManagerView
         {
             ReloadCommand();
         }
+    }
+
+    /// <summary>
+    /// Moves the list selection by <paramref name="delta"/> and scrolls it into
+    /// view. With nothing selected, Down picks the first row and Up the last.
+    /// </summary>
+    private void MoveSelection(int delta)
+    {
+        Entity.Update(
+            (state, cx) =>
+            {
+                var count = state.Visible.Count;
+                if (count == 0)
+                {
+                    return;
+                }
+                var index = state.SelectedIndex;
+                index =
+                    index < 0
+                        ? (delta > 0 ? 0 : count - 1)
+                        : Math.Clamp(index + delta, 0, count - 1);
+                if (index == state.SelectedIndex)
+                {
+                    return;
+                }
+                state.SelectedIndex = index;
+                // Reset the click tracker so a later click is not read as a
+                // double-click on the row just reached with the keyboard.
+                state.LastClickIndex = index;
+                state.LastClickTicks = 0;
+                LoadPreview(cx, state, index);
+                cx.Notify();
+                _listScrollIndex = index;
+                _listScrollToken++;
+            }
+        );
+        Invalidate();
     }
 
     /// <summary>Moves the active tab by <paramref name="delta"/>, wrapping around.</summary>

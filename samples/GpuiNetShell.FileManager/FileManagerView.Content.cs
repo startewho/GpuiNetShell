@@ -86,6 +86,7 @@ internal sealed partial class FileManagerView
                     .MinH(0)
                     .OnSelect(index => OnEntryActivate(cx, state, index))
                     .OnMiddleClick(index => OpenInNewTab(index))
+                    .ScrollTo(_listScrollIndex, _listScrollToken)
                     .RowMenu(
                         ui.ContextMenuItem("打开")
                             .OnSelectStable("fm-row-open", row => OpenIndex(cx, state, row)),
